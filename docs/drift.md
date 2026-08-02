@@ -80,7 +80,7 @@
 
 1. **Báo cáo chuyên sâu:** `01` Quyển báo cáo chi tiết về thiết kế và kiến trúc hệ thống nền tảng IDP.
 2. **Bộ mã nguồn IaC:** Toàn bộ Infrastructure-as-Code (Manifests, Blueprints) được đóng gói và lưu trữ trên GitHub repository.
-3. **Hệ thống thực nghiệm (PoC):** Cụm EKS hoạt động thực tế trên AWS, đáp ứng 3 kịch bản kiểm thử: *Self-Service Provisioning*, *SecOps Auto-Remediation*, và *FinOps Auto-Recycling*.
+3. **Hệ thống thực nghiệm (PoC):** Cụm EKS hoạt động thực tế trên AWS, đáp ứng 3 kịch bản kiểm thử: *Self-Service Provisioning*, *SecOps & Stateful Healing (Phá hoại kép)*, và *FinOps Auto-Recycling*.
 4. **Tài liệu vận hành:** Bộ tài liệu chuẩn doanh nghiệp gồm Runbook hướng dẫn triển khai/debug và Sơ đồ kiến trúc (Architecture Diagram).
 
 ---
@@ -154,8 +154,8 @@ Dự án chuyển đổi tư duy quản lý hạ tầng từ **"Pipeline tĩnh"*
 * **Cập nhật Endpoint Động (Auto-Reconnect):** Khi khôi phục Database từ Snapshot, Crossplane tự động tiêm Endpoint mới vào **AWS Secrets Manager** (hoặc cập nhật qua **ExternalDNS**). Ứng dụng AI tự động kết nối lại Database mới dưới **2 phút** mà không cần sửa code hay can thiệp thủ công.
 
 > [!TIP]
-> **SecOps Auto-Remediation Workflow:** 
-> `Mở lén Port 0.0.0.0/0 trên AWS Console` ➔ `Crossplane phát hiện Configuration Drift` ➔ `Tự động khôi phục Security Group gốc (10.0.0.0/16) dưới 60s` ➔ `Bắn thông báo cảnh báo về kênh Slack SecOps`.
+> **SecOps & Stateful Healing Workflow:** 
+> `Mở lén Port 0.0.0.0/0 & Xóa Database trên AWS Console` ➔ `Crossplane phát hiện Configuration Drift & Missing Resource` ➔ `Tự động khóa Port (10.0.0.0/16) trong <60s, tái tạo DB từ Snapshot & tiêm Endpoint mới vào Secrets Manager` ➔ `App Pods tự động reconnect thành công & bắn alert Slack`.
 
 ---
 
@@ -194,22 +194,22 @@ gantt
 | **Phase 1: Core Control Plane** | Dựng cụm AWS EKS và thiết lập bộ não điều phối. Cấu hình Crossplane Provider kết nối AWS qua IAM IRSA bảo mật. Cài đặt `kro`. | Cụm Kubernetes quản lý thành công tài nguyên AWS (Tự động khởi tạo S3 Bucket từ khai báo YAML). |
 | **Phase 2: MLOps PaaS & Multi-Tenant** | Viết YAML Blueprints cho RAG & Model Training. Thiết lập IRSA, NetworkPolicies và ResourceQuotas cho các tenant. | Dev đẩy 1 file YAML ➔ IDP tự sinh cụm hạ tầng cô lập với quyền IAM Zero-Trust. |
 | **Phase 3: FinOps & Hardening** | Tích hợp OpenCost & Karpenter Spot Orchestration. Thiết lập KEDA (Scale-to-Zero cho Dev, Spot Instances cho Prod). Viết Kyverno rule chặn tài nguyên thiếu mã hóa. Cấu hình Slack notification. | Hạ tầng AI tự động thu hồi GPU khi nhàn rỗi (Graceful Drain); quy tắc an toàn bảo mật được thực thi tự động 100%. |
-| **Phase 4: Chaos & SecOps Testing** | Cấu hình `DeletionPolicy: Retain`. Thiết lập cơ chế tự động vá lỗi bảo mật (Security Group Drift) và xoay vòng Endpoint tự động qua AWS Secrets Manager & ExternalDNS. Giả lập mở Port `0.0.0.0/0` trên Console. | **Báo cáo độ bền (Resilience Report):** Tự động khôi phục cấu hình bảo mật chuẩn trong dưới 60 giây và gửi thông báo cảnh báo về Slack. |
+| **Phase 4: Chaos & SecOps Testing** | Cấu hình `DeletionPolicy: Retain`. Thiết lập cơ chế vá lỗi bảo mật (Security Group Drift) và xoay vòng Endpoint tự động qua AWS Secrets Manager & ExternalDNS. Giả lập thử nghiệm phá hoại kép (Mở Port `0.0.0.0/0` & Xóa RDS) trên Console. | **Báo cáo độ bền (Resilience Report):** Tự động khôi phục cấu hình bảo mật chuẩn <60s, phục hồi DB từ Snapshot và App AI tự reconnect dưới 2 phút. |
 | **Phase 5: Release & Runbook** | Đóng băng kiến trúc. Viết tài liệu vận hành (Runbook) chuẩn doanh nghiệp: Hướng dẫn deploy, thêm API Blueprint, bảo trì và debug IDP. | Đóng gói sản phẩm (Project Release), hoàn tất hồ sơ nghiệm thu trước Hội đồng Kiến trúc. |
 
 ---
 
 # PHẦN IV: TIÊU CHUẨN NGHIỆM THU & LIVE DEMO SCENARIOS
 
-Sản phẩm được đánh giá thành công khi vận hành trơntru qua **03 kịch bản kiểm thử trực tiếp (Live Demo)** sau:
+Sản phẩm được đánh giá thành công khi vận hành trơn tru qua **03 kịch bản kiểm thử trực tiếp (Live Demo)** sau:
 
 ```
 +-----------------------------------------------------------------------------------+
 |                            LIVE DEMO TEST SCENARIOS                               |
 +-------------------------+-------------------------+-------------------------------+
 | SCENARIO 1              | SCENARIO 2              | SCENARIO 3                    |
-| Speed & Security Test   | SecOps Auto-Remediation | FinOps & Spot Test            |
-| (< 3 phút cấp phát RAG) | (< 60s khóa Port rò rỉ) | (Scale-to-zero & Slack TTL)   |
+| Speed & Security Test   | SecOps & Stateful Heal  | FinOps & Spot Test            |
+| (< 3 phút cấp phát RAG) | (Khóa Port & Restore DB)| (Scale-to-zero & Slack TTL)   |
 +-------------------------+-------------------------+-------------------------------+
 ```
 
@@ -218,10 +218,14 @@ Sản phẩm được đánh giá thành công khi vận hành trơntru qua **03
 * **Kỳ vọng:** System tự động khởi tạo môi trường RAG hoàn chỉnh (S3 Bucket, RDS Database, EKS Node) trong **dưới 3 phút**.
 * **Điểm nhấn:** Pod AI Agent truy cập thành công Amazon Bedrock thông qua IRSA mà **không lưu bất kỳ Access Key nào** trong file config hoặc biến môi trường.
 
-### 2. Kịch bản Kỷ luật Bảo mật & Tự chữa lành (SecOps Auto-Remediation Test)
-* **Thao tác:** Đóng vai một kỹ sư/hacker truy cập vào AWS Console, cố tình chỉnh sửa **Security Group** của Database Production: Mở luồng Inbound `0.0.0.0/0` (Public Access) để "chọc thủng" vách ngăn bảo mật.
-* **Kỳ vọng:** Màn hình log của IDP lập tức báo đỏ (Configuration Drift Detected). Hệ thống tự động kích hoạt vòng lặp chữa lành, gửi API lên AWS để **xóa bỏ Rule `0.0.0.0/0` đó và khôi phục lại cấu hình gốc (`10.0.0.0/16`) trong vòng dưới 60 giây**.
-* **Điểm nhấn:** Trình diễn thông báo được bắn thẳng về kênh Slack của đội SecOps: *"Phát hiện can thiệp mạng trái phép tại DB-01. Đã tự động đóng Port và khôi phục an toàn."* - Khẳng định quyền năng tuyệt đối của kiến trúc Control Plane so với Terraform và Web Panel thông thường.
+### 2. Kịch bản Kỷ luật Bảo mật & Tự chữa lành (SecOps & Stateful Healing Test)
+* **Thao tác (Phá hoại kép):** Đóng vai một kỹ sư/hacker truy cập vào AWS Console, thực hiện đồng thời 2 hành động phá hoại:
+  1. Chỉnh sửa Security Group của Database Production: Mở toang luồng Inbound `0.0.0.0/0` (Public Access).
+  2. Xóa trực tiếp phiên bản Database Production đang hoạt động.
+* **Kỳ vọng:** Màn hình log của IDP lập tức báo đỏ (*Configuration Drift & Resource Missing Detected*). Hệ thống tự động kích hoạt vòng lặp chữa lành kép:
+  1. Gửi API lên AWS để xóa bỏ Rule `0.0.0.0/0` và khôi phục mạng gốc (`10.0.0.0/16`) trong **dưới 60 giây**.
+  2. Tự động gọi API bốc bản Snapshot gần nhất để tái tạo Database, sau đó tiêm Endpoint mới vào **AWS Secrets Manager** / **ExternalDNS**.
+* **Điểm nhấn:** Ứng dụng AI tự động kết nối lại với Database mới một cách an toàn dưới 2 phút. Trình diễn thông báo được bắn trực tiếp về kênh Slack SecOps: *"Phát hiện can thiệp hạ tầng trái phép tại DB-01. Đã tự động đóng Port và khôi phục dữ liệu an toàn."* — Khẳng định quyền năng tuyệt đối của kiến trúc Control Plane so với Terraform và Web Panel thông thường.
 
 ### 3. Kịch bản Kiểm soát Chi phí (FinOps & Spot Test)
 * **Thao tác:** Ngừng gửi traffic mô phỏng vào mô hình AI.
