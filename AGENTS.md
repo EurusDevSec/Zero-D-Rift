@@ -14,7 +14,7 @@ At the beginning of a new session:
 4. Read `.agent/memory/cold_memory.md` and the current self-assessment in
    `.agent/learning/LEARNING_LOG.md` so coaching matches the owner's background.
 5. Read only the ADRs and project documents linked by the active spec.
-6. Do not scan deleted/archived proposal drafts from Git history during
+6. Do not scan `docs/archive/` or non-canonical governance records during
    normal implementation unless historical comparison is requested.
 
 Do not claim that hydration has a fixed token count, cache discount, or duration.
@@ -32,8 +32,8 @@ When documents disagree, use this order:
 5. Code, test output, raw data, and AWS inventory are operational evidence.
 6. `.agent/workflows/active_context.md` is only a current-state index.
 
-Deleted proposal drafts and teacher-feedback records remain historical Git
-records, not implementation specifications. See `docs/README.md`.
+Files under `docs/governance/` and `docs/archive/` are records, not implementation
+specifications. See `docs/README.md`.
 
 ## 3. Command router
 

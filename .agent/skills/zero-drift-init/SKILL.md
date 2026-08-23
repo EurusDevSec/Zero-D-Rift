@@ -13,6 +13,5 @@ description: Initialize or audit Zero D-Rift project-agent state when the user s
    the minimum project-state documents required by the root constitution.
 6. Report current phase, active spec, next action, blockers and evidence state.
 
-Do not load nested Eurus sample memory, create AWS resources, install controllers,
-commit or push as part of initialization.
-
+Do not create AWS resources, install controllers, commit or push as part of
+initialization.

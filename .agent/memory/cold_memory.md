@@ -19,8 +19,8 @@ state belongs in `workflows/active_context.md`; raw evidence belongs in
 
 ## Durable agent-operation decisions
 
-- The root `.agent/` directory stores project state; `eurus-agent/` remains the
-  reusable framework source.
+- The root `.agent/` directory is the self-contained project-state and workflow
+  layer. The reusable framework source was removed after P0 initialization.
 - Planning is rolling-wave: current phase detailed, later phases outcome-level.
 - New technologies start in Coach/Pair mode.
 - A claim becomes a result only after linked evidence exists.
@@ -38,4 +38,3 @@ state belongs in `workflows/active_context.md`; raw evidence belongs in
 - Workaround/fix:
 - Durable lesson:
 ```
-

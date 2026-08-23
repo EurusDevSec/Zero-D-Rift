@@ -1,7 +1,7 @@
 ---
 id: SPEC-P1
 title: Foundation and compatibility decisions
-status: READY_FOR_OWNER_REVIEW
+status: ACTIVE
 phase: P1
 start: 2026-08-24
 deadline: 2026-08-30
@@ -63,7 +63,7 @@ By the end of P1, the owner should be able to:
 
 ```gherkin
 Scenario: Architecture is implementation-ready
-  Given the ver3 scope and teacher feedback
+  Given the approved lineage from teacher feedback through ver2 to ver3
   When the system design and ADRs are reviewed
   Then every MVP component has one responsibility and an explicit dependency
   And no out-of-scope component is required for P2
@@ -94,18 +94,23 @@ Scenario: Learning is demonstrated
 
 # 4. Work checkpoint matrix
 
-## Task 1 — Governance and canonical baseline review (2–3 h)
+## Task 1 — Governance lineage and canonical baseline (complete)
 
-- [ ] Review `docs/de_cuong_tot_nghiep_ver3.md` against the historical teacher
-      feedback from `git show 69be067:docs/gop_y_de_cuong_tu_thay_Kiet.md`;
-      record only unresolved alignment issues.
-- [ ] Confirm `docs/README.md` classification and decide later archive paths without
+- [x] Confirm the owner-approved lineage: teacher feedback was incorporated into
+      `docs/governance/de_cuong_tot_nghiep_ver2.md`; ver3 is the implementation
+      optimization of ver2, not a new proposal requiring a fresh full comparison.
+- [x] Confirm `docs/README.md` classification and archive paths without
       changing the byte content of the approved proposal.
-- [ ] Review the initialized root `AGENTS.md`, roadmap and active context.
-- [ ] Review the complete Git file list before explicitly committing ver3 and
+- [x] Review the initialized root `AGENTS.md`, roadmap and active context.
+- [x] Review the complete Git file list before explicitly committing ver3 and
       project-agent state; do not use `git add .`.
 
-Evidence: review note or ADR, changed-file list, Git status.
+Evidence: owner confirmation of document lineage; P0 commit `52c02ce`,
+framework-removal commit `2a5e6a4`, clean Git state synchronized with
+`origin/main`, and byte-identical governance/archive files.
+
+Task 1 is closed. Reopen only if an implementation change would exceed ver3 scope
+or the teacher/school requires a formal revision.
 
 ## Task 2 — System design and architectural ADRs (4–5 h)
 

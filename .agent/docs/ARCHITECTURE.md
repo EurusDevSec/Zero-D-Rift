@@ -14,7 +14,7 @@ scope SSOT. When it disagrees with ver3, ver3 wins and this file must be correct
 
 As of project `/init`, no application, IaC, platform, workload, test-harness, or
 experiment implementation has started. The repository contains the proposal
-documents and the Eurus framework source.
+documents and the self-contained project-agent state.
 
 ## Planned repository boundaries
 
@@ -30,8 +30,7 @@ Zero-D-Rift/
 │   └── batch-training/         Event-driven batch/GPU reference workload
 ├── policies/                   Kyverno, RBAC, quota and network-policy resources
 ├── tests/                      Static, local and AWS integration checks
-├── experiments/               Run manifests, raw data and analysis outputs
-└── eurus-agent/                Reusable framework source; not a thesis deliverable
+└── experiments/               Run manifests, raw data and analysis outputs
 ```
 
 Directories are created only when an approved task needs them. This tree is a
@@ -111,4 +110,3 @@ Architecture/cost/version decisions
 
 Resolve each material decision in an ADR; do not silently update this file from
 an agent assumption.
-

@@ -1,8 +1,9 @@
 ---
 id: ADR-0001
 title: Project-specific Eurus state and evidence-based workflow
-status: ACCEPTED
+status: SUPERSEDED
 date: 2026-08-23
+superseded_by: ADR-0002
 ---
 
 # Context
@@ -50,4 +51,3 @@ delivery, especially for unfamiliar technologies such as Crossplane and kro.
 Revisit only if the project moves to another agent runtime, the school changes
 the approved scope, or the root project-state structure creates demonstrated
 maintenance overhead.
-

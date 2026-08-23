@@ -7,9 +7,9 @@ không phải giải thích lại từ đầu.
 Nếu không muốn đọc toàn bộ tài liệu này, chỉ cần dùng
 [`QUICKSTART.md`](QUICKSTART.md). Đây là thẻ workflow một trang để mở mỗi ngày.
 
-`eurus-agent/` là framework nguồn có thể dùng lại. Thư mục `.agent/` ở project
-root mới là instance chứa trạng thái thật của Zero D-Rift. Không dùng memory mẫu
-bên trong `eurus-agent/.agent/` để quyết định công việc của đồ án.
+Thư mục `.agent/` ở project root là instance tự chứa toàn bộ trạng thái và workflow
+cần cho Zero D-Rift. Framework nguồn ban đầu đã được loại khỏi repository sau khi
+instance này được kiểm tra và commit; session mới không cần tải thêm framework nào.
 
 ---
 
