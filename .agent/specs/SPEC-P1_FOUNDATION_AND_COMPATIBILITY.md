@@ -31,7 +31,7 @@ and explain why each component exists.
 - `docs/security/THREAT_MODEL.md`
 - `docs/finops/COST_PLAN.md`
 - `docs/experiments/EXPERIMENT_PLAN.md`
-- Material ADRs under `docs/adr/`
+- Material ADRs under `.agent/adr/`
 - Reviewed P2 scope and initial EKS-bootstrap spec
 
 These files are planned outputs of P1; their names in this spec do not imply they
