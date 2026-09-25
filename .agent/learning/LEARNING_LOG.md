@@ -39,3 +39,33 @@ Status meanings:
 - `EXPLAINED`: can explain responsibility, flow and one failure mode.
 - `REPRODUCIBLE`: can repeat the project-specific outcome from documentation.
 
+### 2026-09-25 — System design and architectural boundaries
+
+- Phase/task: P1 / Task 2
+- Learning objective: Explain the bootstrap/platform boundary, controller
+  responsibilities, shared-RDS decision and recovery isolation boundary.
+- Source(s) consulted: `docs/de_cuong_tot_nghiep_ver3.md`,
+  `docs/architecture/SYSTEM_DESIGN.md`, ADR-0003 and ADR-0004.
+- Prediction before lab: Initially treated a resource object as the actor for a
+  transition and did not distinguish Argo CD `Synced` from end-to-end `Ready`.
+- Micro-lab/change performed: Traced the bounded `A -> B -> C -> D` request path
+  on paper and reviewed failure scenarios for missing managed/external resources,
+  dual ownership and database authorization. No controller or AWS resource was created.
+- Expected vs actual: After guided correction, correctly located failures by the
+  first missing object and the controller owning the preceding transition; also
+  separated IRSA/IAM authorization from PostgreSQL privileges.
+- Evidence path: `docs/architecture/SYSTEM_DESIGN.md`,
+  `.agent/adr/ADR-0003_BOOTSTRAP_PLATFORM_BOUNDARY.md`, and
+  `.agent/adr/ADR-0004_SHARED_RDS_AND_RECOVERY_DATABASE.md`.
+- Explain in my own words: Terraform creates the EKS bootstrap foundation; Argo CD
+  syncs Git state, kro expands a golden-path request, Kubernetes/Crossplane
+  reconcile child resources, and readiness is distinct from sync. Shared RDS stays
+  outside each sandbox request, while destructive recovery uses a separate PoC DB
+  or clone.
+- Failure I can now diagnose: Argo CD can be synced while a Crossplane resource is
+  not ready; dual-managing one AWS resource can create a reconciliation loop; and
+  successful secret retrieval does not grant PostgreSQL `CREATE SCHEMA` privilege.
+- Remaining gap: Crossplane and kro have not been practiced hands-on. Exact
+  versions, provider packages, Region, IAM scope, secret integration and
+  management/deletion policies remain `UNVERIFIED` for later P1 tasks.
+- Status: EXPLAINED

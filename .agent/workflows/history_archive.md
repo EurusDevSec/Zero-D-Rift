@@ -35,3 +35,17 @@ This is a concise milestone ledger, not a chat transcript.
   implementation-focused optimization of ver2.
 - Closed P1 Task 1 without a redundant full document comparison.
 - P1 next work is Task 2: system design and architectural ADRs.
+
+## 2026-09-25 — P1 Task 2 architecture foundation completed
+
+- Reviewed and corrected `docs/architecture/SYSTEM_DESIGN.md` within the active
+  P1 scope.
+- Accepted ADR-0003 for the Terraform/OpenTofu bootstrap boundary and ADR-0004
+  for the shared RDS and isolated recovery-database boundary.
+- Completed owner teach-back for bootstrap ordering, single resource ownership,
+  shared-RDS trade-offs, and the distinction between IRSA/IAM authorization and
+  PostgreSQL privileges; recorded the learning state as `EXPLAINED`.
+- Passed documentation-level L0 checks for diff whitespace, unique ADR IDs,
+  accepted statuses and referenced evidence paths.
+- No AWS resource or platform controller was created; the next bounded work is
+  P1 Task 3, the version and compatibility matrix.

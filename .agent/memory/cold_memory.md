@@ -16,6 +16,14 @@ state belongs in `workflows/active_context.md`; raw evidence belongs in
   golden paths form the maximum PoC boundary.
 - The project values reproducibility, honest failure reporting, cost control and
   the owner's ability to explain the system over technology count.
+- Terraform/OpenTofu owns the initial VPC, EKS, OIDC, system node group,
+  bootstrap IAM and baseline logging/budget foundation. Argo CD, kro and
+  Crossplane run only after that cluster exists; no resource may be managed by
+  both Terraform/OpenTofu and Crossplane without an explicit ownership handoff.
+- RAGSandbox uses a pre-provisioned shared RDS with per-sandbox database/schema,
+  database role and credential boundaries. Destructive recovery trials use a
+  separate RDS PoC or clone so they cannot disrupt the shared demo database or
+  mix recovery evidence with provisioning evidence.
 
 ## Durable agent-operation decisions
 

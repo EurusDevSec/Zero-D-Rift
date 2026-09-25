@@ -114,15 +114,19 @@ or the teacher/school requires a formal revision.
 
 ## Task 2 — System design and architectural ADRs (4–5 h)
 
-- [ ] Create `[NEW] docs/architecture/SYSTEM_DESIGN.md` with bootstrap, control,
+- [x] Create `[NEW] docs/architecture/SYSTEM_DESIGN.md` with bootstrap, control,
       workload, identity, secret, data, observability and teardown flows.
-- [ ] Draw the end-to-end request sequence from Git PR to workload readiness/status.
-- [ ] Record responsibility boundaries for Terraform, Argo CD, Crossplane and kro.
-- [ ] Record the shared-RDS and separate-recovery-database decision.
-- [ ] List unresolved decisions without letting an agent choose them silently.
+- [x] Draw the end-to-end request sequence from Git PR to workload readiness/status.
+- [x] Record responsibility boundaries for Terraform, Argo CD, Crossplane and kro.
+- [x] Record the shared-RDS and separate-recovery-database decision.
+- [x] List unresolved decisions without letting an agent choose them silently.
 
 Micro-assertion: every technology in the system diagram has exactly one primary
 responsibility and a linked reason for inclusion.
+
+Evidence: `docs/architecture/SYSTEM_DESIGN.md`, accepted ADR-0003 and ADR-0004
+under `.agent/adr/`, owner teach-back recorded in the learning log, and L0
+documentation checks on 2026-09-25.
 
 ## Task 3 — Version and compatibility spike (5–6 h)
 
