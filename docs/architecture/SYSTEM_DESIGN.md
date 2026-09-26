@@ -235,15 +235,15 @@ sau Karpenter reclaim node.
 | ------------------------------------------ | ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
 | AWS Region                                 | UNVERIFIED | Kiểm tra AWS service availability, GPU capacity/quota, giá, credit applicability và network requirement của account sandbox.                             | Không tự chọn Region chỉ vì phổ biến hoặc gần địa lý.                                      |
 | Network egress design                      | UNVERIFIED | So sánh yêu cầu outbound của EKS/node/workload với chi phí và security trade-off của public subnet, NAT Gateway và VPC endpoint.                         | Không mặc định private subnet cần NAT Gateway hoặc public subnet là đủ an toàn.            |
-| Local-first environment: `kind` hoặc `k3d` | UNVERIFIED | Thực hiện compatibility review/micro-lab cho Kubernetes workflow, controller install, ingress/network và local image workflow.                           | Không coi local environment tương đương EKS về IRSA, VPC CNI, Karpenter, RDS hoặc AWS IAM. |
-| Crossplane AWS provider packages           | UNVERIFIED | Kiểm tra official compatibility documentation, supported Kubernetes/Crossplane versions, CRD footprint, ProviderConfig và managed-resource requirements. | Không cài toàn bộ AWS provider family hoặc pin package/version khi chưa có evidence.       |
+| Local-first environment                    | PROPOSED — ADR-0005 | Dùng `kind v0.33.0` với Kubernetes 1.35.8 image đã pin digest; chuyển ADR sang `ACCEPTED` sau owner review và L2 micro-lab.                                  | Không coi kind tương đương EKS về IRSA, VPC CNI, Karpenter, RDS hoặc AWS IAM.               |
+| Crossplane AWS provider packages           | PROPOSED SCOPE      | Candidate v2.7.0; chọn S3 và EC2 cho approved resource paths, giữ SQS conditional và không chọn EKS/IAM/RDS mặc định. Exact OCI refs/digests và pairing cần L2. | Không cài toàn bộ AWS provider family hoặc tuyên bố pairing runtime đã pass.               |
 | Secret integration method                  | UNVERIFIED | Đánh giá cách workload lấy secret từ AWS Secrets Manager, quyền IRSA cần thiết, secret rotation và redaction requirements.                               | Không mặc định dùng một controller/integration cụ thể hoặc đưa secret value vào Git.       |
 | Exact IAM action/resource scope            | UNVERIFIED | Xác định từ selected AWS resources, tenant boundary và negative-access test plan.                                                                        | Không dùng wildcard administrative policy cho workload hoặc tenant.                        |
 | Crossplane management/deletion policies    | UNVERIFIED | Kiểm tra semantics theo version Crossplane/provider đã pin và thiết kế teardown/recovery requirement.                                                    | Không dùng policy/value chỉ dựa trên ví dụ cũ hoặc giả định resource sẽ tự retain/delete.  |
 
-Các quyết định trên không được đóng trước compatibility spike, account/quota review
-và evidence chính thức. Khi chưa xác minh, mọi tài liệu liên quan phải giữ nhãn
-`UNVERIFIED`.
+Quyết định local-first mới ở trạng thái `PROPOSED`; những quyết định còn lại không
+được đóng trước compatibility spike, account/quota review và evidence chính thức.
+Khi chưa xác minh, mọi tài liệu liên quan phải giữ nhãn `UNVERIFIED`.
 
 ## 9. ADRs cần tạo hoặc quyết định sau
 
@@ -253,8 +253,8 @@ và evidence chính thức. Khi chưa xác minh, mọi tài liệu liên quan ph
 | -------------------------------------------------- | ------------------- | ------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
 | Shared RDS và separate recovery database           | ACCEPTED — ADR-0004 | RAGSandbox dùng shared pre-provisioned RDS; destructive recovery dùng RDS/clone PoC riêng.  | Canonical scope ver3 và threat/recovery boundary review.                                    |
 | Bootstrap plane và platform control plane boundary | ACCEPTED — ADR-0003 | Terraform/OpenTofu bootstrap AWS/EKS; Argo CD, kro và Crossplane chạy sau khi EKS sẵn sàng. | Canonical scope ver3, system design và dependency review.                                   |
-| Local-first environment: `kind` hoặc `k3d`         | DECISION PENDING    | Chọn một local environment cho development trước EKS.                                       | Compatibility micro-lab, documented parity gaps và owner review.                            |
-| Selected Crossplane AWS provider packages          | DECISION PENDING    | Chỉ chọn package/service cần cho S3, IAM, Security Group, RDS và khi cần SQS.               | Official compatibility evidence, version matrix và CRD footprint review.                    |
+| Local-first environment: kind                       | PROPOSED — ADR-0005 | Dùng kind cho Kubernetes 1.35 compatibility work trước EKS.                                 | Version matrix đã có; còn L2 micro-lab và owner review trước khi `ACCEPTED`.                 |
+| Selected Crossplane AWS provider packages          | DECISION PENDING    | Chọn S3/EC2 candidates; SQS conditional; không chọn EKS/IAM/RDS mặc định.                   | L2 pairing/CRD footprint evidence và final ownership review trước provider installation.     |
 | AWS Region và network egress design                | DECISION PENDING    | Chọn Region và egress architecture trong giới hạn cost/security PoC.                        | Account credit/quota evidence, service availability và cost comparison.                     |
 | Secret integration method                          | DECISION PENDING    | Chọn cách workload tham chiếu/lấy secret từ AWS Secrets Manager.                            | IAM boundary, redaction requirement, compatibility evidence và local/EKS parity assessment. |
 | Crossplane management/deletion policy              | DECISION PENDING    | Xác định lifecycle của selected AWS resources khi manifest bị đổi/xóa.                      | Pinned version semantics, teardown plan và recovery safety review.                          |

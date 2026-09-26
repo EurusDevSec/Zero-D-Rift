@@ -69,3 +69,23 @@ Status meanings:
   versions, provider packages, Region, IAM scope, secret integration and
   management/deletion policies remain `UNVERIFIED` for later P1 tasks.
 - Status: EXPLAINED
+
+### 2026-09-25 — Version and compatibility baseline
+
+- Phase/task: P1 / Task 3
+- Learning objective: Distinguish a release pin, documented compatibility and
+  project runtime evidence; explain why local Kubernetes evidence is not EKS evidence.
+- Source(s) consulted: `docs/VERSION_MATRIX.md`, ADR-0005 and the official sources
+  linked from the matrix.
+- Prediction before lab: Pending owner review.
+- Micro-lab/change performed: Agent completed the official-source compatibility
+  spike and a read-only local tool probe. No cluster or controller was installed.
+- Expected vs actual: The EKS 1.35 controller baseline was narrowed, while the
+  Crossplane/provider/kro combination and OpenCost remain correctly `UNVERIFIED`.
+- Evidence path: `docs/VERSION_MATRIX.md` and
+  `.agent/adr/ADR-0005_KIND_LOCAL_FIRST_ENVIRONMENT.md`.
+- Explain in my own words: Pending owner teach-back.
+- Failure I can now diagnose: Pending owner teach-back.
+- Remaining gap: Owner must review the matrix and ADR, then explain source evidence
+  versus runtime evidence and kind versus EKS parity. L2 kind evidence does not yet exist.
+- Status: STARTED

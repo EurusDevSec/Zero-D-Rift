@@ -130,16 +130,18 @@ documentation checks on 2026-09-25.
 
 ## Task 3 — Version and compatibility spike (5–6 h)
 
-- [ ] Create `[NEW] docs/VERSION_MATRIX.md` with component, version/digest, source,
+- [x] Create `[NEW] docs/VERSION_MATRIX.md` with component, version/digest, source,
       checked date, compatibility and verification status.
-- [ ] Verify the available EKS/Kubernetes versions and AL2023 constraints from
+- [x] Verify the available EKS/Kubernetes versions and AL2023 constraints from
       current official AWS documentation.
-- [ ] Check Argo CD, Crossplane AWS provider packages and kro compatibility.
-- [ ] Check KEDA, Karpenter, Kyverno and OpenCost requirements without installing them.
-- [ ] Decide `kind` or `k3d` for local-first work and document parity gaps.
-- [ ] Create ADRs only for choices supported by the compatibility evidence.
+- [x] Check Argo CD, Crossplane AWS provider packages and kro compatibility.
+- [x] Check KEDA, Karpenter, Kyverno and OpenCost requirements without installing them.
+- [x] Decide `kind` or `k3d` for local-first work and document parity gaps.
+- [x] Create ADRs only for choices supported by the compatibility evidence.
 
-Evidence: direct official links and `UNVERIFIED` labels for remaining unknowns.
+Evidence: `docs/VERSION_MATRIX.md`, proposed ADR-0005, direct official links and
+`UNVERIFIED` labels for remaining unknowns. Functional research/drafting is
+complete; ADR acceptance, owner teach-back and L2 runtime verification remain open.
 
 ## Task 4 — Threat model and identity design (4 h)
 
