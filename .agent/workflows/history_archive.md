@@ -49,3 +49,18 @@ This is a concise milestone ledger, not a chat transcript.
   accepted statuses and referenced evidence paths.
 - No AWS resource or platform controller was created; the next bounded work is
   P1 Task 3, the version and compatibility matrix.
+
+## 2026-09-28 — P1 Task 4 learning gate closed and Task 5 cost plan drafted
+
+- Closed Task 4 owner teach-back at `EXPLAINED`: the owner separated successful
+  workload identity from over-broad S3 authorization and identified STS caller,
+  CloudTrail data events and policy review as required evidence.
+- Created `docs/finops/COST_PLAN.md` with the canonical 100 USD envelope, dated
+  AWS pricing/quota sources, Budget/TTL/GPU guardrails, daily billing loop and
+  pre/post-teardown inventory contract.
+- Proposed ADR-0006: no default NAT Gateway, public worker subnets with restricted
+  ingress, private RDS and a no-additional-charge S3 gateway endpoint for the PoC.
+- A later redacted read-only probe confirmed `us-east-1` and captured EKS/EC2/VPC/
+  RDS quotas. Both G/VT On-Demand and Spot quotas are zero; credit applicability,
+  exact prices and ADR approval remain open.
+- No AWS resource, Budget, quota request or infrastructure mutation was performed.

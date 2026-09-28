@@ -140,30 +140,38 @@ documentation checks on 2026-09-25.
 - [x] Create ADRs only for choices supported by the compatibility evidence.
 
 Evidence: `docs/VERSION_MATRIX.md`, proposed ADR-0005, direct official links and
-`UNVERIFIED` labels for remaining unknowns. Functional research/drafting is
-complete; ADR acceptance, owner teach-back and L2 runtime verification remain open.
+`UNVERIFIED` labels for remaining unknowns. Functional research/drafting and owner
+teach-back are complete at `EXPLAINED`; ADR acceptance and L2 runtime verification
+remain open.
 
 ## Task 4 — Threat model and identity design (4 h)
 
-- [ ] Create `[NEW] docs/security/THREAT_MODEL.md` with assets, actors, trust
+- [x] Create `[NEW] docs/security/THREAT_MODEL.md` with assets, actors, trust
       boundaries, abuse cases and mitigations.
-- [ ] Draw the Git/CI, Kubernetes, AWS API, tenant and administrative identity flows.
-- [ ] Define least-privilege IRSA boundaries and negative-access test intentions.
-- [ ] Document why namespace/RBAC/NetworkPolicy is soft multi-tenancy.
-- [ ] Define secret redaction rules for Git, logs, screenshots and experiment data.
+- [x] Draw the Git/CI, Kubernetes, AWS API, tenant and administrative identity flows.
+- [x] Define least-privilege IRSA boundaries and negative-access test intentions.
+- [x] Document why namespace/RBAC/NetworkPolicy is soft multi-tenancy.
+- [x] Define secret redaction rules for Git, logs, screenshots and experiment data.
 
-Evidence: threat-to-control-to-test mapping; no secret values.
+Evidence: `docs/security/THREAT_MODEL.md`, official sources checked 2026-09-28,
+18 threat-to-control-to-test mappings and no secret values. Functional design and
+owner teach-back are complete at `EXPLAINED`; later L2/L3 runtime evidence remains open.
 
 ## Task 5 — Cost, quota and teardown plan (4 h)
 
-- [ ] Create `[NEW] docs/finops/COST_PLAN.md` using the 100 USD envelope from ver3.
-- [ ] Verify credit applicability and relevant account quotas without creating resources.
-- [ ] Compare NAT Gateway, public subnet and/or VPC endpoint assumptions for this PoC.
-- [ ] Define Budget thresholds, TTL tags, daily billing check and GPU limits.
-- [ ] Define resource inventory and retain/delete allowlists for P2 onward.
+- [x] Create `[NEW] docs/finops/COST_PLAN.md` using the 100 USD envelope from ver3.
+- [ ] Verify credit applicability and relevant account quotas without creating
+      resources. Applied EKS/EC2/VPC/RDS quotas are verified in `us-east-1`; credit
+      applicability remains `UNVERIFIED` because installed AWS CLI lacks `GetCredits`.
+- [x] Compare NAT Gateway, public subnet and/or VPC endpoint assumptions for this PoC.
+- [x] Define Budget thresholds, TTL tags, daily billing check and GPU limits.
+- [x] Define resource inventory and retain/delete allowlists for P2 onward.
 
 Evidence: assumptions marked `VERIFIED` or `UNVERIFIED`, dated price/source links,
-and a teardown checklist.
+teardown checklist, `docs/finops/COST_PLAN.md` and proposed ADR-0006. Documentation
+and design passed L0 checks on 2026-09-28; account/Region evidence and owner review
+remain open for credit, exact price and ADR-0006 approval. GPU G/VT On-Demand and
+Spot quotas are both observed at zero; no increase request was sent.
 
 ## Task 6 — Baseline and experiment contract (4 h)
 

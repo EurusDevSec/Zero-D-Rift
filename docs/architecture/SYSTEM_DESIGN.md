@@ -54,7 +54,9 @@
   gọi AWS API và reconcile các selected resource đã được phê duyệt → Crossplane cập nhật status vào Kubernetes → kro dùng status của các
   resource con để cập nhật readiness/status của RAGSandbox
 - kro tạo Kubernetes object theo graph nhưng không thay thế controller của object đó: kro có thể tạo `Deployment`, nhưng Deployment controller mới tạo `ReplicaSet`/Pod; kro có thể tạo Crossplane managed resource, nhưng Crossplane provider mới gọi AWS API.
-- Crossplane AWS Provider reconcile selected AWS external resource (S3, RDS, IAM, SG, SQS)
+- Crossplane AWS Provider reconcile selected AWS external resources. Task 3 chọn
+  candidate S3 và EC2/Security Group; SQS còn conditional, còn RDS/IAM không được
+  mặc định giao cho Crossplane khi ownership chưa được phê duyệt.
 
 ### 4.3. Thứ tự phụ thuộc
 
@@ -133,6 +135,9 @@ to the pull-request interface requires a separate integration and remains
 6. KEDA ngừng tạo Job mới khi queue/event về 0. Sau khi Job hoàn thành và không còn Pod cần node, Karpenter có thể drain/terminate node theo disruption policy; checkpoint phải được xác minh trong S3 trước khi node bị thu hồi.
 
 ## 6. Identity, secret và trust boundary
+
+Threat-to-control-to-test mapping chi tiết nằm tại
+`docs/security/THREAT_MODEL.md`; section này chỉ giữ high-level flow.
 
 ### 6.1. IRSA identity flow
 
@@ -233,8 +238,8 @@ sau Karpenter reclaim node.
 
 | Quyết định                                 | Trạng thái | Cách xác minh                                                                                                                                            | Không được giả định                                                                        |
 | ------------------------------------------ | ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
-| AWS Region                                 | UNVERIFIED | Kiểm tra AWS service availability, GPU capacity/quota, giá, credit applicability và network requirement của account sandbox.                             | Không tự chọn Region chỉ vì phổ biến hoặc gần địa lý.                                      |
-| Network egress design                      | UNVERIFIED | So sánh yêu cầu outbound của EKS/node/workload với chi phí và security trade-off của public subnet, NAT Gateway và VPC endpoint.                         | Không mặc định private subnet cần NAT Gateway hoặc public subnet là đủ an toàn.            |
+| AWS Region                                 | SELECTED — `us-east-1` | STS và applied EKS/EC2/VPC/RDS quotas đã đọc ngày 2026-09-28; exact credit/prices và GPU capacity còn mở. | Không coi Region selection là bằng chứng Spot capacity hoặc credit applicability. |
+| Network egress design                      | PROPOSED — ADR-0006 | Public worker subnets + restricted public IPv4, private RDS, no default NAT Gateway và S3 gateway endpoint; cần owner/account/Region/L3 review. | Không coi cost-optimized PoC network là production design hoặc public subnet tự động an toàn. |
 | Local-first environment                    | PROPOSED — ADR-0005 | Dùng `kind v0.33.0` với Kubernetes 1.35.8 image đã pin digest; chuyển ADR sang `ACCEPTED` sau owner review và L2 micro-lab.                                  | Không coi kind tương đương EKS về IRSA, VPC CNI, Karpenter, RDS hoặc AWS IAM.               |
 | Crossplane AWS provider packages           | PROPOSED SCOPE      | Candidate v2.7.0; chọn S3 và EC2 cho approved resource paths, giữ SQS conditional và không chọn EKS/IAM/RDS mặc định. Exact OCI refs/digests và pairing cần L2. | Không cài toàn bộ AWS provider family hoặc tuyên bố pairing runtime đã pass.               |
 | Secret integration method                  | UNVERIFIED | Đánh giá cách workload lấy secret từ AWS Secrets Manager, quyền IRSA cần thiết, secret rotation và redaction requirements.                               | Không mặc định dùng một controller/integration cụ thể hoặc đưa secret value vào Git.       |
@@ -255,7 +260,8 @@ Khi chưa xác minh, mọi tài liệu liên quan phải giữ nhãn `UNVERIFIED
 | Bootstrap plane và platform control plane boundary | ACCEPTED — ADR-0003 | Terraform/OpenTofu bootstrap AWS/EKS; Argo CD, kro và Crossplane chạy sau khi EKS sẵn sàng. | Canonical scope ver3, system design và dependency review.                                   |
 | Local-first environment: kind                       | PROPOSED — ADR-0005 | Dùng kind cho Kubernetes 1.35 compatibility work trước EKS.                                 | Version matrix đã có; còn L2 micro-lab và owner review trước khi `ACCEPTED`.                 |
 | Selected Crossplane AWS provider packages          | DECISION PENDING    | Chọn S3/EC2 candidates; SQS conditional; không chọn EKS/IAM/RDS mặc định.                   | L2 pairing/CRD footprint evidence và final ownership review trước provider installation.     |
-| AWS Region và network egress design                | DECISION PENDING    | Chọn Region và egress architecture trong giới hạn cost/security PoC.                        | Account credit/quota evidence, service availability và cost comparison.                     |
+| AWS Region                                         | SELECTED — `us-east-1` | Account/Region và quotas đã probe read-only; credit, exact prices và GPU quota increase còn mở. | Revisit nếu credit, price, quota approval hoặc capacity không phù hợp.                       |
+| Network egress design                              | PROPOSED — ADR-0006 | No default NAT; public worker subnets, private RDS và S3 gateway endpoint cho PoC.            | Owner review, Region pricing, Terraform plan và L3 network/security evidence.                |
 | Secret integration method                          | DECISION PENDING    | Chọn cách workload tham chiếu/lấy secret từ AWS Secrets Manager.                            | IAM boundary, redaction requirement, compatibility evidence và local/EKS parity assessment. |
 | Crossplane management/deletion policy              | DECISION PENDING    | Xác định lifecycle của selected AWS resources khi manifest bị đổi/xóa.                      | Pinned version semantics, teardown plan và recovery safety review.                          |
 

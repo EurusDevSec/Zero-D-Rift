@@ -77,15 +77,79 @@ Status meanings:
   project runtime evidence; explain why local Kubernetes evidence is not EKS evidence.
 - Source(s) consulted: `docs/VERSION_MATRIX.md`, ADR-0005 and the official sources
   linked from the matrix.
-- Prediction before lab: Pending owner review.
+- Prediction before lab: A release existing upstream might be mistaken for proof
+  that an exact multi-component combination works in this project.
 - Micro-lab/change performed: Agent completed the official-source compatibility
   spike and a read-only local tool probe. No cluster or controller was installed.
 - Expected vs actual: The EKS 1.35 controller baseline was narrowed, while the
   Crossplane/provider/kro combination and OpenCost remain correctly `UNVERIFIED`.
+  During teach-back the owner correctly separated release evidence, local kind
+  compatibility evidence and EKS/AWS integration evidence.
 - Evidence path: `docs/VERSION_MATRIX.md` and
   `.agent/adr/ADR-0005_KIND_LOCAL_FIRST_ENVIRONMENT.md`.
-- Explain in my own words: Pending owner teach-back.
-- Failure I can now diagnose: Pending owner teach-back.
-- Remaining gap: Owner must review the matrix and ADR, then explain source evidence
-  versus runtime evidence and kind versus EKS parity. L2 kind evidence does not yet exist.
+- Explain in my own words: Separate official releases do not prove that Crossplane
+  core 2.4.0 and AWS provider 2.7.0 work together. A healthy provider on kind can
+  prove Kubernetes/package compatibility, but real S3 creation still depends on
+  EKS identity, IAM authorization, networking and AWS APIs. Kind was selected over
+  k3d because it uses upstream Kubernetes 1.35, while K3s is a modified distribution.
+- Failure I can now diagnose: Distinguish a package/controller compatibility
+  failure from an IRSA/IAM/AWS external-resource failure, and avoid treating kind
+  success as proof of EKS-specific behavior.
+- Remaining gap: L2 kind and L3 EKS/AWS runtime evidence, exact artifact digests,
+  ProviderRevision health and real external-resource tests do not yet exist.
+- Status: EXPLAINED
+
+### 2026-09-28 — Threat model and identity boundaries
+
+- Phase/task: P1 / Task 4
+- Learning objective: Explain the Git/CI, Kubernetes, IRSA/AWS, tenant and
+  administrative trust boundaries and identify the evidence for a denied action.
+- Source(s) consulted: `docs/security/THREAT_MODEL.md` and the official AWS EKS,
+  Kubernetes, Kyverno and GitHub sources linked from it.
+- Prediction before lab: Owner expected that a tenant-A Pod assuming tenant-A IAM
+  role but reading tenant-B S3 data indicated an overly broad AWS authorization policy.
+- Micro-lab/change performed: Reviewed IRSA flow, soft-tenancy boundary and T07/T08/T10,
+  then diagnosed one cross-tenant S3 access scenario. No security control, cluster,
+  IAM policy or AWS resource was created.
+- Expected vs actual: Owner correctly separated a successful identity path from a
+  failed authorization boundary and named STS caller identity, CloudTrail and policy
+  review as evidence. Correction: the resource belongs to tenant B rather than a
+  "Pod B", and the allow can originate from role identity/session policy or S3
+  bucket/access-point policy rather than bucket policy alone.
+- Evidence path: `docs/security/THREAT_MODEL.md`.
+- Explain in my own words: If Pod A assumes Role A as intended, the identity flow
+  works. If that role can read tenant-B S3 data, the authorization/isolation scope
+  is too broad. Confirm the caller, inspect S3 data events and evaluate all relevant
+  identity/resource policies to locate the allow path.
+- Failure I can now diagnose: Distinguish wrong-role/trust failure from correct-role
+  over-authorization and identify the evidence needed for cross-tenant S3 access.
+- Remaining gap: Later L2/L3 positive and negative runtime tests, exact IAM policies,
+  CloudTrail data-event configuration and VPC CNI/Kyverno enforcement.
+- Status: EXPLAINED
+
+### 2026-09-28 — Cost, quota and teardown guardrails
+
+- Phase/task: P1 / Task 5
+- Learning objective: Explain why scale-to-zero does not remove fixed AWS cost,
+  compare public/NAT/endpoint egress options and identify the evidence required
+  before paid AWS work.
+- Source(s) consulted: `docs/de_cuong_tot_nghiep_ver3.md`,
+  `docs/finops/COST_PLAN.md`, ADR-0006 and the dated AWS/Karpenter sources linked
+  from the cost plan.
+- Prediction before lab: Pending owner review.
+- Micro-lab/change performed: Agent completed the documentation-level cost plan
+  and ran a redacted read-only account probe. `us-east-1`, IAM-user STS access and
+  EKS/EC2/VPC/RDS quota values were observed; no resource or quota request was created.
+- Expected vs actual: The 100 USD envelope, pricing formulas, Budget/TTL/GPU
+  guardrails and teardown contract are explicit. Region and selected applied quotas
+  are now account-verified; both G/VT On-Demand and Spot quotas are zero. Credit
+  applicability and exact prices remain correctly `UNVERIFIED`.
+- Evidence path: `docs/finops/COST_PLAN.md` and
+  `.agent/adr/ADR-0006_POC_NETWORK_EGRESS_AND_COST_GUARDRAILS.md`.
+- Explain in my own words: Pending owner review.
+- Failure I can now diagnose: Pending owner review; planned examples include Pod
+  scale-to-zero while EKS/RDS/public IPv4 still accrue cost and a GPU launch blocked
+  by a zero G/VT vCPU quota.
+- Remaining gap: Owner review of ADR-0006, credit applicability, exact-price
+  evidence and a separately approved GPU quota-increase decision.
 - Status: STARTED
