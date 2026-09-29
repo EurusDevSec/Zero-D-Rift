@@ -1,0 +1,83 @@
+{
+  "schema_version": "1.0",
+  "contract_version": "0.1.0",
+  "run_id": "zdr-synthetic-20000101T000000Z-001",
+  "campaign_id": "synthetic-schema-dry-run",
+  "experiment_id": "H1_RAG_PROVISIONING",
+  "hypothesis_ids": [
+    "H1",
+    "H3"
+  ],
+  "trial_number": 0,
+  "data_class": "SYNTHETIC",
+  "official": false,
+  "inclusion_status": "EXCLUDED",
+  "exclusion_reason_code": "SYNTHETIC_NOT_OFFICIAL",
+  "result_status": "DRY_RUN_SCHEMA_ONLY",
+  "source": {
+    "commit_sha": "0000000000000000000000000000000000000000",
+    "git_dirty": false,
+    "versions": {
+      "eks": "SYNTHETIC",
+      "kubernetes": "SYNTHETIC",
+      "argocd": "SYNTHETIC",
+      "kro": "SYNTHETIC",
+      "crossplane": "SYNTHETIC"
+    }
+  },
+  "environment": {
+    "account_alias": "synthetic-account",
+    "region": "us-east-1",
+    "az": "us-east-1a",
+    "cluster_alias": "synthetic-cluster",
+    "tenant_alias": "synthetic-tenant"
+  },
+  "workload": {
+    "blueprint": "RAGSandbox",
+    "profile_id": "synthetic-rag-profile-v1",
+    "input_hash": "SYNTHETIC_NOT_COMPUTED",
+    "instance_type": "m6i.large",
+    "capacity_type": "ON_DEMAND",
+    "timeout_seconds": 900,
+    "idle_window_seconds": 0
+  },
+  "timestamps": {
+    "preflight_utc": "2000-01-01T00:00:00Z",
+    "t0_utc": "2000-01-01T00:00:05Z",
+    "ready_utc": "2000-01-01T00:02:08Z",
+    "end_utc": "2000-01-01T00:02:08Z",
+    "teardown_complete_utc": "2000-01-01T00:03:00Z",
+    "billing_observed_at_utc": null
+  },
+  "result": {
+    "duration_seconds": 123,
+    "acceptance_checks": {
+      "app_readiness": "SYNTHETIC_PASS",
+      "db_query": "SYNTHETIC_PASS"
+    },
+    "error_class": null,
+    "error_code": null,
+    "manual_interactions": 1,
+    "commands_count": 1,
+    "automated_actions_count": 5
+  },
+  "cost": {
+    "variable_compute_usd_gross": null,
+    "fixed_cost_usd_gross": null,
+    "billing_status": "SYNTHETIC_NOT_QUERIED",
+    "source": null
+  },
+  "evidence": {
+    "events_path": "SYNTHETIC/events.jsonl",
+    "inventory_before_path": "SYNTHETIC/inventory-before.json",
+    "inventory_after_path": "SYNTHETIC/inventory-after.json",
+    "acceptance_path": "SYNTHETIC/acceptance.json",
+    "hashes_path": "SYNTHETIC/hashes.sha256",
+    "redaction_status": "SYNTHETIC_ONLY"
+  },
+  "cleanup": {
+    "retain_allowlist": [],
+    "post_teardown_orphan_count": 0
+  },
+  "synthetic_notice": "Schema dry run only. Never include in official metrics or thesis results."
+}
