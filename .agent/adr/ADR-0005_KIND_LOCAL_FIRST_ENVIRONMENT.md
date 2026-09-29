@@ -31,6 +31,10 @@ Decision chỉ được chuyển sang `ACCEPTED` sau khi owner review và L2 mic
 chứng minh cluster 1.35 khởi động được cùng những controller được task triển khai
 cho phép. Task 3 không cài controller và không tạo cluster.
 
+Owner teach-back đã hoàn tất trong P1: owner phân biệt được capability mà kind có
+thể kiểm tra với IRSA/AWS/EKS behavior bắt buộc xác minh lại. ADR vẫn `PROPOSED`
+vì L2 micro-lab và runtime evidence chưa tồn tại.
+
 # Why kind
 
 - kind release cung cấp upstream Kubernetes 1.35.8 image và công bố digest cần
@@ -91,8 +95,8 @@ kind và Helm chưa có trên `PATH` tại thời điểm Task 3 probe.
 
 Trước khi đổi status sang `ACCEPTED`:
 
-1. Owner giải thích được hai điều kind kiểm tra được và hai điều bắt buộc kiểm tra
-   lại trên EKS.
+1. [x] Owner giải thích được hai điều kind kiểm tra được và hai điều bắt buộc kiểm
+   tra lại trên EKS.
 2. kind tạo cluster bằng image/digest đã pin.
 3. Observed Kubernetes version là 1.35.x.
 4. L2 task lưu run ID/log và cleanup cluster theo documented procedure.

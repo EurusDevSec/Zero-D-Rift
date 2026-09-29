@@ -412,7 +412,7 @@ một security product mới.
 | Karpenter controller/node-role IAM boundary | `UNVERIFIED` | Pin version-specific permissions and bounded `iam:PassRole` during P6. |
 | Kyverno failure policy and exception process | `UNVERIFIED` | Test required policies in Audit then Enforce; define who may approve exceptions. |
 | RDS database/schema privilege statements | `UNVERIFIED` | Implement per-sandbox roles and cross-tenant SQL negative tests. |
-| Evidence storage path and run-manifest schema | `UNVERIFIED` | Task 6 defines immutable raw data and redacted publication layout. |
+| Evidence storage path and run-manifest schema | `APPROVED_CONTRACT` | Task 6 contract v0.1.0 defines the planned immutable raw-data layout, manifest fields and redacted publication boundary; later harness/runtime enforcement remains unverified. |
 
 Residual risk remains even after controls: a compromised cluster admin, node kernel,
 platform controller or shared database admin can cross tenant boundaries. This is

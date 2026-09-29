@@ -46,3 +46,11 @@ implementation authority.
 
 Before publishing the repository as a portfolio, redact phone numbers, student
 IDs, account identifiers, and other unnecessary personal information.
+
+## NCKH derivative research track
+
+The proposed student-research topic derived from Zero D-Rift is documented at
+`research/nckh/NCKH_RESEARCH_CONTEXT.md`. It is a handoff/context record, not an
+approved extension of the graduation-project scope. Its title, Category B target,
+advisor acceptance, non-duplication boundary, funding and experiment design remain
+subject to the explicit status labels in that file.

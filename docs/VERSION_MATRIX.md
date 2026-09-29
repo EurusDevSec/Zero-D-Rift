@@ -29,7 +29,7 @@ manifest trước official trial.
 | Component | Selected version / digest | Official source | Checked date | Compatibility with project baseline | Status |
 | --- | --- | --- | --- | --- | --- |
 | Amazon EKS / Kubernetes | EKS minor `1.35`; EKS platform patch do AWS quản lý | [EKS Kubernetes versions](https://docs.aws.amazon.com/eks/latest/userguide/kubernetes-versions.html), [platform versions](https://docs.aws.amazon.com/eks/latest/userguide/platform-versions.html) | 2026-09-25 | EKS 1.35 đang trong standard support. Không pin platform patch như một user-managed dependency. | `DOC_VERIFIED` |
-| EKS optimized AMI, system nodes | AL2023 standard variant; architecture và exact AMI ID `UNVERIFIED` | [AL2023 for EKS](https://docs.aws.amazon.com/eks/latest/userguide/al2023.html), [retrieve AMI ID](https://docs.aws.amazon.com/eks/latest/userguide/retrieve-ami-id.html) | 2026-09-25 | AL2023 dùng cgroup v2 và phù hợp EKS 1.35. Exact AMI release/ID phụ thuộc Region và phải resolve qua SSM khi Region được duyệt. | `DOC_VERIFIED` for OS family; AMI ID `UNVERIFIED` |
+| EKS optimized AMI, system nodes | AL2023 standard variant; architecture và exact AMI ID `UNVERIFIED` | [AL2023 for EKS](https://docs.aws.amazon.com/eks/latest/userguide/al2023.html), [retrieve AMI ID](https://docs.aws.amazon.com/eks/latest/userguide/retrieve-ami-id.html) | 2026-09-25 | AL2023 dùng cgroup v2 và phù hợp EKS 1.35. Exact AMI release/ID phải resolve qua SSM cho selected Region trong P2. | `DOC_VERIFIED` for OS family; AMI ID `UNVERIFIED` |
 | EKS optimized AMI, GPU nodes | AL2023 NVIDIA variant; exact architecture, AMI ID and driver build `UNVERIFIED` | [EKS optimized accelerated AMI](https://docs.aws.amazon.com/eks/latest/userguide/ml-eks-optimized-ami.html) | 2026-09-25 | AL2023 NVIDIA AMI hỗ trợ Kubernetes 1.33 trở lên. Instance family, architecture, device plugin và Karpenter NodeClass cần EKS test. | `SOURCE_VERIFIED` |
 | Argo CD | `v3.5.3`; image/chart digests `UNVERIFIED` | [v3.5.3 release](https://github.com/argoproj/argo-cd/releases/tag/v3.5.3), [tested Kubernetes versions](https://argo-cd.readthedocs.io/en/stable/operator-manual/installation/) | 2026-09-25 | Argo CD 3.5 được dự án kiểm thử với Kubernetes 1.33-1.36, gồm 1.35. | `DOC_VERIFIED` |
 | Crossplane core | `v2.4.0`; chart/image digests `UNVERIFIED` | [v2.4.0 release](https://github.com/crossplane/crossplane/releases/tag/v2.4.0), [install prerequisites](https://docs.crossplane.io/latest/get-started/install/) | 2026-09-25 | Release hiện hành và yêu cầu Kubernetes còn được upstream hỗ trợ. Exact pairing với AWS provider v2.7.0 chưa có matrix chính thức được tìm thấy. | `SOURCE_VERIFIED`; pairing `UNVERIFIED` |
@@ -50,8 +50,8 @@ manifest trước official trial.
   của trial phải ghi observed platform version thay vì coi một patch hiện tại là pin.
 - Containerd 1.x là generation cuối được EKS 1.35 hỗ trợ; P2 phải kiểm tra runtime
   thực tế và không xây automation phụ thuộc vào containerd 1.x cho lần nâng 1.36.
-- Region, architecture, exact AL2023 AMI ID, GPU instance family và NVIDIA device
-  plugin vẫn `UNVERIFIED`.
+- Architecture, exact AL2023 AMI ID, GPU instance family và NVIDIA device plugin
+  vẫn `UNVERIFIED`; Region đã chọn là `us-east-1` nhưng runtime/capacity chưa verify.
 
 ## 3. Crossplane AWS provider package scope
 
@@ -107,8 +107,8 @@ phù hợp hơn cho CRD, admission và reconciliation compatibility spike.
 | AWS LoadBalancer/NLB, quotas and service limits | No | Yes |
 | OpenCost allocation logic | Partial | AWS pricing configuration and billing reconciliation |
 
-The local choice remains `PROPOSED` until owner review and a later L2 kind
-micro-lab. It must not be described as EKS parity.
+Owner teach-back for the local/EKS boundary is complete. The local choice remains
+`PROPOSED` until a later L2 kind micro-lab and must not be described as EKS parity.
 
 ## 5. Evidence and open gates
 
@@ -124,14 +124,14 @@ status remains `UNVERIFIED`.
 
 ### Required before P2/P3 installation or official trials
 
-1. Owner reviews ADR-0005 and explains why kind is useful but not EKS-equivalent.
+1. Owner review/teach-back for ADR-0005 is complete; retain the local/EKS parity gaps.
 2. Install prerequisites only in the implementation task that explicitly permits it.
 3. Run the L2 kind compatibility lab and retain command output/run ID.
 4. Resolve chart/OCI/image digests and record them in Git or a run manifest.
 5. Recheck every release/security status immediately before installation; this
    matrix is a dated decision record, not an auto-updating dependency feed.
-6. Verify Region, EKS add-ons, AMI IDs, IRSA, IAM actions and AWS-specific behavior
-   in P2/P3 before any official trial.
+6. Carry forward selected Region `us-east-1`; verify EKS add-ons, AMI IDs, IRSA,
+   IAM actions and AWS-specific behavior in P2/P3 before any official trial.
 
 ## 6. Task 3 conclusion
 

@@ -4,8 +4,9 @@
 
 Tài liệu này biến spending envelope **100 USD** trong
 `docs/de_cuong_tot_nghiep_ver3.md` thành guardrail có thể kiểm tra trước khi P2
-tạo tài nguyên AWS. Đây không phải dự báo hóa đơn chính xác và không chứng minh
-credit hoặc quota của account hiện tại.
+tạo tài nguyên AWS. Đây không phải dự báo hóa đơn chính xác. Credit hiện có,
+Region và selected quota đã được kiểm tra ở account mục tiêu; từng runtime vẫn
+phải đối soát gross cost và inventory thực tế.
 
 Phạm vi giữ nguyên:
 
@@ -23,6 +24,7 @@ nguyên AWS nào.
 | Nhãn | Ý nghĩa |
 | --- | --- |
 | `DOC_VERIFIED` | Giá, default quota hoặc behavior có nguồn AWS chính thức, được kiểm tra ngày 2026-09-28. |
+| `PRICE_API_VERIFIED` | Unit price được đọc từ AWS Price List API ngày 2026-09-28 cho cấu hình và Region ghi rõ; không chứng minh capacity hay final bill. |
 | `ACCOUNT_VERIFIED` | Giá trị đã đọc từ đúng account và Region mục tiêu bằng API/console, có evidence đã redaction. |
 | `PROPOSED` | Thiết kế được đề xuất nhưng chưa được owner chấp thuận hoặc chưa có runtime evidence. |
 | `UNVERIFIED` | Chưa có account, Region, price hoặc runtime evidence cần thiết. |
@@ -36,20 +38,25 @@ Read-only probe tại workstation:
 
 | Check | Kết quả | Trạng thái |
 | --- | --- | --- |
-| AWS CLI | Có `aws-cli/2.0.30` | `OBSERVED` |
+| AWS CLI | Nâng cấp từ `2.0.30` lên `2.37.4`; terminal mới resolve đúng binary | `OBSERVED` |
 | AWS identity | `aws sts get-caller-identity` pass; principal type `IAM_USER`; account ID/ARN được redaction | `ACCOUNT_VERIFIED` |
 | Configured Region | `us-east-1` | `ACCOUNT_VERIFIED` |
-| Credit balance/applicable products/expiry | Installed CLI `2.0.30` không hỗ trợ `billing get-credits`; chưa kiểm tra console/API bằng client mới | `UNVERIFIED` |
+| Credit hiện có | Promotion 100 USD; remaining/estimated 100 USD; `ENABLED`; hiệu lực 2026-06-13 đến 2027-06-13; product list chứa EKS, EC2, RDS, S3, SQS, VPC và các dịch vụ platform liên quan | `ACCOUNT_VERIFIED` |
+| Credit từ guide chưa hoàn thành | Owner dự kiến thêm 100 USD sau khi hoàn thành guide; chưa xuất hiện trong `GetCredits` | `UNVERIFIED_OWNER_PLANNED` |
 | Applied service quotas | Đã đọc EKS, EC2 CPU/GPU, VPC và RDS quota; xem mục 7.3 | `ACCOUNT_VERIFIED` |
 
 Không account ID, ARN, access key hoặc credential nào được ghi vào tài liệu. Không
-có tài nguyên AWS, quota request hoặc account setting nào được tạo/thay đổi bởi probe.
+có tài nguyên AWS hoặc quota request nào được tạo bởi probe. Owner đã bật account
+setting cho phép IAM user/role sử dụng Billing information để thực hiện read-only
+`GetCredits`; việc bật setting không tự cấp IAM permission.
 
 Authenticated probe hiện dùng long-lived IAM user key. Evidence quota có giá trị
 cho account/Region, nhưng credential này không được dùng làm workload identity và
 không đóng security gate cho P2. Trước paid bootstrap, cần review bootstrap principal
 và ưu tiên temporary session theo threat model. KodeKloud Playground không được
 dùng làm evidence cho credit/quota của account chạy official trial.
+
+Evidence đã redaction: `docs/finops/evidence/2026-09-28_ACCOUNT_COST_PREFLIGHT.md`.
 
 ## 4. Spending envelope và nguyên tắc kế toán
 
@@ -62,6 +69,12 @@ dùng làm evidence cho credit/quota của account chạy official trial.
 | Network, IPv4, log, data transfer | 10 USD | Không tạo NAT Gateway mặc định; giới hạn log retention và public IPv4 hours. |
 | Dự phòng | 10 USD | Chỉ dùng cho sai số billing, failed trial hợp lệ hoặc teardown; không dùng để mở rộng scope. |
 | **Tổng** | **100 USD** | Hard project envelope, không phải bảo đảm của AWS Budgets. |
+
+Credit không thay đổi research budget: account hiện có 100 USD verified và có thể
+có thêm 100 USD sau một guide chưa hoàn thành, nhưng **gross project envelope vẫn
+là 100 USD**. Credit thứ hai chỉ trở thành account evidence khi `GetCredits` trả về
+record tương ứng; kể cả khi tổng credit đạt 200 USD, phần vượt envelope là reserve,
+không phải quyền mở rộng scope hoặc tăng mức chi.
 
 ### Quy tắc tính chi phí
 
@@ -112,25 +125,49 @@ Network cost
 | EKS standard-support control plane | 0.10 USD/cluster-hour; extended support 0.60 USD/cluster-hour | `DOC_VERIFIED` |
 | EKS 25 USD envelope | Lý thuyết tối đa 250 giờ ở 0.10 USD/giờ; plan dùng tối đa 200 giờ để giữ buffer | `DERIVED_FROM_DOC` |
 | Public IPv4 | 0.005 USD/address-hour cho in-use và idle public IPv4 | `DOC_VERIFIED` |
-| NAT Gateway | Tính theo provisioned hour, processed GB và standard data transfer; partial hour tính tròn | `DOC_VERIFIED`; exact Region price `UNVERIFIED` |
+| Linux `m6i.large` | 0.096 USD/instance-hour tại `us-east-1` | `PRICE_API_VERIFIED` |
+| Linux `t3.medium` | 0.0416 USD/instance-hour tại `us-east-1` | `PRICE_API_VERIFIED` |
+| Linux `g4dn.xlarge` | 0.526 USD/instance-hour tại `us-east-1` | `PRICE_API_VERIFIED`; launch `BLOCKED_BY_QUOTA` |
+| RDS PostgreSQL Single-AZ `db.t4g.micro` | 0.016 USD/instance-hour | `PRICE_API_VERIFIED` |
+| EBS gp3 / RDS PostgreSQL gp3 | 0.08 / 0.115 USD mỗi GB-month | `PRICE_API_VERIFIED` |
+| Additional RDS PostgreSQL backup | 0.095 USD mỗi GB-month vượt free allocation | `PRICE_API_VERIFIED` |
+| NAT Gateway | 0.045 USD/gateway-hour + 0.045 USD/GB processed tại `us-east-1`; standard data transfer tính riêng | `PRICE_API_VERIFIED` |
 | S3 gateway endpoint | Không có additional endpoint charge | `DOC_VERIFIED` |
-| Interface endpoint | Tính theo endpoint ENI-hour ở mỗi AZ và GB processed; giá phụ thuộc Region | `DOC_VERIFIED`; exact Region price `UNVERIFIED` |
-| EC2/RDS/GPU/EBS/S3/CloudWatch | Phụ thuộc Region, instance class, storage, request và retention | `UNVERIFIED` đến khi Region/config được chốt |
+| PrivateLink interface endpoint | 0.01 USD/endpoint-hour + 0.01 USD/GB tới 1 PB/tháng tại `us-east-1` | `PRICE_API_VERIFIED` |
+| S3/CloudWatch/request/data transfer | Phụ thuộc usage, retention và traffic thực tế | Unit/usage phải capture trước từng paid run |
 
 Ví dụ minh họa, không phải estimate cuối: hai public IPv4 cho node chạy tổng cộng
 200 giờ tương đương `2 x 200 x 0.005 = 2 USD`. Số node/hour thực tế phải lấy từ
 inventory và billing data.
 
+### 5.3. Priced planning baseline cho P2 và các campaign sau
+
+Planning baseline dùng 730 giờ/tháng để prorate storage. Nó là cap để kiểm tra
+Terraform plan và run manifest, không phải cam kết AWS sẽ có capacity:
+
+| Nhóm | Cấu hình và phép tính | Estimated gross | Envelope check |
+| --- | --- | ---: | --- |
+| EKS | 1 cluster x 200 h x 0.10 USD | 20.00 USD | <= 25 USD |
+| System/CPU nodes | `m6i.large` 200 h (19.20) + `t3.medium` 80 h (3.33) + gp3 30 GB/200 h (0.66) + gp3 20 GB/80 h (0.18) | 23.36 USD | <= 25 USD |
+| RDS/storage/recovery | Shared `db.t4g.micro` 200 h (3.20) + gp3 20 GB/200 h (0.63) + recovery DB 20 h (0.32) + recovery gp3 20 GB/20 h (0.06) + 20 GB snapshot tối đa một tháng ngoài free allocation (1.90) | 6.11 USD | <= 15 USD |
+| GPU | `g4dn.xlarge` 20 h (10.52) + gp3 50 GB/20 h (0.11) | 10.63 USD | <= 15 USD; quota hiện bằng 0 |
+| Network fixed baseline | Public IPv4 cho system/CPU/GPU: `(200 + 80 + 20) h x 0.005`; NAT = 0; interface endpoint = 0; S3 gateway endpoint = 0 | 1.50 USD | <= 10 USD; 8.50 USD còn lại cap log/request/data transfer |
+
+Known planning subtotal là **61.60 USD**. Category headroom và reserve vẫn bị chặn
+bởi tổng gross envelope 100 USD; không được cộng toàn bộ headroom thành scope mới.
+Nếu Terraform plan đổi instance type/count, storage, active hours, NAT hoặc endpoint,
+phải chạy lại priced estimate trước `apply`.
+
 ## 6. Network egress comparison
 
 | Phương án | Fixed/variable cost | Ưu điểm | Rủi ro/giới hạn | Kết luận P1 |
 | --- | --- | --- | --- | --- |
-| Public node subnets + Internet Gateway | Không có NAT hourly charge; trả public IPv4 và data transfer | Đơn giản, đáp ứng general outbound cho image/package/API trong PoC ngắn | Node có public IP; phải deny unsolicited inbound, enforce IMDS/SG và giới hạn EKS API CIDR | `PROPOSED` cho PoC qua ADR-0006 |
+| Public node subnets + Internet Gateway | Không có NAT hourly charge; trả public IPv4 và data transfer | Đơn giản, đáp ứng general outbound cho image/package/API trong PoC ngắn | Node có public IP; phải deny unsolicited inbound, enforce IMDS/SG và giới hạn EKS API CIDR | `ACCEPTED` cho PoC qua ADR-0006; runtime chưa verify |
 | Private nodes + NAT Gateway | NAT-hour + processed GB + data transfer | General outbound đơn giản, node không cần public IPv4 | Fixed hourly leak lớn so với envelope; một NAT tạo AZ/cross-AZ trade-off, per-AZ NAT tăng cost | Không tạo mặc định |
 | Private nodes + interface endpoints | Endpoint ENI-hour/AZ + processed GB cho từng service | Private AWS API path, có thể giảm NAT traffic | Nhiều endpoint tạo nhiều fixed charges; không thay general internet egress; phải inventory chính xác service dependency | Chỉ dùng khi security/traffic evidence biện minh |
-| S3 gateway endpoint | Không thêm endpoint charge | S3 không cần NAT/Internet Gateway route; phù hợp checkpoint/artifact | Chỉ S3/DynamoDB gateway services; route/policy phải được test | `PROPOSED` cùng ADR-0006 |
+| S3 gateway endpoint | Không thêm endpoint charge | S3 không cần NAT/Internet Gateway route; phù hợp checkpoint/artifact | Chỉ S3/DynamoDB gateway services; route/policy phải được test | `ACCEPTED` cùng ADR-0006; route/policy chưa verify |
 
-### Proposed P2 baseline — chưa được chấp thuận
+### Accepted P2 planning baseline — runtime verification pending
 
 - Không tạo NAT Gateway mặc định.
 - System và ephemeral workload nodes chạy trong public subnets với public IPv4,
@@ -150,8 +187,18 @@ vẫn `UNVERIFIED`.
 
 ### 7.1. Credit applicability
 
-AWS Billing `GetCredits` có thể trả credit amount, applicable product names,
-expiry và enabled state. Trước P2 phải lưu evidence đã redaction cho:
+AWS Billing `GetCredits` ngày 2026-09-28 xác nhận một Promotion credit:
+
+- initial, remaining và estimated amount đều 100 USD;
+- trạng thái `ENABLED`, hết hạn 2027-06-13;
+- applicable products chứa EKS, EC2, RDS, S3, SQS, VPC, ECR, ELB,
+  CloudWatch, CloudTrail, Secrets Manager, KMS, Data Transfer và Budgets.
+
+Một guide khác được owner mô tả có thể thưởng thêm 100 USD nhưng chưa hoàn thành;
+không cộng khoản đó vào balance hiện tại. Sau khi hoàn thành phải chạy lại cùng
+redacted query và ghi record mới, không suy ra 200 USD chỉ từ mô tả của guide.
+
+Evidence credit phải giữ:
 
 - remaining amount;
 - expiration date;
@@ -162,14 +209,20 @@ expiry và enabled state. Trước P2 phải lưu evidence đã redaction cho:
 Nếu API/console không chứng minh một service được cover, coi service đó là
 out-of-pocket và vẫn tính vào 100 USD envelope.
 
-### 7.2. Selected Region và remaining price gate
+Product-level applicability không chứng minh mọi SKU, thuế, Marketplace hoặc
+third-party fee được cover. Gross cost và credit-applied amount phải đối soát
+riêng sau khi billing data cập nhật.
+
+### 7.2. Selected Region và priced baseline
 
 Owner đã cấu hình và read-only probe đã xác nhận `us-east-1` ngày 2026-09-28.
 Region này được chọn cho PoC vì EKS endpoint và GPU families cần thiết có mặt,
 official pricing/examples dễ đối chiếu và project không ưu tiên end-user latency.
 
 Selection vẫn phải được review lại nếu credit, price hoặc GPU capacity không phù
-hợp. Exact EC2/RDS/GPU price sheet còn `UNVERIFIED`. Các yếu tố giữ làm evidence:
+hợp. Candidate EC2/RDS/GPU/network unit prices và planning baseline đã được đọc
+từ AWS Price List API; Spot price, capacity và variable usage vẫn là pre-run
+evidence. Các yếu tố giữ làm evidence:
 
 1. EKS/Kubernetes 1.35 và selected services khả dụng.
 2. GPU family candidate có mặt và account có quota.
@@ -187,11 +240,11 @@ hợp. Exact EC2/RDS/GPU price sheet còn `UNVERIFIED`. Các yếu tố giữ l�
 | VPCs per Region | 5, adjustable | 1 | `ACCOUNT_VERIFIED` |
 | EC2 Running On-Demand G and VT vCPUs | **0**, adjustable | Tối thiểu 4 vCPU cho một `g4dn.xlarge` candidate | `BLOCKED_BY_QUOTA` |
 | EC2 All G and VT Spot vCPUs | **0**, adjustable | Tối thiểu 4 vCPU cho một `g4dn.xlarge` candidate | `BLOCKED_BY_QUOTA` |
-| Standard On-Demand vCPUs | 5, adjustable | System nodes + bounded CPU workload pool | `ACCOUNT_VERIFIED`; sizing review needed |
+| Standard On-Demand vCPUs | 5, adjustable | `m6i.large` system + `t3.medium` CPU node = 4 vCPU tối đa đồng thời theo planning baseline | `ACCOUNT_VERIFIED` |
 | Standard Spot vCPUs | 5, adjustable | Bounded CPU Spot experiment if used | `ACCOUNT_VERIFIED` |
 | RDS DB instances | 40, adjustable | Shared RDS + tối đa một recovery target đồng thời | `ACCOUNT_VERIFIED` |
 | Manual RDS DB snapshots | 100, adjustable | Chỉ snapshot có allowlist/expiry | `ACCOUNT_VERIFIED` |
-| NAT gateways per Availability Zone | 5, adjustable | 0 theo proposed ADR-0006 | `ACCOUNT_VERIFIED` |
+| NAT gateways per Availability Zone | 5, adjustable | 0 theo accepted ADR-0006 | `ACCOUNT_VERIFIED` |
 | Network interfaces per Region | 5000, adjustable | Bounded by one cluster/two tenants | `ACCOUNT_VERIFIED` |
 | IAM roles/OIDC providers | Default docs phải kiểm tra cùng applied quota | Bootstrap/controller/workload roles tối thiểu | `UNVERIFIED` |
 | Security group rules, load balancers, public IPv4 | Account/Region dependent | Bounded by one cluster and two tenants | `UNVERIFIED` |
@@ -352,16 +405,19 @@ Mặc định delete sau window:
 - [x] Budget thresholds, daily check, TTL tags và GPU limits được định nghĩa.
 - [x] Inventory, teardown order và retain/delete allowlists được định nghĩa.
 
-### Account/owner gate — open
+### Account/owner gate — complete
 
-- [ ] Owner chấp thuận hoặc từ chối ADR-0006.
+- [x] Owner chấp thuận ADR-0006 ngày 2026-09-29 và giải thích được cost/security trade-off.
 - [x] Chọn AWS account và Region mục tiêu (`us-east-1`) và xác nhận bằng STS đã redaction.
-- [ ] Xác minh credit amount, applicable products và expiry.
+- [x] Xác minh credit amount, applicable products và expiry; credit guide thứ hai
+      vẫn `UNVERIFIED_OWNER_PLANNED` và không cần để giữ envelope 100 USD.
 - [x] Capture applied quota cho EKS, EC2 standard/GPU, VPC và RDS; GPU G/VT
       On-Demand/Spot đều bằng 0. ELB detail giữ cho pre-P2 priced inventory nếu dùng.
-- [ ] Tạo priced estimate cho exact node/RDS/GPU/network configuration trước P2.
+- [x] Tạo priced planning baseline cho node/RDS/GPU/network configuration; mọi
+      thay đổi trong Terraform plan phải price lại trước `apply`.
 
-Không được gọi Task 5 `ACCOUNT_VERIFIED` hoặc bắt đầu paid L3 work khi gate này còn mở.
+Task 5 đạt `ACCOUNT_VERIFIED` và learning gate `EXPLAINED`. Điều này không cấp
+quyền bắt đầu paid L3 work; P2 spec, cost check và explicit task vẫn là gate riêng.
 
 ## 13. Official references checked 2026-09-28
 
@@ -372,6 +428,7 @@ Không được gọi Task 5 `ACCOUNT_VERIFIED` hoặc bắt đầu paid L3 work
 - AWS, [AWS PrivateLink pricing](https://aws.amazon.com/privatelink/pricing/)
 - AWS, [Best practices for AWS Budgets](https://docs.aws.amazon.com/cost-management/latest/userguide/budgets-best-practices.html)
 - AWS, [Billing GetCredits API](https://docs.aws.amazon.com/aws-cost-management/latest/APIReference/API_billing_GetCredits.html)
+- AWS CLI, [Pricing get-products](https://docs.aws.amazon.com/cli/latest/reference/pricing/get-products.html)
 - AWS, [Service Quotas list-service-quotas](https://docs.aws.amazon.com/cli/latest/reference/service-quotas/list-service-quotas.html)
 - AWS, [Amazon EKS endpoints and quotas](https://docs.aws.amazon.com/general/latest/gr/eks.html)
 - AWS, [Amazon EC2 instance type quotas](https://docs.aws.amazon.com/ec2/latest/instancetypes/ec2-instance-quotas.html)

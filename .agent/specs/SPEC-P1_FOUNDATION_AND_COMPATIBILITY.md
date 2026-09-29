@@ -1,7 +1,7 @@
 ---
 id: SPEC-P1
 title: Foundation and compatibility decisions
-status: ACTIVE
+status: COMPLETE
 phase: P1
 start: 2026-08-24
 deadline: 2026-08-30
@@ -157,40 +157,66 @@ Evidence: `docs/security/THREAT_MODEL.md`, official sources checked 2026-09-28,
 18 threat-to-control-to-test mappings and no secret values. Functional design and
 owner teach-back are complete at `EXPLAINED`; later L2/L3 runtime evidence remains open.
 
-## Task 5 — Cost, quota and teardown plan (4 h)
+## Task 5 — Cost, quota and teardown plan (complete)
 
 - [x] Create `[NEW] docs/finops/COST_PLAN.md` using the 100 USD envelope from ver3.
-- [ ] Verify credit applicability and relevant account quotas without creating
-      resources. Applied EKS/EC2/VPC/RDS quotas are verified in `us-east-1`; credit
-      applicability remains `UNVERIFIED` because installed AWS CLI lacks `GetCredits`.
+- [x] Verify credit applicability and relevant account quotas without creating
+      resources. Applied EKS/EC2/VPC/RDS quotas and one enabled 100 USD Promotion
+      credit are verified in `us-east-1`; a separate owner-planned guide reward
+      remains `UNVERIFIED` and is not included in the 100 USD project envelope.
 - [x] Compare NAT Gateway, public subnet and/or VPC endpoint assumptions for this PoC.
 - [x] Define Budget thresholds, TTL tags, daily billing check and GPU limits.
 - [x] Define resource inventory and retain/delete allowlists for P2 onward.
 
-Evidence: assumptions marked `VERIFIED` or `UNVERIFIED`, dated price/source links,
-teardown checklist, `docs/finops/COST_PLAN.md` and proposed ADR-0006. Documentation
-and design passed L0 checks on 2026-09-28; account/Region evidence and owner review
-remain open for credit, exact price and ADR-0006 approval. GPU G/VT On-Demand and
+Evidence: assumptions marked `VERIFIED` or `UNVERIFIED`, dated source links,
+priced planning baseline, teardown checklist, `docs/finops/COST_PLAN.md`, redacted
+account evidence and accepted ADR-0006. Credit, Region, candidate unit prices and
+selected quotas are verified. Owner accepted the network cost/security trade-off
+and completed teach-back at `EXPLAINED` on 2026-09-29. GPU G/VT On-Demand and
 Spot quotas are both observed at zero; no increase request was sent.
 
-## Task 6 — Baseline and experiment contract (4 h)
+## Task 6 — Baseline and experiment contract (complete)
 
-- [ ] Create `[NEW] docs/experiments/EXPERIMENT_PLAN.md`.
-- [ ] Define manual baseline actions without inventing enterprise duration/error data.
-- [ ] Define run-manifest fields, timestamps, timeout, success and failure rules.
-- [ ] Define trial retention/exclusion and dataset-freeze rules before collection.
-- [ ] Sketch the CSV/JSONL schema and analysis outputs for p50/p95 and success/total.
+- [x] Create `[NEW] docs/experiments/EXPERIMENT_PLAN.md`.
+- [x] Define manual baseline actions without inventing enterprise duration/error data.
+- [x] Define run-manifest fields, timestamps, timeout, success and failure rules.
+- [x] Define trial retention/exclusion and dataset-freeze rules before collection.
+- [x] Sketch the CSV/JSONL schema and analysis outputs for p50/p95 and success/total.
 
-Evidence: one dry example manifest clearly marked `SYNTHETIC`, not an observed run.
+Evidence: `docs/experiments/EXPERIMENT_PLAN.md` and one parseable dry manifest at
+`docs/experiments/examples/SYNTHETIC_RUN_MANIFEST.json`, marked `SYNTHETIC`,
+`official=false` and excluded from official metrics. Functional contract is
+complete; the owner approved contract v0.1.0 and completed teach-back at
+`EXPLAINED` on 2026-09-29. No observed trial exists, and a separate campaign
+freeze remains required before official collection.
 
 ## Task 7 — P1 review, teach-back and P2 readiness (3 h)
 
-- [ ] Run documentation link/consistency checks appropriate to the repository.
-- [ ] Review architecture, cost, threat and experiment documents against ver3.
-- [ ] Answer the P1 teach-back questions without reading generated prose verbatim.
-- [ ] Record gaps in `.agent/learning/LEARNING_LOG.md`.
-- [ ] Create the P2 spec with tasks/subtasks only after P1 decisions are approved.
-- [ ] Update roadmap, active context and history with observed completion state.
+- [x] Run documentation link/consistency checks appropriate to the repository.
+- [x] Review architecture, cost, threat and experiment documents against ver3.
+- [x] Answer the P1 teach-back questions without reading generated prose verbatim.
+- [x] Record gaps in `.agent/learning/LEARNING_LOG.md`.
+- [x] Create the P2 spec with tasks/subtasks only after P1 decisions are approved.
+- [x] Update roadmap, active context and history with observed completion state.
+
+Review evidence on 2026-09-29: all required P1 artifacts exist; 24 canonical
+scope/status markers and the synthetic-manifest guards passed; ADR IDs are unique;
+`git diff --check` passed. The inline-code path scan checked 39 occurrences. Six
+missing occurrences are expected: three historical paths inside immutable ver3
+are mapped by `docs/README.md`, and three are future experiment outputs not due in
+P1. Cross-document stale states for ADR-0005/0006, Region/cost evidence and the
+Task 6 evidence contract were corrected. The 68 external source URLs retain their
+dated source-check evidence and were not live-reprobed in this consistency pass.
+
+Teach-back evidence on 2026-09-29: the owner located an end-to-end readiness
+failure at the Crossplane-managed-resource to AWS boundary; separated provider
+health, IRSA trust and AWS authorization; explained the bootstrap circular
+dependency; traced Pod -> ServiceAccount token -> OIDC/trust -> STS -> temporary
+credentials -> service authorization; and bounded namespace tenancy as soft
+isolation with shared EKS/VPC failure domains. Cost and experiment questions had
+already been answered immediately before Task 7. Hands-on Crossplane, kro, IRSA
+and policy evidence remains explicitly carried to P3-P5 rather than treated as
+P1 mastery.
 
 # 5. Teach-back questions
 
@@ -207,3 +233,8 @@ Evidence: one dry example manifest clearly marked `SYNTHETIC`, not an observed r
 P1 is complete only when all MUST tasks satisfy both the functional and learning
 Definition of Done. Merely generating the six documents is not sufficient; their
 assumptions must be reviewed and their unresolved items must remain visible.
+
+Observed result on 2026-09-29: P1 satisfies this rule at documentation/design and
+`EXPLAINED` level. It does not claim `PRACTICED` or `REPRODUCIBLE` runtime skill.
+The initial P2 contract is `.agent/specs/SPEC-P2_REPRODUCIBLE_EKS_BOOTSTRAP.md`
+and remains `DRAFT_FOR_OWNER_APPROVAL`; no P2 apply is authorized by P1 closure.

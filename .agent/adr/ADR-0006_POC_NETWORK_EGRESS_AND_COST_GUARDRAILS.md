@@ -1,8 +1,9 @@
 ---
 id: ADR-0006
 title: Cost-bounded PoC network egress baseline
-status: PROPOSED
+status: ACCEPTED
 date: 2026-09-28
+accepted_date: 2026-09-29
 ---
 
 # Context
@@ -15,7 +16,7 @@ không được public-accessible.
 Quyết định chỉ áp dụng cho một-account, một-Region PoC. Nó không phải production
 network recommendation.
 
-# Proposed decision
+# Decision
 
 P2 bootstrap mặc định:
 
@@ -33,8 +34,8 @@ P2 bootstrap mặc định:
    security need và exact Region pricing chứng minh baseline không đủ.
 
 Region, subnet CIDR, exact endpoint policy, EKS endpoint CIDR và selected service
-dependencies vẫn `UNVERIFIED`. ADR chỉ chuyển sang `ACCEPTED` sau owner review và
-acceptance checks bên dưới.
+dependencies vẫn `UNVERIFIED`. Trạng thái `ACCEPTED` chốt planning boundary; nó
+không thay thế Terraform-plan review hoặc runtime acceptance checks bên dưới.
 
 # Why this baseline
 
@@ -93,6 +94,17 @@ traffic chính của project. Không chọn.
 - [AWS NAT Gateway pricing](https://docs.aws.amazon.com/vpc/latest/userguide/nat-gateway-pricing.html)
 - [AWS S3 gateway endpoints](https://docs.aws.amazon.com/vpc/latest/privatelink/vpc-endpoints-s3.html)
 - [AWS PrivateLink pricing](https://aws.amazon.com/privatelink/pricing/)
+
+## Owner review — 2026-09-29
+
+Owner chấp thuận quyết định sau khi giải thích được:
+
+- NAT Gateway tại `us-east-1` có hourly charge và per-GB processing charge ngay
+  cả khi không có workload Pod, miễn resource vẫn tồn tại;
+- public worker nodes loại fixed NAT cost nhưng cần no Internet ingress, no SSH,
+  restrictive security groups, IMDS controls và bounded EKS public API CIDR;
+- RDS vẫn private và S3 gateway endpoint giữ vai trò no-additional-charge path;
+- đây là PoC trade-off, không phải production-network recommendation.
 
 # Acceptance checks
 

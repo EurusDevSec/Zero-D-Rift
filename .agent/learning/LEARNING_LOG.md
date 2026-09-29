@@ -136,20 +136,95 @@ Status meanings:
 - Source(s) consulted: `docs/de_cuong_tot_nghiep_ver3.md`,
   `docs/finops/COST_PLAN.md`, ADR-0006 and the dated AWS/Karpenter sources linked
   from the cost plan.
-- Prediction before lab: Pending owner review.
+- Prediction before lab: Owner expected a second 100 USD guide reward to make
+  200 USD credit available after completing the guide.
 - Micro-lab/change performed: Agent completed the documentation-level cost plan
-  and ran a redacted read-only account probe. `us-east-1`, IAM-user STS access and
-  EKS/EC2/VPC/RDS quota values were observed; no resource or quota request was created.
-- Expected vs actual: The 100 USD envelope, pricing formulas, Budget/TTL/GPU
-  guardrails and teardown contract are explicit. Region and selected applied quotas
-  are now account-verified; both G/VT On-Demand and Spot quotas are zero. Credit
-  applicability and exact prices remain correctly `UNVERIFIED`.
+  and ran redacted read-only account, Billing and Price List probes. `us-east-1`,
+  IAM-user STS access, EKS/EC2/VPC/RDS quota values, one enabled 100 USD credit
+  and candidate On-Demand prices were observed; no resource or quota request was created.
+- Expected vs actual: The 100 USD envelope, priced planning baseline,
+  Budget/TTL/GPU guardrails and teardown contract are explicit. Region, one
+  enabled 100 USD credit and selected applied quotas are account-verified; both
+  G/VT On-Demand and Spot quotas are zero. The possible second credit remains
+  correctly `UNVERIFIED_OWNER_PLANNED` until the guide is completed and re-queried.
 - Evidence path: `docs/finops/COST_PLAN.md` and
   `.agent/adr/ADR-0006_POC_NETWORK_EGRESS_AND_COST_GUARDRAILS.md`.
-- Explain in my own words: Pending owner review.
-- Failure I can now diagnose: Pending owner review; planned examples include Pod
-  scale-to-zero while EKS/RDS/public IPv4 still accrue cost and a GPU launch blocked
-  by a zero G/VT vCPU quota.
-- Remaining gap: Owner review of ADR-0006, credit applicability, exact-price
-  evidence and a separately approved GPU quota-increase decision.
-- Status: STARTED
+- Explain in my own words: NAT Gateway retains its hourly charge and adds per-GB
+  processing cost while it exists, so the short-lived PoC accepts public worker
+  nodes instead. That trade-off requires no Internet ingress or SSH, restrictive
+  security groups, IMDS controls, bounded EKS public API CIDR and private RDS.
+  Additional credit does not expand the canonical 100 USD gross envelope.
+  `Pod=0` removes workload Pods, not the EKS control plane, system nodes, RDS,
+  public IPv4, EBS/snapshots, S3 objects, CloudWatch logs, load balancers or any
+  accidentally retained NAT Gateway.
+- Failure I can now diagnose: Distinguish workload scale-to-zero from infrastructure
+  teardown, detect a fixed-cost resource that survived the run and identify a GPU
+  launch blocked by zero G/VT vCPU quota.
+- Remaining gap: Runtime billing lag, Spot price/capacity and the separately
+  approved GPU quota-increase decision remain future campaign evidence.
+- Status: EXPLAINED
+
+### 2026-09-29 — Baseline and experiment contract
+
+- Phase/task: P1 / Task 6
+- Learning objective: Explain why event boundaries, timeout, failure, exclusion
+  and dataset-freeze rules must be registered before official trials.
+- Source(s) consulted: `docs/de_cuong_tot_nghiep_ver3.md`,
+  `docs/experiments/EXPERIMENT_PLAN.md`, the threat-model evidence rules and the
+  project Definition of Done.
+- Prediction before lab: Owner needed to distinguish a real system failure after
+  `t0` from an invalid measurement that may be excluded.
+- Micro-lab/change performed: Created the documentation-level experiment contract
+  and parsed one manifest marked `SYNTHETIC`, `official=false` and `EXCLUDED`.
+  No cluster, AWS resource or observed trial was created.
+- Expected vs actual: H1–H6 targets/sample counts, manual baselines, event/timeout
+  rules, retained failures, pre-registered exclusions, JSONL/CSV shapes and
+  dataset freeze are explicit. Synthetic exclusion guards and JSON parsing pass.
+- Evidence path: `docs/experiments/EXPERIMENT_PLAN.md` and
+  `docs/experiments/examples/SYNTHETIC_RUN_MANIFEST.json`.
+- Explain in my own words: After `t0`, a timeout or system failure is a real trial
+  outcome, so it remains in the denominator and counts as failure. Exclusion is
+  only for an invalid measurement, such as missing collector evidence or use of
+  the wrong frozen artifact. Freezing timeout, success and exclusion rules before
+  results prevents cherry-picking bad outcomes and keeps the thesis conclusion
+  comparable and defensible.
+- Failure I can now diagnose: A post-`t0` capacity or timeout outcome is a retained
+  failed trial, whereas a registered measurement-pipeline failure can be excluded
+  with its reason code and evidence.
+- Remaining gap: Later harness implementation, campaign freeze and real L3/L4
+  trial evidence; these are not prerequisites for the P1 learning gate.
+- Status: EXPLAINED
+
+### 2026-09-29 — P1 retention and P2-readiness audit
+
+- Phase/task: P1 / Task 7
+- Learning objective: Reconstruct the P1 system boundary and diagnose a small
+  number of cross-layer scenarios without reading generated prose verbatim.
+- Source(s) consulted: P1 spec, ver3, system design, version matrix, threat model,
+  cost plan, experiment contract and ADR-0003 through ADR-0006.
+- Prediction before lab: Prior guided answers might show point-in-time recognition
+  without durable independent recall or hands-on understanding.
+- Micro-lab/change performed: Documentation/path consistency audit plus bounded
+  paper scenarios for Argo/Crossplane readiness, AWS authorization, bootstrap
+  dependency, IRSA and soft tenant isolation. No local cluster, controller, IAM
+  policy or AWS resource was created.
+- Expected vs actual: Required P1 artifacts are aligned after correcting stale
+  status references. The owner initially self-assessed only high-level recognition,
+  then independently located controller/AWS failure boundaries, traced IRSA and
+  bounded soft-tenancy claims. This supports current `EXPLAINED`, not hands-on or
+  durable `PRACTICED`/`REPRODUCIBLE` mastery.
+- Evidence path: `.agent/specs/SPEC-P1_FOUNDATION_AND_COMPATIBILITY.md` and the
+  canonical P1 documents listed there.
+- Explain in my own words: Argo can be synced while a Crossplane managed resource
+  and AWS resource are not ready. Provider health proves the controller runtime,
+  not IAM authorization. Terraform creates the first EKS because Crossplane needs
+  an existing Kubernetes runtime. IRSA exchanges a ServiceAccount token through
+  OIDC/trust and STS before service permission is evaluated. Namespace controls
+  reduce tenant access but shared EKS/VPC and privileged components keep isolation soft.
+- Failure I can now diagnose: Distinguish Argo sync from end-to-end readiness;
+  controller health from AWS authorization; STS trust failure from S3 permission
+  failure; and a passed RBAC negative test from a hard-isolation claim.
+- Remaining gap: No hands-on Terraform state cycle, controller runtime, real IRSA,
+  NetworkPolicy/RBAC suite or AWS reconciliation evidence exists. These gaps move
+  to the bounded P2-P5 micro-labs and must not be described as mastered.
+- Status: EXPLAINED

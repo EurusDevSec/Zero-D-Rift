@@ -1,6 +1,6 @@
 ---
 project: Zero D-Rift
-roadmap_version: 1.0
+roadmap_version: 1.1
 canonical_scope: docs/de_cuong_tot_nghiep_ver3.md
 planning_method: rolling-wave
 start_date: 2026-08-23
@@ -24,8 +24,8 @@ target_release_candidate: 2026-11-01
 | ID | Dates | Status | Technical outcome | Learning focus | Exit criteria |
 |---|---|---|---|---|---|
 | P0 | 23/08 | COMPLETE | Project-specific Eurus planning state | Evidence-based agent workflow | Root constitution, roadmap, active context, workflow, learning plan and P1 spec exist |
-| P1 | 24–30/08 | ACTIVE | Architecture and experiment foundation | EKS architecture, IAM, reconciliation, experimental design | ADRs, baseline, threat model, cost plan, quota and version matrix reviewed |
-| P2 | 31/08–06/09 | PLANNED | Reproducible EKS bootstrap and teardown | Terraform state/modules, VPC, EKS, OIDC | EKS can be created and deleted from documented commands |
+| P1 | 24–30/08 | COMPLETE (actual 29/09) | Architecture and experiment foundation | EKS architecture, IAM, reconciliation, experimental design | ADRs, baseline, threat model, cost plan, quota and version matrix reviewed |
+| P2 | 31/08–06/09 | READY FOR SPEC REVIEW | Reproducible EKS bootstrap and teardown | Terraform state/modules, VPC, EKS, OIDC | EKS can be created and deleted from documented commands |
 | P3 | 07–13/09 | PLANNED | First control-plane vertical slice | GitOps, CRDs, reconciliation, Crossplane before kro | One CR produces a stable S3 + Deployment resource graph |
 | P4 | 14–20/09 | PLANNED | RAGSandbox end-to-end | IRSA, Secrets, RDS/pgvector, readiness | RAG application passes DB and AWS-access checks |
 | P5 | 21–27/09 | PLANNED | Tenant and policy guardrails | RBAC, quotas, NetworkPolicy, Pod Security, Kyverno | Negative security suite passes |
@@ -35,6 +35,11 @@ target_release_candidate: 2026-11-01
 | P9 | 19–25/10 | PLANNED | Official trials and frozen dataset | Test harness, p50/p95, reproducibility | Run manifests, raw dataset and analysis script are locked |
 | P10 | 26/10–01/11 | PLANNED | Release candidate and defense assets | Runbooks, limitations, evidence-based explanation | Code freeze, video, report and slides ready |
 | P11 | November | PLANNED | Defect fixes and defense practice only | Teach-back and incident explanation | No new feature or technology |
+
+Schedule status on 2026-09-29: the original P1-P9 weekly windows have slipped.
+The technical order and acceptance criteria remain valid, but P2-P11 dates must
+be rebaselined during P2 Task 1 before any paid apply. Do not hide the schedule
+risk by weakening evidence, combining unverified mechanisms or skipping teardown.
 
 ## Scope gates
 
@@ -64,5 +69,8 @@ research; they are not additional to the 25–30 hours.
 
 ## Active detailed contract
 
-See `.agent/specs/SPEC-P1_FOUNDATION_AND_COMPATIBILITY.md`.
+P1 closed contract: `.agent/specs/SPEC-P1_FOUNDATION_AND_COMPATIBILITY.md`.
+
+Next contract for owner review:
+`.agent/specs/SPEC-P2_REPRODUCIBLE_EKS_BOOTSTRAP.md`.
 

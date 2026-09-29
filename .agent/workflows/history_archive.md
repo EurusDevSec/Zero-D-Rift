@@ -64,3 +64,44 @@ This is a concise milestone ledger, not a chat transcript.
   RDS quotas. Both G/VT On-Demand and Spot quotas are zero; credit applicability,
   exact prices and ADR approval remain open.
 - No AWS resource, Budget, quota request or infrastructure mutation was performed.
+
+## 2026-09-29 — P1 Task 5 cost/account gate closed
+
+- Verified one enabled 100 USD Promotion credit with 100 USD remaining through
+  2027-06-13; the owner's possible second guide reward remains unverified and does
+  not expand the canonical 100 USD gross project envelope.
+- Captured candidate `us-east-1` On-Demand prices from AWS Price List API and
+  produced a 61.60 USD known planning subtotal within category guardrails.
+- Accepted ADR-0006 after owner review: no default NAT Gateway, public worker
+  nodes with bounded exposure, private RDS and an S3 gateway endpoint.
+- Closed the Task 5 learning gate at `EXPLAINED`; owner distinguished Pod
+  scale-to-zero from teardown of persistent/fixed-cost AWS resources.
+- No AWS resource, Budget or quota request was created; G/VT On-Demand and Spot
+  quotas remain zero for the future GPU campaign.
+
+## 2026-09-29 — P1 Task 6 experiment contract closed
+
+- Approved experiment contract v0.1.0 with H1–H6 boundaries, reproducible manual
+  baselines, event and timeout rules, retained failures, registered exclusions,
+  data schemas and campaign-freeze requirements.
+- Parsed one dry manifest marked `SYNTHETIC`, `official=false` and `EXCLUDED`; it
+  is schema evidence only and cannot enter official metrics.
+- Closed the learning gate at `EXPLAINED`: the owner distinguished real post-`t0`
+  system outcomes from invalid measurements and explained why rules must be
+  frozen before results to prevent biased exclusions.
+- No observed trial or AWS resource was created. A later campaign freeze and
+  runtime evidence remain required; active work moves to P1 Task 7.
+
+## 2026-09-29 — P1 closed; P2 bootstrap spec drafted
+
+- Completed the P1 cross-document review against ver3 and corrected stale status
+  references for ADR-0005/0006, Region/cost evidence and the Task 6 evidence contract.
+- Closed Task 7 teach-back at `EXPLAINED`, not mastered: the owner diagnosed
+  reconciliation/AWS boundaries, IRSA trust versus permission and soft-isolation
+  limits; hands-on gaps remain assigned to P2-P5 micro-labs.
+- Created `.agent/specs/SPEC-P2_REPRODUCIBLE_EKS_BOOTSTRAP.md` as
+  `DRAFT_FOR_OWNER_APPROVAL`, with a zero-cost Terraform state micro-lab before
+  any explicitly approved EKS apply and a mandatory teardown/orphan audit.
+- Recorded that the original schedule has slipped and must be rebaselined during
+  P2 Task 1 without weakening acceptance criteria.
+- No local cluster, platform controller, IAM policy or paid AWS resource was created.
