@@ -24,6 +24,9 @@ state belongs in `workflows/active_context.md`; raw evidence belongs in
   database role and credential boundaries. Destructive recovery trials use a
   separate RDS PoC or clone so they cannot disrupt the shared demo database or
   mix recovery evidence with provisioning evidence.
+- The parallel NCKH derivative studies Evidence-Graph-based Failure Localization
+  over the RAGSandbox provisioning path. It is a separate research scope and does
+  not expand an active implementation spec or authorize additional AWS spending.
 
 ## Durable agent-operation decisions
 

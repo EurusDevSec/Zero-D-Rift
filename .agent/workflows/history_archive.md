@@ -105,3 +105,24 @@ This is a concise milestone ledger, not a chat transcript.
 - Recorded that the original schedule has slipped and must be rebaselined during
   P2 Task 1 without weakening acceptance criteria.
 - No local cluster, platform controller, IAM policy or paid AWS resource was created.
+
+## 2026-09-30 — NCKH proposal checkpointed; active work returned to P2
+
+- Owner reported that the advisor agreed to supervise the separate NCKH
+  derivative as a Category-B, 12-month project requiring a TDMU journal article
+  before acceptance. Administrative approval remains independently unverified.
+- Kept the NCKH contribution separate from the graduation-project implementation:
+  it studies Evidence-Graph-based Failure Localization over the RAGSandbox
+  provisioning path and does not expand the active P2 implementation scope.
+- Prepared the formal proposal draft with research motivation, objectives,
+  related work, scope, method, 12-month schedule, products and 10,000,000-VND
+  Category-B ceiling. Personal administrative identifiers remain outside the
+  shared handoff context.
+- A final source audit confirmed that all eleven cited works exist, but returned
+  `PARTIAL`: two author initials and two paper characterizations need correction;
+  one Kubernetes-configuration claim needs a direct source; and the controlled-
+  experiment methodology should receive an additional reference.
+- Resumed Phase 2 at Task 1. SPEC-P2 remains `DRAFT_FOR_OWNER_APPROVAL`; no tool,
+  schedule, identity, state backend, cost window or AWS apply was approved.
+- No AWS resource, local cluster, controller, IAM policy, Budget or quota request
+  was created. No Git staging, commit or push was performed.
