@@ -98,6 +98,21 @@ Crossplane, kro, KEDA, Karpenter, IRSA và recovery bắt đầu ở Coach hoặ
 Feature chạy được nhưng chủ dự án chưa giải thích được chỉ là functional done,
 chưa phải learning done.
 
+## Dojo tách khỏi tiến độ chính
+
+`/dojo` mở một bài luyện DevOps/cloud trong `playground/`. Dojo dùng để luyện
+lặp lại, cố ý gây lỗi và chẩn đoán; nó không thay micro-lab của active SPEC và
+không tự tạo project evidence hay phase progress. Chỉ một lab Dojo được active
+tại một thời điểm, mặc định ưu tiên paper/local/mock/kind trước AWS thật.
+
+## Kiểm tra continuity
+
+`/hydration-test candidate` kiểm tra một account/session mới có thể tự đọc
+repository, đối chiếu live Git và xác định đúng outcome, current state, next safe
+action cùng authority boundary hay không. Candidate chỉ trả report read-only;
+`/hydration-test evaluator` dùng rubric semantic để account hiện tại chấm lại.
+Không dùng trí nhớ cloud hoặc độ giống văn phong làm đáp án.
+
 ## Done và evidence
 
 Một task chỉ done khi kết quả chạy được, có evidence phù hợp và người dùng giải
@@ -140,7 +155,9 @@ mọi exclusion phải có lý do đã quy định.
 |---|---|
 | /init, start | Kiểm tra packet và onboard session |
 | /resume, continue | Tiếp tục một next action đã kiểm chứng |
+| /hydration-test candidate hoặc evaluator | Chạy/chấm bài continuity read-only |
 | /learn chủ-đề | Coach một concept và micro-lab |
+| /dojo status hoặc /dojo terraform | Xem/chọn một deliberate-practice lab riêng |
 | /plan feature | Refine spec/task/evidence |
 | build Task N theo Pair mode | Triển khai bounded change đã duyệt |
 | /verify, /test | Chạy tier phù hợp |

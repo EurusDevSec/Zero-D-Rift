@@ -64,7 +64,9 @@ specifications. See `docs/README.md`.
 |---|---|
 | `/init`, `start`, `đầu ngày` | `.agent/skills/zero-drift-init/SKILL.md` |
 | `/resume`, `continue`, `tiếp tục` | `.agent/skills/zero-drift-resume/SKILL.md` |
+| `/hydration-test candidate`, `/hydration-test evaluator` | `.agent/skills/zero-drift-hydration/SKILL.md` |
 | `/learn`, `học`, `micro-lab`, `grill-me` | `.agent/skills/zero-drift-learn/SKILL.md` |
+| `/dojo`, `playground`, `practice`, `drill` | `.agent/skills/zero-drift-dojo/SKILL.md` |
 | `/spec`, `/plan`, `kế hoạch`, `chia task` | `.agent/skills/zero-drift-plan/SKILL.md` |
 | Terraform/HCL, `.tftest.hcl`, state or plan review | `.agent/skills/zero-drift-terraform/SKILL.md` |
 | `/test`, `/verify`, `kiểm thử` | `.agent/skills/zero-drift-verify/SKILL.md` |
