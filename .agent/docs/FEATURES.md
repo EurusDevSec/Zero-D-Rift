@@ -6,8 +6,8 @@ This is a lightweight routing index. Dates, status, and exit criteria live in
 | Feature | Phase | Contract status | Spec |
 |---|---|---|---|
 | Project governance and Eurus onboarding | P0 | Complete (docs-only) | Recorded in workflow history |
-| Foundation and compatibility decisions | P1 | Active | `../specs/SPEC-P1_FOUNDATION_AND_COMPATIBILITY.md` |
-| Reproducible EKS bootstrap | P2 | Not yet specified | Create near end of P1 |
+| Foundation and compatibility decisions | P1 | Complete (design/evidence contract) | `../specs/SPEC-P1_FOUNDATION_AND_COMPATIBILITY.md` |
+| Reproducible EKS bootstrap | P2 | Draft for owner approval | `../specs/SPEC-P2_REPRODUCIBLE_EKS_BOOTSTRAP.md` |
 | Control-plane vertical slice | P3 | Not yet specified | Create near end of P2 |
 | RAGSandbox golden path | P4 | Not yet specified | Create near end of P3 |
 | Governance and tenant negative tests | P5 | Not yet specified | Create near end of P4 |
