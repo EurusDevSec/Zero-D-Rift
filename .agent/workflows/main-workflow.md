@@ -19,13 +19,24 @@ flowchart TD
     C --> N[Next task or phase]
 ```
 
+## Context lifecycle
+
+Context follows `Select -> Expand -> Work -> Verify -> Classify -> Contract`.
+Use `.agent/references/context-governance.md` when starting/resuming a session or
+writing a checkpoint. Active context is rewritten around the next decision; it
+is not an append-only report of the session that just ended.
+
 ## Session start
 
 1. Read root `AGENTS.md` and `.agent/workflows/active_context.md`.
-2. Compare recorded Git state with `git rev-parse HEAD` and `git status --short`.
-3. Read the active spec and only its linked ADRs/documents.
-4. Report current phase, next unchecked subtask, blocker and expected evidence.
-5. Do not provision AWS or mutate infrastructure during hydration.
+2. Query `git rev-parse HEAD` and `git status --short`; do not expect an embedded
+   checkpoint hash to represent live state.
+3. Read the referenced current learning status and classify intent/risk.
+4. Load the active task, acceptance/negative cases and only the linked decisions
+   needed for the request. Expand to the full spec for phase-wide or L3/L4 work.
+5. Report current phase/task, verified state, blocker, next safe action, expected
+   evidence and authority boundary.
+6. Do not provision AWS or mutate infrastructure during hydration.
 
 ## Work modes
 
@@ -94,9 +105,14 @@ because a teach-back is incomplete.
 
 ## Troubleshooting and stopping conditions
 
-- After a failure, preserve the core error, expected/actual state and last known
-  working checkpoint.
-- Retry only when a concrete hypothesis changed.
+- After a failure, preserve the core error, expected/actual state, reproduction
+  conditions, recent relevant changes and last known working checkpoint.
+- Locate the first failing component boundary. Compare redacted input, output,
+  configuration and state at that boundary; never log credentials or secrets to
+  gain observability.
+- State one concrete root-cause hypothesis and test it with the smallest safe
+  change or read-only probe. Do not bundle speculative fixes or unrelated refactors.
+- Retry only when the hypothesis, evidence or relevant state changed.
 - After repeated identical failure, unexpected cost growth, destructive drift,
   or missing authority, stop and request owner direction.
 - A fixed two-attempt rule is not appropriate for every infrastructure failure;
@@ -104,10 +120,15 @@ because a teach-back is incomplete.
 
 ## Checkpoint and Git policy
 
-1. Run the relevant verification tier.
-2. Update active context with observed state and evidence links.
-3. Add durable lessons to cold memory only when they will matter in later phases.
-4. Append a concise milestone to history only for meaningful state transitions.
-5. Show changed files and Git status.
-6. Commit or push only after explicit owner instruction; never run `git add .`.
+1. Run the relevant verification tier and query live Git/external state.
+2. Classify new information: active, durable decision, evidence, learning,
+   milestone history or disposable detail.
+3. Rewrite active context around the next safe action; do not paste chronology or
+   duplicate whole sections from a SPEC/ADR/evidence file.
+4. Update current learning status only from demonstrated evidence; append detailed
+   learning history only for a meaningful new result.
+5. Add durable lessons to cold memory only when they will matter in later phases;
+   append history only for meaningful state transitions.
+6. Run `.agent/scripts/check-context.ps1`, then show changed files and live Git status.
+7. Commit or push only after explicit owner instruction; never run `git add .`.
 

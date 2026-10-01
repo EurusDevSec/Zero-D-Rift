@@ -14,5 +14,6 @@ description: Verify Zero D-Rift documentation, code, infrastructure, or experime
    hypothesis or state has changed.
 5. Record `PASS` only when the acceptance criterion is actually proven. Otherwise
    use `FAIL`, `BLOCKED`, `PARTIAL` or `NOT RUN` with a reason.
-6. Update active context only after evidence has been captured.
+6. Update active context only after evidence has been captured, and record only
+   the result's effect on the next decision rather than copying raw output.
 

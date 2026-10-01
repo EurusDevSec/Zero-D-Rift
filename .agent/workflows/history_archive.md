@@ -126,3 +126,16 @@ This is a concise milestone ledger, not a chat transcript.
   schedule, identity, state backend, cost window or AWS apply was approved.
 - No AWS resource, local cluster, controller, IAM policy, Budget or quota request
   was created. No Git staging, commit or push was performed.
+
+## 2026-10-01 — Adaptive context governance installed
+
+- Replaced fixed, broad session hydration with a progressive working-set model:
+  `Select -> Expand -> Work -> Verify -> Classify -> Contract`.
+- Contracted active context into a current-decision index and removed embedded
+  Git truth, completed-task narration and duplicated canonical detail.
+- Added a concise current learning view, kept detailed learning/history on demand
+  and updated all six project skills to follow the same lifecycle.
+- Added `.agent/scripts/check-context.ps1`; the context packet and all six skills
+  passed their local structural validators after the change.
+- P2 remains at Task 1 and `DRAFT_FOR_OWNER_APPROVAL`. This workflow change did
+  not authorize AWS work, advance implementation evidence, commit or push.
