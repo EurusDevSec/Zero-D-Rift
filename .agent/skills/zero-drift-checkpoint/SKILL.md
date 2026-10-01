@@ -5,14 +5,17 @@ description: Save a verified Zero D-Rift session checkpoint and handoff state wi
 
 # Zero D-Rift Checkpoint
 
-1. Summarize changed files, completed subtasks, verification results, failures,
-   learning evidence and cost/resource state.
-2. Update `.agent/workflows/active_context.md` with current Git HEAD/dirty state,
-   active task, blockers, evidence paths and the next small action.
-3. Add only durable lessons to cold memory and meaningful milestones to history.
-4. Show `git status --short` and identify untracked/modified files.
-5. Do not run `git add .`, commit or push. If the user explicitly requests a
-   commit/push, stage only the reviewed file list and report the verification state.
-6. Do not mark a feature/phase complete unless its functional and learning DoD
-   are satisfied.
+1. Read [context governance](../../references/context-governance.md), then capture
+   changed files, live Git state, verification, failures, learning and cost/resources.
+2. Classify new information into active state, ADR/canonical decision, evidence,
+   learning, milestone history or disposable detail.
+3. Rewrite `.agent/workflows/active_context.md` around the next safe action. Do
+   not append chronology, duplicate canonical text or store Git HEAD as live truth.
+4. Update `learning/CURRENT_STATUS.md` only from demonstrated evidence; append the
+   full learning log, cold memory and history only when their specific criteria apply.
+5. Run `../../scripts/check-context.ps1`; show warnings, exact modified/untracked
+   files and `git status --short` separately.
+6. Do not run `git add .`, commit or push. If explicitly requested, stage only the
+   reviewed file list and report verification state.
+7. Do not mark a feature/phase complete unless functional and learning DoD pass.
 

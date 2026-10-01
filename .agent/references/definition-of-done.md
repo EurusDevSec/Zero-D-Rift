@@ -29,11 +29,20 @@ Functional done and learning done are separate states. A feature is fully comple
 only when both are satisfied, but incomplete learning must not prevent emergency
 teardown, secret removal or other safety work.
 
+## Checkpoint/handoff done
+
+- [ ] Live Git and any relevant external state were queried.
+- [ ] Claims link to code, command output or evidence rather than chat memory.
+- [ ] Active context names one next safe action, evidence target and authority boundary.
+- [ ] Durable decisions, evidence, learning and history were moved to their canonical homes.
+- [ ] Expired detail and duplicated canonical text were removed from active context.
+- [ ] `.agent/scripts/check-context.ps1` passes or its warning/blocker is recorded.
+
 ## Phase done
 
 - [ ] Phase exit criteria in `docs/ROADMAP.md` are met.
 - [ ] The relevant feature specs satisfy functional and learning DoD.
-- [ ] Active context points to the next phase and current Git state.
+- [ ] Active context points to the next phase; current Git state was checked live.
 - [ ] Material decisions are recorded in ADRs.
 - [ ] The next phase is still allowed by all scope gates.
 

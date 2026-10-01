@@ -1,0 +1,11 @@
+# Raw or sensitive-capable practice output stays local.
+runs/
+**/.terraform/
+**/*.tfstate
+**/*.tfstate.*
+**/*.tfplan
+**/plan.json
+**/terraform.tfvars
+**/*.auto.tfvars
+**/crash.log
+**/crash.*.log

@@ -17,4 +17,6 @@ description: Create or refine a Zero D-Rift phase/feature spec with learning goa
 7. Mark assumptions and unresolved decisions; never silently invent versions,
    prices, quotas, metrics or observed results.
 8. Request owner review before materially new implementation begins.
+9. Link canonical scope/ADR/evidence instead of copying them into the spec or
+   active context; keep future phases at outcome level.
 

@@ -13,8 +13,9 @@ description: Teach and practice one Zero D-Rift technology just in time through 
 4. Ask the owner to predict one outcome before the lab when interaction permits.
 5. Design one local or low-cost micro-lab with observable evidence; do not compose
    multiple unfamiliar controllers at once.
-6. After the lab, use 3–5 focused teach-back questions and record remaining gaps
-   in `.agent/learning/LEARNING_LOG.md`.
+6. After the lab, use 3–5 focused teach-back questions. Append demonstrated
+   evidence and gaps to `.agent/learning/LEARNING_LOG.md`, then update
+   `CURRENT_STATUS.md` only if the current evidence level actually changed.
 
 Use Coach mode by default. A reading session alone is `STARTED`, not `PRACTICED`.
 

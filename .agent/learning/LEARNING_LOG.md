@@ -1,7 +1,8 @@
 # Zero D-Rift Learning Log
 
-This file records demonstrated understanding and open gaps. It does not award
-completion merely because an agent generated working files.
+This file is the dated evidence history for demonstrated understanding and open
+gaps. New sessions read `CURRENT_STATUS.md` first and load this full log only for
+a learning update or audit. Generated artifacts alone do not award completion.
 
 ## Initial self-assessment — 2026-08-23
 
