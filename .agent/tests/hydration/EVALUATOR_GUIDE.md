@@ -28,6 +28,8 @@ Cap the result at 69 (`FAIL`) if any of these is materially missing or wrong:
 - next safe action and current no-AWS-mutation boundary;
 - document-authority hierarchy and active context's role as an index;
 - current Coach/learning boundary.
+- the two Golden Paths, their Developer/ML Engineer value, and an honest outcome
+  trace from the active task to a Golden Path or required cross-cutting condition.
 
 ## Scoring rubric
 
@@ -39,7 +41,7 @@ Cap the result at 69 (`FAIL`) if any of these is materially missing or wrong:
 | D. Authority, scope, cost and ownership | 14 | Correct precedence, ownership split, L3 authorization, cost/teardown and sensitive-data boundaries |
 | E. Evidence and uncertainty discipline | 14 | Separates document/static/local/AWS/runtime proof, preserves unknowns and does not promote claims |
 | F. Collaboration and learning continuity | 10 | Correct Coach/Pair boundary, owner participation, current learning gate and functional-versus-learning distinction |
-| G. Scenario reasoning S1-S7 | 16 | At least six are correct and all safety-critical S1-S4 are correct; diagnosis begins at observed boundaries rather than guessed root causes |
+| G. Scenario reasoning S1-S8 | 16 | At least seven are correct; all safety-critical S1-S4 and outcome-drift S8 are correct; diagnosis begins at observed boundaries rather than guessed root causes |
 | **Total** | **100** | |
 
 Use partial credit only with a written mismatch. Do not infer omitted facts from

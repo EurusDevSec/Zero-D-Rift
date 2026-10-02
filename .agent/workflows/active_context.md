@@ -1,9 +1,9 @@
 ---
 project: Zero D-Rift
-status: P2_BOUNDED_SCOPE_APPROVED_TASK1_OPEN
+status: P2_TASK1_CLOSED_P2_T2_READY_NOT_STARTED
 active_phase: P2
-active_task: P2-T1
-active_feature: P2 bootstrap identity, EKS access and break-glass decision
+active_task: P2-T2
+active_feature: Local Terraform state/dependency micro-lab authorization gate
 active_spec: .agent/specs/SPEC-P2_REPRODUCIBLE_EKS_BOOTSTRAP.md
 current_learning: .agent/learning/CURRENT_STATUS.md
 mode: Coach
@@ -21,8 +21,9 @@ for live Git/AWS state. Follow `.agent/references/context-governance.md`.
 - P1 is complete only at documentation/design and `EXPLAINED` learning level.
   No local cluster, EKS cluster, platform controller, workload or project IAM
   policy has runtime evidence.
-- P2 bounded scope and Terraform CLI exact pin `1.16.4` are owner-approved;
-  Task 1 remains open. Decisions and sources live in SPEC-P2 Task 1.
+- P2 Task 1 decisions are owner-approved: scope/pins in SPEC-P2 and its review
+  packet, identity/state in accepted ADR-0007, cap/window/owners in COST_PLAN §7.4.
+  Task 1 is COMPLETE_WITH_L3_BLOCKERS, Phase1-approved 02/10; P2/learning incomplete.
 - Aggressive P2-P11 rebaseline is owner-approved: ver3 section 12 is canonical,
   with `.agent/docs/ROADMAP.md` as its derived planning view. P2 gate is 06/10.
 - The approved bootstrap boundary is Terraform -> VPC/EKS/OIDC/system
@@ -34,33 +35,36 @@ for live Git/AWS state. Follow `.agent/references/context-governance.md`.
 
 ## Open decisions and blockers
 
-1. Temporary bootstrap identity/session, EKS access entries and break-glass owner.
-2. State backend, encryption, locking, recovery and secret-output rules.
-3. Fresh gross spend/credit/Region/quota preflight and approved P2 cost cap,
-   active AWS window and teardown owner; the schedule does not approve these.
-4. Source-checked exact provider/module pins and transitive compatibility;
-   candidates remain unapproved (see SPEC-P2 Task 1).
-5. CLI installation/upgrade permission is absent; the installed version was
-   observed as 1.14.8 at Task 1 preflight, not as the approved 1.16.4 baseline.
-6. Read-only diagnosis of the Terraform `%APPDATA%\terraform.d` warning.
+1. HARD_BLOCKER before L3: current IAM user MFA count 0; approved MFA/temporary
+   AssumeRole and tested independent recovery login are absent/unverified.
+2. Installed CLI is 1.14.8; exact 1.16.4 installation/verification needs separate
+   authority. Pins remain STATIC_SOURCE_COMPATIBLE, without runtime PASS.
+3. EBS credit coverage is UNVERIFIED; price full gross exposure within P2 cap.
+   Final gross service MTD/credit/quota scalars live in the preflight evidence.
+4. Exact IAM/create permission, backend controls, Task 6 Budget control, priced
+   plan, Tasks 2–6 and fresh account preflight remain before-L3 requirements.
+5. Terraform denial observed only in Codex; owner warning not reproduced and
+   directory accessible. Exact mechanism unproven; no global repair claimed.
+6. P2-T2 is READY_NOT_STARTED; no lab or new learning evidence exists.
 
 ## Next safe action
 
-Coach the bootstrap identity/temporary-session decision, EKS access-entry boundary
-and break-glass ownership. Produce a reviewed decision plus unresolved blockers.
-Do not upgrade the CLI, create a backend, request quota, run `terraform apply`,
-mutate AWS, commit or push. L3 approval remains separate from all document approvals.
+Obtain separate owner authorization to install and verify exact Terraform 1.16.4
+before generating P2-T2 lab evidence. Coach lab remains READY_NOT_STARTED.
+This handoff authorizes no installation, Terraform command or lab execution, backend,
+IAM/Budget/resource mutation, quota request, AWS apply, commit or push.
 
 ## Required evidence for the next transition
 
-- Reviewed bootstrap identity/session/access matrix and break-glass owner.
-- Exact provider/module sources and compatibility evidence before approval.
-- Approved cost cap, AWS window, teardown owner and state-management decisions.
-- Fresh redacted account preflight immediately before any later L3 request.
+- Separate install/verification approval, official checksum and exact CLI version.
+- Future Task 2 L1 evidence: owner prediction, observed state/plan/re-plan/destroy
+  and explanation; no AWS/EKS runtime claim from that lab.
+- Before L3: MFA/temporary/recovery, IAM/backend/Budget controls, exact priced plan,
+  fresh account preflight and explicit execution approval remain required.
 
 ## Context expansion
 
-- Current contract: read SPEC-P2 Goal/boundaries, Task 1, verification tiers and
+- Current contract: read SPEC-P2 Goal/boundaries, Task 2, verification tiers and
   completion rule. Read the full spec for phase-wide approval.
 - Ownership: `.agent/adr/ADR-0003_BOOTSTRAP_PLATFORM_BOUNDARY.md`.
 - Network/cost: `.agent/adr/ADR-0006_POC_NETWORK_EGRESS_AND_COST_GUARDRAILS.md`

@@ -1,7 +1,8 @@
 ---
-as_of: 2026-10-01
+as_of: 2026-10-02
 active_phase: P2
-active_task: P2-T1
+active_task: P2-T2
+task_status: READY_NOT_STARTED
 history: .agent/learning/LEARNING_LOG.md
 ---
 
@@ -21,6 +22,10 @@ in `LEARNING_LOG.md`; this file must not invent mastery from generated artifacts
 | Crossplane and kro | Conceptual only | No hands-on controller or external-resource evidence |
 
 ## Current P2 learning gate
+
+Task 1 closure is Phase1-approved with L3 blockers. Task 2 is READY_NOT_STARTED;
+separate owner authorization to install/verify Terraform 1.16.4 is required before
+lab evidence. Routing changed; demonstrated levels are unchanged.
 
 The next learning objective is Terraform configuration/state/provider/dependency
 flow and predictable teardown. Before AWS implementation, the owner should:

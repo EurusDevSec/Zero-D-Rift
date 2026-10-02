@@ -1,7 +1,7 @@
 ---
 id: SPEC-P2
 title: Reproducible EKS bootstrap and teardown
-status: BOUNDED_SCOPE_APPROVED_TASK1_OPEN_NO_AWS_MUTATION
+status: TASK1_COMPLETE_WITH_L3_BLOCKERS
 phase: P2
 start: 2026-10-02
 deadline: 2026-10-06
@@ -58,8 +58,9 @@ explicit task, current cost check, temporary/approved identity and teardown owne
   baseline logging/budget and their teardown lifecycle (ADR-0003).
 - Public worker subnets with restricted exposure, private DB subnets, no default
   NAT Gateway and an S3 gateway endpoint (ADR-0006).
-- Gross project envelope remains 100 USD. P2 execution cap and active window are
-  `TBD_OWNER_APPROVAL` and must fit the P1 category guardrails.
+- Gross project envelope remains 100 USD; approved P2 gross cap is 5 USD and must
+  fit the P1 category guardrails. Conditional candidate window is recorded in
+  COST_PLAN §7.4; it requires Tasks 2–6 gates and separate execution approval.
 - GPU G/VT On-Demand and Spot quota remain zero; GPU is outside P2.
 - kind remains proposed until an L2 micro-lab; local evidence does not prove EKS behavior.
 
@@ -114,28 +115,59 @@ Scenario: Teardown is complete
       and [release v1.16.4](https://github.com/hashicorp/terraform/releases/tag/v1.16.4).
       CLI pin approval does not authorize installation/upgrade or prove
       provider/module compatibility.
-- [ ] Source-check and obtain owner approval for exact provider/module pins;
-      AWS provider 6.67.0, EKS module 21.26.0 and VPC module 6.7.3 remain
-      unapproved candidates. Include transitive requirements before selection.
+- [x] Source-check and obtain owner approval for exact provider/module pins,
+      including transitive dependencies (2026-10-02). Approved exact table and
+      sources live in [review packet](../../docs/evidence/p2/P2_T1_DECISION_REVIEW.md).
+      Status remains STATIC_SOURCE_COMPATIBLE, not runtime PASS or install authority.
 - [x] Owner approves aggressive P2–P11 rebaseline (2026-10-02), without
       weakening acceptance criteria; canonical schedule is ver3 section 12,
       mirrored in `.agent/docs/ROADMAP.md`. P2 gate is 2026-10-06.
-- [ ] (30–45 m) Decide bootstrap identity/temporary-session method, EKS access-entry
-      boundary and break-glass owner; no account mutation yet.
-- [ ] (30 m) Decide state backend, encryption, locking, recovery and secret-output rules.
-- [ ] (30 m) Recheck current gross spend, credit, Region, EKS/VPC/EC2 quotas and
-      set P2 execution cap/window/teardown owner.
+- [x] Decide bootstrap identity/temporary-session method, EKS access-entry
+      boundary and HoangLV recovery ownership (2026-10-02); no account mutation.
+- [x] Decide state backend, encryption, locking, recovery and secret-output rules
+      (2026-10-02); foundation creation requires separate execution approval.
+- [x] Approve P2 gross cap 5 USD, conditional candidate window 05/10 09:00–17:00
+      Asia/Saigon after Tasks 2–6 gates, freeze new create 15:00, >= 2 h cleanup,
+      HoangLV primary lifecycle/teardown owner and recovery custodian (2026-10-02).
+- [x] Recheck and record current gross spend, credit, Region and EKS/VPC/EC2
+      quotas (2026-10-02 owner-terminal/Console evidence). Negative/unknown
+      findings remain explicit; this records preflight, not L3 readiness.
+
+Task 1 review artifacts (2026-10-02):
+- [Accepted ADR-0007](../adr/ADR-0007_P2_BOOTSTRAP_IDENTITY_AND_STATE.md) covers
+  identity/access, trusted-admin limits, manual break-glass cleanup and state lifecycle.
+- [Fresh preflight](../../docs/evidence/p2/P2_T1_PREFLIGHT_20261002.md): local CLI
+  observations captured; Codex credential chain unresolved/config access denied.
+  Owner-terminal append observes STS/Region/inventory/selected applied quotas and
+  displayed Billing/credit scalars. Follow-up confirms private account match,
+  IAM_USER type, default VPC, IGW count and credit expiry. Final owner evidence
+  records gross service MTD 0.00 USD, EKS/EC2/S3 credit eligibility, EBS unknown,
+  MFA count 0 and installed CLI 1.14.8. Warning is not reproduced in owner terminal;
+  Codex denial is not globally fixed. Independent MFA recovery login is unverified.
+- [COST_PLAN section 7.4](../../docs/finops/COST_PLAN.md) records approved 5 USD
+  gross cap, conditional candidate window and ownership; no AWS execution authority.
 
 Evidence: approved spec revision, tool/version sources, redacted preflight and
 explicit list of unresolved blockers. No paid resource or backend is created.
 
-Task 1 remains OPEN: identity/access/break-glass, state backend/security/recovery,
-cost/preflight/cap/window/teardown owner and provider/module pins are not approved.
-The CLI configuration warning at `%APPDATA%\terraform.d` also requires read-only
-diagnosis. Scope, CLI pin and schedule approvals do not authorize implementation,
-CLI upgrade, backend creation, quota requests, Terraform apply or AWS mutation.
+Task 1 is COMPLETE_WITH_L3_BLOCKERS; Phase1 independently approved closure on 2026-10-02:
+all decision/preflight checklist items are recorded; negative or unknown observations
+are not PASS results. This does not complete P2 (§8) or the learning gate.
+NOT_READY_FOR_L3: current IAM user has MFA_DEVICE_COUNT=0; approved MFA/temporary
+AssumeRole and independent recovery path must be established/tested under separate
+authority. CLI 1.16.4 installation/verification remains unauthorized and unperformed.
+EBS credit coverage is unknown, so price full gross exposure within the approved cap.
+Exact IAM/create permissions, backend and Budget controls, Tasks 2–6, priced plan,
+fresh preflight and separate execution approval remain downstream requirements.
+Owner terminal has no terraform.d Access denied warning and can access that directory;
+observed denial is CODEX_EXECUTION_BOUNDARY_ONLY / NOT_REPRODUCED_OWNER_TERMINAL,
+with exact mechanism unproven. Closure does not authorize implementation, CLI upgrade,
+backend/IAM/Budget/resource mutation, quota requests, Terraform apply, commit or push.
 
 ## Task 2 — Local Terraform state/dependency micro-lab (2 h)
+
+Status: READY_NOT_STARTED. Separately authorize installation and checksum/version
+verification of exact Terraform 1.16.4 before generating lab evidence; no lab has run.
 
 - [ ] (20 m) Predict the plan for a tiny local `terraform_data` graph.
 - [ ] (30 m) Run init/validate/plan/apply with no cloud provider/resource.

@@ -4,6 +4,34 @@ This repository is a graduation-thesis project and a learning portfolio. Agents
 must help the owner build, verify, understand, and explain the system; they must
 not optimize only for producing artifacts quickly.
 
+## 0. Product outcome and controlled acceleration
+
+The project North Star is not document count, installed technology or completed
+agent tasks. It is two evidence-backed Golden Paths that deliver the promised
+end-user value:
+
+- **RAGSandbox:** a Developer/ML Engineer submits a high-level request and
+  receives a usable RAG environment with clear readiness and access information.
+- **BatchTrainingJob:** a Developer/ML Engineer submits a training request and
+  receives an observable job outcome with bounded capacity and verified cleanup.
+
+Every parent task must trace to one Golden Path or to a necessary cross-cutting
+condition that makes those paths reproducible, secure, observable, cost-bounded
+or safely removable. If that trace cannot be stated, defer the work to the dojo,
+mark it `COULD`, or remove it from the MVP. Plans, ADRs, tools and controllers are
+enablers; they are not product completion or end-to-end runtime evidence.
+
+Use controlled acceleration: agents may research, draft, implement and verify a
+bounded approved task end-to-end. The owner retains product/scope decisions,
+risk and cost approvals, review, explanation and teach-back. Do not interrupt the
+owner for small reversible choices inside an approved contract; do stop for scope,
+architecture, security, cost, AWS mutation or difficult-to-reverse decisions.
+
+Learning supports delivery instead of replacing it. Use focused micro-labs and
+teach-back for the concepts needed to operate and defend the result, while keeping
+the main path aimed at the first working Golden Path rather than perfecting the
+platform or documentation indefinitely.
+
 ## 1. Adaptive session hydration
 
 Context is a bounded working set, not an archive. Start with the smallest

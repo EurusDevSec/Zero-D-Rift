@@ -26,6 +26,21 @@ Use `.agent/references/context-governance.md` when starting/resuming a session o
 writing a checkpoint. Active context is rewritten around the next decision; it
 is not an append-only report of the session that just ended.
 
+## Outcome gate
+
+Before accepting a parent task, state its `outcome_trace`:
+
+1. `RAGSandbox`, `BatchTrainingJob`, or a necessary cross-cutting condition;
+2. the concrete end-user/system capability it advances;
+3. the evidence that will show the capability became closer to usable;
+4. why the work belongs in the MVP instead of the dojo or `COULD` backlog.
+
+Do not close a task merely because documents, manifests, modules or controllers
+exist. Close it only against the task acceptance evidence, while preserving the
+difference between an enabling foundation, a local mechanism proof and an
+end-to-end Golden Path outcome. Prefer the smallest walking skeleton toward the
+first usable Golden Path over additional platform breadth.
+
 ## Session start
 
 1. Read root `AGENTS.md` and `.agent/workflows/active_context.md`.
@@ -69,6 +84,8 @@ Crossplane, kro, KEDA, Karpenter, IRSA, or recovery merely to save time.
 - Record material decisions as ADRs.
 - Include learning objectives, acceptance/negative cases, cost impact, target files,
   evidence and teach-back questions.
+- Include the task's Golden Path or cross-cutting `outcome_trace` and the end-user
+  benefit it enables; move work with no defensible trace outside the MVP.
 - Owner approval is required before building a materially new feature.
 
 ### Build
@@ -76,6 +93,8 @@ Crossplane, kro, KEDA, Karpenter, IRSA, or recovery merely to save time.
 - Implement one parent task or a small group of related subtasks.
 - Preserve user changes and avoid unrelated refactoring.
 - No scope expansion or new technology without an ADR and roadmap check.
+- Prefer completing the bounded task end-to-end over pausing for reversible,
+  low-risk micro-decisions already covered by the approved contract.
 
 ### Verify
 
@@ -94,7 +113,7 @@ explicit cost check and teardown plan.
 
 The owner should be able to explain:
 
-1. Why the component exists.
+1. Which Golden Path/end-user outcome the component advances and why it exists.
 2. What reconciles or calls what.
 3. Where a permission/configuration failure appears.
 4. Which evidence proves success.
