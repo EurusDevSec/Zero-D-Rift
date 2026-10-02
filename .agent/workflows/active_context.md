@@ -1,14 +1,14 @@
 ---
 project: Zero D-Rift
-status: PHASE_1_COMPLETE_P2_SPEC_REVIEW
+status: P2_BOUNDED_SCOPE_APPROVED_TASK1_OPEN
 active_phase: P2
 active_task: P2-T1
-active_feature: P2 approval, tool pin and zero-cost preflight
+active_feature: P2 bootstrap identity, EKS access and break-glass decision
 active_spec: .agent/specs/SPEC-P2_REPRODUCIBLE_EKS_BOOTSTRAP.md
 current_learning: .agent/learning/CURRENT_STATUS.md
 mode: Coach
 authority: NO_AWS_APPLY_OR_ACCOUNT_MUTATION
-last_reviewed: 2026-10-01
+last_reviewed: 2026-10-02
 ---
 
 # Active Context
@@ -21,8 +21,10 @@ for live Git/AWS state. Follow `.agent/references/context-governance.md`.
 - P1 is complete only at documentation/design and `EXPLAINED` learning level.
   No local cluster, EKS cluster, platform controller, workload or project IAM
   policy has runtime evidence.
-- P2 is active, but its spec remains `DRAFT_FOR_OWNER_APPROVAL`; this does not
-  authorize implementation or paid AWS work.
+- P2 bounded scope and Terraform CLI exact pin `1.16.4` are owner-approved;
+  Task 1 remains open. Decisions and sources live in SPEC-P2 Task 1.
+- Aggressive P2-P11 rebaseline is owner-approved: ver3 section 12 is canonical,
+  with `.agent/docs/ROADMAP.md` as its derived planning view. P2 gate is 06/10.
 - The approved bootstrap boundary is Terraform -> VPC/EKS/OIDC/system
   nodes/bootstrap IAM. Platform controllers are later phases.
 - Region remains `us-east-1`; the gross project envelope remains 100 USD. Cost,
@@ -32,27 +34,28 @@ for live Git/AWS state. Follow `.agent/references/context-governance.md`.
 
 ## Open decisions and blockers
 
-1. Owner approval of bounded P2 scope. Terraform is selected; approval of this
-   tool choice does not approve implementation or AWS mutation.
-2. Source-checked Terraform CLI/provider/module pins.
-3. Rebaselined P2-P11 dates and bounded P2 cap/window/teardown owner.
-4. Temporary bootstrap identity, EKS access entries and break-glass boundary.
-5. State backend, encryption, locking, recovery and secret-output rules.
+1. Temporary bootstrap identity/session, EKS access entries and break-glass owner.
+2. State backend, encryption, locking, recovery and secret-output rules.
+3. Fresh gross spend/credit/Region/quota preflight and approved P2 cost cap,
+   active AWS window and teardown owner; the schedule does not approve these.
+4. Source-checked exact provider/module pins and transitive compatibility;
+   candidates remain unapproved (see SPEC-P2 Task 1).
+5. CLI installation/upgrade permission is absent; the installed version was
+   observed as 1.14.8 at Task 1 preflight, not as the approved 1.16.4 baseline.
 6. Read-only diagnosis of the Terraform `%APPDATA%\terraform.d` warning.
 
 ## Next safe action
 
-Review P2 Task 1 one decision at a time, beginning with bounded scope approval
-and the exact Terraform CLI pin.
-Produce an approved decision record plus unresolved-blocker list. Do not create a
-backend, request quota, run `terraform apply`, create AWS resources, commit or push.
+Coach the bootstrap identity/temporary-session decision, EKS access-entry boundary
+and break-glass ownership. Produce a reviewed decision plus unresolved blockers.
+Do not upgrade the CLI, create a backend, request quota, run `terraform apply`,
+mutate AWS, commit or push. L3 approval remains separate from all document approvals.
 
 ## Required evidence for the next transition
 
-- Owner-approved P2 scope/tool decision.
-- Official source links for selected version pins.
-- Rebaselined schedule and explicit cost/teardown ownership.
-- Reviewed identity/access and state-management decisions.
+- Reviewed bootstrap identity/session/access matrix and break-glass owner.
+- Exact provider/module sources and compatibility evidence before approval.
+- Approved cost cap, AWS window, teardown owner and state-management decisions.
 - Fresh redacted account preflight immediately before any later L3 request.
 
 ## Context expansion
