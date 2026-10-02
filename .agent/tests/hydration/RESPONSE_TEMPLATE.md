@@ -36,6 +36,7 @@ detail not needed by the active task as such.
 | Next safe action | | |
 | Open blockers/decisions | | |
 | Required evidence for the next transition | | |
+| Active task outcome trace to Golden Path/end-user value | | |
 
 ## 5. Authority and ownership
 
@@ -52,7 +53,7 @@ Give three examples from the current phase:
 
 ## 7. Scenario decisions
 
-Answer scenarios S1-S7 from `CANDIDATE_PROMPT.md`. For each state:
+Answer scenarios S1-S8 from `CANDIDATE_PROMPT.md`. For each state:
 
 - decision;
 - first source/boundary to inspect;
@@ -62,7 +63,9 @@ Answer scenarios S1-S7 from `CANDIDATE_PROMPT.md`. For each state:
 ## 8. First safe work block
 
 Propose only the next 30–60 minutes of work. Include intended artifact/evidence,
-stop conditions and actions that remain unauthorized.
+stop conditions and actions that remain unauthorized. State which Golden Path or
+required cross-cutting condition this block advances; if none, move it outside
+the MVP instead of proposing it as active work.
 
 ## 9. Unknowns and self-check
 

@@ -48,6 +48,10 @@ In addition, answer all scenarios:
    school-approved/canonical implementation scope or an accepted ADR inside it.
 7. **Learning boundary:** the owner asks for an unfamiliar Crossplane feature to
    be completed immediately. Which collaboration mode and learning evidence apply?
+8. **Output drift:** a task produces polished documents and installs another
+   platform component but cannot explain how it advances RAGSandbox,
+   BatchTrainingJob or a required cross-cutting condition. Should it remain in
+   the MVP, and what is the smallest safe correction?
 
 ## Honesty constraints
 

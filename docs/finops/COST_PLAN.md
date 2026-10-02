@@ -268,6 +268,67 @@ aws service-quotas list-service-quotas --service-code elasticloadbalancing --reg
 Evidence không được chứa access key hoặc full account ID. Quota-increase request
 là external account mutation và cần owner approval riêng; Task 5 không gửi request.
 
+### 7.4. P2 approved decisions — no execution authority (2026-10-02)
+
+Owner đã duyệt gross cap, conditional candidate window và ownership dưới đây;
+đây là SPEC-P2 Task 1 decision approval, không cấp quyền AWS execution. Source-checked
+pins và read-only preflight ở
+[P2-T1 review packet](../evidence/p2/P2_T1_DECISION_REVIEW.md) và
+[fresh diagnostics](../evidence/p2/P2_T1_PREFLIGHT_20261002.md).
+Codex execution environment không resolve AWS credentials/profile/Region và
+Phase1 quan sát standard .aws file access bị từ chối; không suy ra máy/account
+owner không có credentials. Không
+được dùng account/credit/quota snapshot ngày 28/09 làm fresh execution clearance.
+
+Owner-terminal append ngày 02/10 trong fresh diagnostics bổ sung STS success,
+Region us-east-1, EKS count 0, VPC count 1, pending/running EC2 count 0; applied
+quotas EKS 100, VPC 5, IGW 5 và Standard On-Demand 5 vCPUs. Hai m6i.large minh họa
+cần 4 vCPUs, fit limit nhưng không chứng minh toàn bộ usage hoặc capacity.
+Phase1 reviewed Console scalars: displayed MTD/last-month cost 0.00 USD, credit
+remaining/estimated 100.00 USD và used/estimated 0.00 USD; Budget chưa tạo, một
+anomaly monitor active. Đây là owner-provided evidence, không phải Codex AWS calls.
+Owner follow-up trong preflight record xác nhận private account match, IAM_USER,
+default available VPC, IGW count 1 và Active AWS Free Tier credit expiry 13/06/2027.
+Final owner Bills expanded-service evidence cho period 2026-10 ghi gross MTD
+service charges 0.00 USD, tax 0.00 USD, không thấy credit offset khi gross bằng 0.
+Credit eligibility EKS/EC2/S3=YES, EBS=UNVERIFIED: coi toàn bộ EBS gross charges có
+thể không được credit cover, giữ nguyên 5 USD gross cap; không suy extra 100 USD.
+Current IAM user MFA count 0 là HARD_BLOCKER trước approved temporary-session/L3
+path. EKS Console access không chứng minh CreateCluster permission; Budget vẫn chưa
+tạo. Task 1 có thể đóng decision/preflight với L3 blockers; không clearance execution.
+
+| Decision | Owner-approved choice / planning detail | Remaining evidence / authority |
+| --- | --- | --- |
+| P2 gross cap | 5 USD cho initial create/verify/destroy và retained backend/log cost attributable to P2 | Subset của 100 USD, không cộng thêm ngân sách; exact priced plan và gross/category ledger phải fit trước L3 |
+| Cap allocation (planning recommendation) | EKS <= 1.00; system/EBS <= 1.80; network/log/backend <= 0.70; teardown contingency <= 1.50 USD | Derived planning split, chưa coi là separate approved category caps; contingency trong existing 10 USD reserve, actual charges ghi đúng category |
+| AWS window | Candidate 05/10/2026, 09:00–17:00 Asia/Saigon (02:00–10:00 UTC), chỉ sau Tasks 2–6 gates | Tối đa 8 elapsed hours kể cả create/verify/destroy; không bật AWS trước gate, không để overnight |
+| Cleanup start/stop | Freeze new create lúc 15:00 local, dành >= 2 giờ teardown/inventory; actual risk có thể yêu cầu bắt đầu sớm hơn | Nếu create/verify không fit, stop và rebaseline từ live state; không giảm acceptance để giữ 06/10 |
+| Teardown owner | HoangLV/chủ đồ án là primary lifecycle/teardown owner và recovery custodian | Independent tested MFA recovery identity/login MUST trước L3; human backup thứ hai SHOULD nếu có, không bắt buộc cho single-owner PoC |
+| Backend lifecycle | Accepted ADR-0007: dedicated S3 us-east-1, separate reviewed CLI foundation; review mỗi 7 ngày, checkpoint review/cleanup 03/11/2026 | Chỉ xóa sau orphan inventory và explicit cleanup approval; creation/IAM execution chưa được phép, không tạo trong Task 1 |
+
+Illustration từ dated P1 price baseline (28/09, **không phải final estimate**):
+8 giờ, 1 standard EKS cluster, tối đa 2 m6i.large system nodes, 30 GB gp3/node,
+2 public IPv4: `0.80 + 1.536 + (60 * 0.08 * 8 / 730) + 0.08 = 2.4686 USD`.
+One-node illustration là 1.6343 USD. Đây không chọn node count thay Task 5 và không
+bao gồm variable logs/S3 requests/data transfer hoặc failed-delete overrun.
+EKS standard-support 0.10 USD/giờ được recheck tại
+[AWS EKS pricing](https://aws.amazon.com/eks/pricing/) ngày 02/10; node/storage
+giá cũ phải refresh cho exact plan trước L3. Không khẳng định cap bảo đảm final bill.
+
+Planning recommendation: freeze tạo mới nếu measured/estimated P2 burn + outstanding
+liability tới 3.50 USD; giữ 1.50 USD cho cleanup. Billing có độ trễ nên dùng inventory
+runtime/estimate cùng gross ledger, không chờ alert. Nếu projected total vượt cap,
+không tạo thêm; record incident và xin quyết định owner, tiếp tục cleanup đã được
+authorize thay vì bỏ orphan. Unknown bill/quota/identity hoặc chưa verified renewal/
+independent recovery login giữ L3 gate đóng. Gross cost observation cần từ existing console read
+hoặc separately approved metered API; không tự gọi Cost Explorer API ở zero-cost
+preflight vì [AWS tính phí theo request](https://aws.amazon.com/aws-cost-management/aws-cost-explorer/pricing/).
+
+Owner approval không tạo quyền backend/IAM mutation, CLI upgrade, quota request,
+Terraform apply hoặc resource creation, commit/push. Candidate window không trở
+thành active window nếu Tasks 2–6, fresh priced/account preflight và explicit L3
+approval chưa đạt; physical controls và cleanup vẫn phải được verified.
+
 ## 8. Budget, billing và stop rules
 
 ### 8.1. Budget design
@@ -380,7 +441,7 @@ Chỉ giữ AWS resource khi có `Retain=true`, owner approval, reason và expir
 
 | Có thể retain có điều kiện | Điều kiện |
 | --- | --- |
-| Terraform remote-state backend | Ownership/state protection được P2 chốt; không chứa plaintext secret. |
+| Terraform remote-state backend | P2 identity/state contract và HoangLV ownership đã accepted trong ADR-0007; review mỗi 7 ngày, review/cleanup checkpoint 03/11/2026. Chỉ xóa sau orphan inventory và explicit approval, không tự hết hạn. Không chủ ý đưa credential/secret vào configuration/output. Raw Terraform state luôn được coi là sensitive, phải access-controlled và encrypted at rest, không đưa vào Git/evidence; sensitive=true không làm state secret-free. |
 | Designated evidence/checkpoint S3 bucket/prefix | Lifecycle/expiry, encryption và publish/redaction rule đã duyệt. |
 | Shared RDS | Chỉ trong active RAG campaign; daily cost check và expiry rõ ràng. |
 | Một verified RDS recovery snapshot | Chỉ trong recovery campaign; checksum/evidence linked và expiry rõ ràng. |
