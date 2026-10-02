@@ -342,21 +342,36 @@ Biện pháp bắt buộc:
 | Thời gian | Công việc | Exit criteria |
 |---|---|---|
 | 24-30/08 | Chốt kiến trúc, ADR, baseline, threat model, budget, quota và version matrix | Tài liệu và cost plan được review |
-| 31/08-06/09 | Terraform/OpenTofu bootstrap EKS, CI validate và teardown | Tạo/xóa EKS tái lập được |
-| 07-13/09 | Cài Argo CD, Crossplane, kro; spike S3 + Deployment | Một CR tạo resource graph thành công |
-| 14-20/09 | Hoàn thành RAG Sandbox với shared RDS và IRSA | RAG end-to-end pass |
-| 21-27/09 | RBAC, quota, NetworkPolicy, Pod Security, Kyverno | Negative test suite pass |
-| 28/09-04/10 | KEDA ScaledJob, Karpenter và GPU NodePool | Batch end-to-end pass |
-| 05-11/10 | Prometheus, OpenCost, baseline và cost instrumentation | Cost dashboard + raw metrics |
-| 12-18/10 | Security Group remediation và RDS recovery | Hai kịch bản độc lập pass |
-| 19-25/10 | Chạy trial chính thức và khóa dataset | Dataset, run manifests, analysis script |
-| 26/10-01/11 | Đóng băng code, runbook, video, báo cáo và slide | Release candidate bảo vệ |
-| Tháng 11 | Chỉ sửa lỗi, hoàn thiện báo cáo và luyện phản biện | Không thêm feature/technology mới |
+| 02-06/10 | P2: Terraform bootstrap EKS, CI validate và teardown | Tạo/xóa EKS tái lập được |
+| 07-09/10 | P3: Cài Argo CD, Crossplane, kro; spike S3 + Deployment | Một CR tạo resource graph thành công |
+| 10-12/10 | P4: Hoàn thành RAG Sandbox với shared RDS và IRSA | RAG end-to-end pass |
+| 13-14/10 | P5: RBAC, quota, NetworkPolicy, Pod Security, Kyverno | Negative test suite pass |
+| 15-18/10 | P6: KEDA ScaledJob, Karpenter và GPU NodePool | Batch end-to-end pass |
+| 19-20/10 | P7: Prometheus, OpenCost, baseline và cost instrumentation | Cost dashboard + raw metrics |
+| 21-23/10 | P8: Security Group remediation, RDS recovery và campaign freeze | Hai kịch bản độc lập pass; đủ preconditions và freeze record trước official trial |
+| 24-30/10 | P9: Official campaign, cleanup, evidence và raw analysis | Đủ sample theo contract; giữ failed trials, run manifests và raw evidence |
+| 31/10 | P10 phần kỹ thuật: final acceptance audit, teardown, orphan inventory và evidence packaging | Technical evidence được audit; teardown và inventory đạt tiêu chí |
+| 01-03/11 | P9 phần cost: append delayed billing evidence có version trước final dataset freeze | Dataset, run manifests và analysis script được khóa khi đủ evidence |
+| Tháng 11 | P10-P11: final cost reconciliation, báo cáo, slide, sửa lỗi trong scope và diễn tập bảo vệ | Release candidate bảo vệ; không thêm feature/technology mới |
+
+Rebaseline được owner duyệt ngày 02/10/2026 làm aggressive baseline. Technical
+implementation và official trial execution phải kết thúc trong tháng 10; runbook
+và video evidence được tạo dần trong từng phase, không dồn vào ngày 31/10.
+P9 dự trù 44-48 giờ cho campaign, cleanup, evidence và raw analysis; điều chỉnh
+dự toán theo observed cycle time từ dry run, không giữ giới hạn 34 giờ trước đó.
+Mốc final dataset freeze mục tiêu là 03/11, phụ thuộc đủ sample và delayed billing
+evidence theo `docs/experiments/EXPERIMENT_PLAN.md`. Cost evidence được append
+bằng versioned file và timestamp; không thêm feature, sửa trial result hoặc đổi
+observed event timestamps. Thiếu dữ liệu vẫn là `PENDING`/`INCONCLUSIVE`.
+Nếu gate 06/10, 12/10, 18/10 hoặc campaign freeze 23/10 trượt, phải rebaseline từ
+live state; không giảm trial count, acceptance criteria, learning gate hoặc
+teardown để giữ ngày. Lịch không cấp quyền AWS apply/account mutation.
+Mốc bảo vệ dự kiến đầu tháng 12; ngày hội đồng cụ thể chưa được xác nhận.
 
 ### 12.1. Scope gates
 
-- Nếu kro + Crossplane integration chưa tạo được S3 resource ổn định trước 13/09, dừng mở rộng và sửa vertical slice đầu tiên; không cài thêm công nghệ.
-- Nếu chưa có RAG end-to-end trước 20/09, Batch Training không được mở rộng ngoài skeleton.
+- Nếu kro + Crossplane integration chưa tạo được S3 resource ổn định tại gate 09/10, dừng mở rộng và sửa vertical slice đầu tiên; không cài thêm công nghệ.
+- Nếu chưa có RAG end-to-end tại gate 12/10, Batch Training không được mở rộng ngoài skeleton.
 - Nếu GPU Spot không có capacity, dùng On-Demand cho trial chức năng và ghi rõ Spot là giới hạn thực nghiệm; không làm giả kết quả Spot.
 - Nếu RDS recovery không thể tự động hóa an toàn, giữ recovery workflow có bước phê duyệt và báo đúng mức tự động hóa thực tế.
 - Sau 18/10 không thêm portal, service mesh, multi-region, model registry hoặc công nghệ ngoài MVP.

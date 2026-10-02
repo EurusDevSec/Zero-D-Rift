@@ -1,14 +1,16 @@
 ---
 id: SPEC-P2
 title: Reproducible EKS bootstrap and teardown
-status: DRAFT_FOR_OWNER_APPROVAL
+status: BOUNDED_SCOPE_APPROVED_TASK1_OPEN_NO_AWS_MUTATION
 phase: P2
-start: TBD_AFTER_OWNER_APPROVAL
-deadline: TBD_REBASELINE
+start: 2026-10-02
+deadline: 2026-10-06
 estimated_effort: 27-31 hours
 mode: Coach then Pair
 canonical_scope: docs/de_cuong_tot_nghiep_ver3.md
 iac_tool: Terraform
+terraform_cli_exact_pin: 1.16.4
+authority: NO_AWS_APPLY_OR_ACCOUNT_MUTATION
 ---
 
 # 1. Goal and boundaries
@@ -104,10 +106,20 @@ Scenario: Teardown is complete
 
 ## Task 1 — P2 approval, tool pin and zero-cost preflight (2–3 h)
 
-- [x] Owner selects Terraform rather than OpenTofu for P2 (2026-10-01); exact
-      CLI/provider/module versions remain source-checked pins.
-- [ ] (30–45 m) Owner reviews and approves the bounded P2 scope.
-- [ ] (30 m) Rebaseline P2–P11 dates without weakening acceptance criteria.
+- [x] Owner selects Terraform rather than OpenTofu for P2 (2026-10-01).
+- [x] Owner approves bounded P2 scope (2026-10-02), covering Goal, MUST
+      deliverables, Negative boundaries, P1 constraints and acceptance scenarios.
+- [x] Owner approves Terraform CLI exact pin `1.16.4` (2026-10-02).
+      Sources: [HashiCorp install page](https://developer.hashicorp.com/terraform/install)
+      and [release v1.16.4](https://github.com/hashicorp/terraform/releases/tag/v1.16.4).
+      CLI pin approval does not authorize installation/upgrade or prove
+      provider/module compatibility.
+- [ ] Source-check and obtain owner approval for exact provider/module pins;
+      AWS provider 6.67.0, EKS module 21.26.0 and VPC module 6.7.3 remain
+      unapproved candidates. Include transitive requirements before selection.
+- [x] Owner approves aggressive P2–P11 rebaseline (2026-10-02), without
+      weakening acceptance criteria; canonical schedule is ver3 section 12,
+      mirrored in `.agent/docs/ROADMAP.md`. P2 gate is 2026-10-06.
 - [ ] (30–45 m) Decide bootstrap identity/temporary-session method, EKS access-entry
       boundary and break-glass owner; no account mutation yet.
 - [ ] (30 m) Decide state backend, encryption, locking, recovery and secret-output rules.
@@ -116,6 +128,12 @@ Scenario: Teardown is complete
 
 Evidence: approved spec revision, tool/version sources, redacted preflight and
 explicit list of unresolved blockers. No paid resource or backend is created.
+
+Task 1 remains OPEN: identity/access/break-glass, state backend/security/recovery,
+cost/preflight/cap/window/teardown owner and provider/module pins are not approved.
+The CLI configuration warning at `%APPDATA%\terraform.d` also requires read-only
+diagnosis. Scope, CLI pin and schedule approvals do not authorize implementation,
+CLI upgrade, backend creation, quota requests, Terraform apply or AWS mutation.
 
 ## Task 2 — Local Terraform state/dependency micro-lab (2 h)
 
