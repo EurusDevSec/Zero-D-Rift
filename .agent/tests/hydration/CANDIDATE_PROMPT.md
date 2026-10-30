@@ -19,7 +19,7 @@ contact AWS/Kubernetes/external services.
    git rev-parse HEAD
    git status --short
    git log -1 --oneline --decorate
-   .agent/scripts/check-context.ps1
+   .agent/scripts/check-context.sh
    ```
 
 Do not read `docs/archive/`, prior hydration reports or old chat exports. Do not

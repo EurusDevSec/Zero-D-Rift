@@ -13,7 +13,7 @@ description: Save a verified Zero D-Rift session checkpoint and handoff state wi
    not append chronology, duplicate canonical text or store Git HEAD as live truth.
 4. Update `learning/CURRENT_STATUS.md` only from demonstrated evidence; append the
    full learning log, cold memory and history only when their specific criteria apply.
-5. Run `../../scripts/check-context.ps1`; show warnings, exact modified/untracked
+5. Run `../../scripts/check-context.sh`; show warnings, exact modified/untracked
    files and `git status --short` separately.
 6. Do not run `git add .`, commit or push. If explicitly requested, stage only the
    reviewed file list and report verification state.

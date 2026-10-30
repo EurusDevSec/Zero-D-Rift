@@ -75,7 +75,7 @@ Thiếu fact cụ thể nào thì mở rộng đúng nguồn đó.
 1. Chạy verification phù hợp và truy vấn lại live state.
 2. Phân loại thông tin mới.
 3. Rewrite active context quanh next safe action.
-4. Chạy .agent/scripts/check-context.ps1.
+4. Chạy .agent/scripts/check-context.sh.
 5. Báo danh sách file thay đổi và Git status.
 6. Không commit/push nếu chưa có yêu cầu rõ.
 
