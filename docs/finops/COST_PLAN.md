@@ -270,6 +270,14 @@ là external account mutation và cần owner approval riêng; Task 5 không g�
 
 ### 7.4. P2 approved decisions — no execution authority (2026-10-02)
 
+Schedule note, 2026-10-29: canonical ver3 section 12 now starts recovery delivery
+on 29/10. The candidate AWS window 05/10 below is historical and expired, not
+renewed by the Linear schedule. Request a new exact execution/cleanup window
+after current gates, identity and priced/spend checks. P2 gross cap 5 USD, total
+100 USD, >=2 h teardown, 7-day backend review and the 03/11 review/cleanup
+checkpoint remain; checkpoint is not automatic deletion authority. This note
+changes no historical account observations or approved security/cost decisions.
+
 Owner đã duyệt gross cap, conditional candidate window và ownership dưới đây;
 đây là SPEC-P2 Task 1 decision approval, không cấp quyền AWS execution. Source-checked
 pins và read-only preflight ở

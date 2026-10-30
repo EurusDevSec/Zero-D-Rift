@@ -64,6 +64,67 @@ first usable Golden Path over additional platform breadth.
 Mode escalation is `Coach -> Pair -> Executor`; do not jump to Executor for
 Crossplane, kro, KEDA, Karpenter, IRSA, or recovery merely to save time.
 
+## Codex and Claude coordination
+
+The owner authorized parallel Codex/Claude assistance on 2026-10-29. Both agents
+follow root `AGENTS.md`, this workflow and the same current issue contract.
+Claude starts at root `CLAUDE.md`; there is no separate Claude scope or roadmap.
+Linear routing and completion policy live in `../docs/LINEAR_DELIVERY.md`.
+
+- The owner keeps scope, architecture/security/cost decisions, AWS execution
+  windows, final acceptance and learning demonstration. Schedule urgency does not
+  transfer that authority to either agent.
+- Choose an implementer and a reviewer per bounded issue; either agent may fill
+  either role. Default: one builds while the other reviews, researches official
+  pinned sources, or explains the concept. Avoid duplicating implementation.
+- Keep one active implementation issue per owner. Parallel preparation/review is
+  allowed for disjoint outputs; agent speed is not extra owner learning capacity.
+- Before editing, record a work claim on the Linear issue: agent/session,
+  bounded outcome, file/path allowlist, Git HEAD plus dirty paths, start time,
+  verification target and authority. Claim only the files actually being edited.
+  An abandoned claim must be explicitly released or reassigned, never silently
+  stolen because a clock expired. A claim is coordination, not a filesystem lock.
+- One writer owns an overlapping file at a time, including AGENTS, SPEC, active
+  context, learning files and shared manifests. The second agent supplies review
+  findings or a proposed diff until handoff. Disjoint paths may be edited in
+  parallel after checking shared contracts and prerequisites.
+- Never run concurrent Terraform/state/backend operations or destructive/shared
+  cluster/database tests against the same environment. Each AWS window has one
+  approved operator and teardown owner, regardless of how many agents assist.
+- Review the actual diff and linked evidence independently. Record reviewer,
+  revision/dirty candidate, findings, command results and limits. Self-review or a
+  generated explanation is not independent acceptance or owner learning evidence.
+- An agent that cannot access Linear uses an owner-provided, dated issue snapshot
+  and the repository sources. Mark live state unverified; send a handoff for the
+  owner or authorized connected agent to reconcile. Do not invent issue updates,
+  direct agent messaging permissions or credentials to bridge tool access.
+- Handoff includes issue ID/AC, current revision and dirty paths, changed files,
+  evidence tier/run ID/results, learning gap, unresolved risks, authority and one
+  next action. The receiving agent rechecks live Git and relevant external state.
+  The active-context file remains a concise index, not a shared chat transcript.
+- No automatic merge, commit, push, install, cloud execution or approval from an
+  agent review or Linear status. Use existing explicit user authorization for
+  bounded reversible work; ask only for the consequential authority still absent.
+
+### Daily delivery rhythm
+
+Use 8 focused hours/day as the planning baseline; up to 10 hours is optional
+recovery capacity, never assumed every day. Start 2026-10-29, Asia/Saigon; current
+working targets are in canonical ver3 section 12 and Linear P2-P11.
+
+1. Start: check the active issue, prerequisites, authority and current Git state;
+   choose one observable result for this work block.
+2. Work in 15-60 minute subtasks inside a 2-4 hour parent outcome. Include the
+   necessary focused explanation/lab before unfamiliar mechanisms are composed.
+3. Reserve time within the day for verification, evidence, explanation and
+   cleanup. Do not fill all available hours with generated code.
+4. Close the day with observed result, remaining estimate, blocker/unblock action
+   and evidence link on the issue. Update learning only from demonstrated work.
+5. At a missed gate or unexpected pilot cycle time, rebaseline remaining targets
+   from observed state. Preserve acceptance, official samples, failed trials,
+   learning gates, budget and teardown. Runbooks/video/report outline accumulate
+   during implementation; never defer all evidence to the final day.
+
 ## Feature loop
 
 ### Learn
@@ -148,6 +209,6 @@ because a teach-back is incomplete.
    learning history only for a meaningful new result.
 5. Add durable lessons to cold memory only when they will matter in later phases;
    append history only for meaningful state transitions.
-6. Run `.agent/scripts/check-context.ps1`, then show changed files and live Git status.
+6. Run `.agent/scripts/check-context.sh`, then show changed files and live Git status.
 7. Commit or push only after explicit owner instruction; never run `git add .`.
 

@@ -77,7 +77,7 @@ Checkpointing is classification and rewrite, not append-only summarization:
    - completed milestone -> history;
    - expired or redundant detail -> discard.
 4. Rewrite active context so it describes the next safe working state.
-5. Run `.agent/scripts/check-context.ps1` and show live Git status separately.
+5. Run `.agent/scripts/check-context.sh` and show live Git status separately.
 
 Do not force every category to change at every checkpoint. Update only what the
 session actually changed and proved.

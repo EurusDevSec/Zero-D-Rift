@@ -7,8 +7,8 @@ description: Resume Zero D-Rift work from a fresh session by validating Git stat
 
 1. Read [context governance](../../references/context-governance.md), active
    context and its referenced current learning status.
-2. Query live Git HEAD/status and run `../../scripts/check-context.ps1` when
-   PowerShell is available. Treat mismatch as drift to investigate, not a reason
+2. Query live Git HEAD/status and run `../../scripts/check-context.sh` (bash).
+   Treat mismatch as drift to investigate, not a reason
    to discard owner changes.
 3. Identify the active outcome and risk. Load the current task plus applicable
    acceptance/negative cases; read the full spec only for phase-wide or L3/L4 work.

@@ -36,7 +36,7 @@ teardown, secret removal or other safety work.
 - [ ] Active context names one next safe action, evidence target and authority boundary.
 - [ ] Durable decisions, evidence, learning and history were moved to their canonical homes.
 - [ ] Expired detail and duplicated canonical text were removed from active context.
-- [ ] `.agent/scripts/check-context.ps1` passes or its warning/blocker is recorded.
+- [ ] `.agent/scripts/check-context.sh` passes or its warning/blocker is recorded.
 
 ## Phase done
 

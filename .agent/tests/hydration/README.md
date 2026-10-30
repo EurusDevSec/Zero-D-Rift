@@ -60,6 +60,12 @@ because responses may contain machine paths or account aliases. Never store
 credentials, account IDs, tokens, kubeconfig, Terraform state or raw sensitive
 plans in a hydration report.
 
+Owner-authorized sanitized shared records live in
+[docs/evidence/hydration/](../../../docs/evidence/hydration/README.md).
+Only evaluators or historical audits should consult past results, after candidate
+submission. Candidates must not read prior reports or evaluations. A recorded
+same-chat result does not establish fresh-chat or independent account continuity.
+
 ## What passing means
 
 Passing means the candidate can determine where the project is, what is proven,

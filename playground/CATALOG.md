@@ -5,7 +5,7 @@ detailed `LAB.md` so the Dojo does not become a second speculative roadmap.
 
 | Track | Core capability | Typical environment | First progression | Status |
 |---|---|---|---|---|
-| Terraform engineering | Predict state, graph, lifecycle, tests, drift and teardown | D0-D1, later D4 | State graph -> plan tests -> modules -> drift/recovery | T01 drafted |
+| Terraform engineering | Predict state, graph, lifecycle, tests, drift and teardown | D0-D1, later D4 | State graph -> plan tests -> modules -> drift/recovery | T01 ready |
 | AWS foundations | Trace VPC/EKS/resource lifecycle, quota, cost and inventory | D0, D3, D4 | Network flow -> inventory -> teardown incident | Outline |
 | IAM and workload identity | Separate identity, trust, STS and service authorization | D0, D3, D4 | Policy evaluation -> AssumeRole -> IRSA failures | Outline |
 | Kubernetes reconciliation | Diagnose desired/observed state and controller boundaries | D1-D2 | Deployment chain -> CRD/status -> admission failure | Outline |

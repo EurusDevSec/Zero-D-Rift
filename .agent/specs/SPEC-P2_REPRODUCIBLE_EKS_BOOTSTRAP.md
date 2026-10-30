@@ -3,8 +3,9 @@ id: SPEC-P2
 title: Reproducible EKS bootstrap and teardown
 status: TASK1_COMPLETE_WITH_L3_BLOCKERS
 phase: P2
-start: 2026-10-02
-deadline: 2026-10-06
+start: 2026-10-29
+deadline: 2026-11-02
+schedule_baseline: OWNER_REQUESTED_RECOVERY_2026-10-29
 estimated_effort: 27-31 hours
 mode: Coach then Pair
 canonical_scope: docs/de_cuong_tot_nghiep_ver3.md
@@ -14,6 +15,12 @@ authority: NO_AWS_APPLY_OR_ACCOUNT_MUTATION
 ---
 
 # 1. Goal and boundaries
+
+Schedule-only rebaseline on 2026-10-29: Linear uses this phase's P2 identifier; working window
+29/10-02/11 replaces the missed 02-06/10 window. Canonical ver3 section 12 owns
+the schedule. Historical Task 1 approvals/preflight retain their actual dates;
+they are not fresh account checks or an active AWS execution window. Scope,
+acceptance, exact pins, learning and execution authority are unchanged.
 
 ## Goal
 

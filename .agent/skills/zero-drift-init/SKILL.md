@@ -8,7 +8,7 @@ description: Initialize or audit Zero D-Rift project-agent state when the user s
 1. Read [context governance](../../references/context-governance.md), root
    `AGENTS.md`, active context and its referenced current learning status.
 2. Inspect live Git HEAD/status and repository structure before trusting any
-   checkpoint. Run `../../scripts/check-context.ps1` when PowerShell is available.
+   checkpoint. Run `../../scripts/check-context.sh` (bash).
 3. Classify the request and repository as planning, implementation, experiment
    or release work, then load only the required canonical/spec/ADR sections.
 4. Validate that active-context pointers exist and that the packet identifies one

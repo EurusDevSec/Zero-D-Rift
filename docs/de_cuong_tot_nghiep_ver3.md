@@ -337,44 +337,60 @@ Biện pháp bắt buộc:
 - Chạy inventory và teardown ngay sau mỗi đợt thử nghiệm.
 - Xác minh loại credit hiện có áp dụng cho EKS, EC2 GPU, RDS và các dịch vụ liên quan.
 
-## 12. Lộ trình thực hiện đến tháng 11/2026
+## 12. Lộ trình phục hồi từ 29/10/2026 đến đầu tháng 12/2026
 
-| Thời gian | Công việc | Exit criteria |
-|---|---|---|
-| 24-30/08 | Chốt kiến trúc, ADR, baseline, threat model, budget, quota và version matrix | Tài liệu và cost plan được review |
-| 02-06/10 | P2: Terraform bootstrap EKS, CI validate và teardown | Tạo/xóa EKS tái lập được |
-| 07-09/10 | P3: Cài Argo CD, Crossplane, kro; spike S3 + Deployment | Một CR tạo resource graph thành công |
-| 10-12/10 | P4: Hoàn thành RAG Sandbox với shared RDS và IRSA | RAG end-to-end pass |
-| 13-14/10 | P5: RBAC, quota, NetworkPolicy, Pod Security, Kyverno | Negative test suite pass |
-| 15-18/10 | P6: KEDA ScaledJob, Karpenter và GPU NodePool | Batch end-to-end pass |
-| 19-20/10 | P7: Prometheus, OpenCost, baseline và cost instrumentation | Cost dashboard + raw metrics |
-| 21-23/10 | P8: Security Group remediation, RDS recovery và campaign freeze | Hai kịch bản độc lập pass; đủ preconditions và freeze record trước official trial |
-| 24-30/10 | P9: Official campaign, cleanup, evidence và raw analysis | Đủ sample theo contract; giữ failed trials, run manifests và raw evidence |
-| 31/10 | P10 phần kỹ thuật: final acceptance audit, teardown, orphan inventory và evidence packaging | Technical evidence được audit; teardown và inventory đạt tiêu chí |
-| 01-03/11 | P9 phần cost: append delayed billing evidence có version trước final dataset freeze | Dataset, run manifests và analysis script được khóa khi đủ evidence |
-| Tháng 11 | P10-P11: final cost reconciliation, báo cáo, slide, sửa lỗi trong scope và diễn tập bảo vệ | Release candidate bảo vệ; không thêm feature/technology mới |
+Ngày 29/10/2026, owner yêu cầu khởi động lại từ live state, đưa công việc lên
+Linear và phối hợp Codex/Claude, với 8 giờ/ngày, tối đa 10 giờ khi cần bù. Baseline
+02/10 đã trượt và được thay bằng các **working target** dưới đây; mục tiêu cũ
+kết thúc kỹ thuật trong tháng 10 không còn là lịch đang thực thi. Đây là đổi lịch,
+không giảm scope, số trial, acceptance, learning gate, budget hoặc teardown.
+Ngày nộp báo cáo và ngày hội đồng chính xác vẫn `UNCONFIRMED`; 02/12 là mục tiêu
+nội bộ cho trạng thái sẵn sàng bảo vệ, không phải ngày nhà trường xác nhận.
 
-Rebaseline được owner duyệt ngày 02/10/2026 làm aggressive baseline. Technical
-implementation và official trial execution phải kết thúc trong tháng 10; runbook
-và video evidence được tạo dần trong từng phase, không dồn vào ngày 31/10.
-P9 dự trù 44-48 giờ cho campaign, cleanup, evidence và raw analysis; điều chỉnh
-dự toán theo observed cycle time từ dry run, không giữ giới hạn 34 giờ trước đó.
-Mốc final dataset freeze mục tiêu là 03/11, phụ thuộc đủ sample và delayed billing
-evidence theo `docs/experiments/EXPERIMENT_PLAN.md`. Cost evidence được append
-bằng versioned file và timestamp; không thêm feature, sửa trial result hoặc đổi
-observed event timestamps. Thiếu dữ liệu vẫn là `PENDING`/`INCONCLUSIVE`.
-Nếu gate 06/10, 12/10, 18/10 hoặc campaign freeze 23/10 trượt, phải rebaseline từ
-live state; không giảm trial count, acceptance criteria, learning gate hoặc
-teardown để giữ ngày. Lịch không cấp quyền AWS apply/account mutation.
-Mốc bảo vệ dự kiến đầu tháng 12; ngày hội đồng cụ thể chưa được xác nhận.
+| Phase | Working window | Công việc | Exit criteria |
+|---|---|---|---|
+| Nền tảng P0-P1 | Đã thực hiện; evidence lịch sử | Kiến trúc, ADR, baseline, threat model, budget/quota và version matrix | Documentation/design đã review; không suy runtime từ tài liệu |
+| P2 | 29/10-02/11 | Terraform bootstrap EKS, CI validate và teardown; giải quyết CLI/identity/backend prerequisites | Tạo/verify/xóa EKS tái lập, inventory và learning evidence |
+| P3 | 03-05/11 | Argo CD, Crossplane, kro; spike S3 + Deployment | Một CR tạo resource graph ổn định, ownership/readiness/cleanup rõ |
+| P4 | 06-08/11 | RAGSandbox với shared RDS và IRSA | App, DB, S3 access và usable status đạt end-to-end trên EKS |
+| P5 | 09-10/11 | RBAC, quota, NetworkPolicy, Pod Security, Kyverno | Negative security/isolation suite pass; không tuyên bố hard tenancy |
+| P6 | 11-14/11 | KEDA ScaledJob, Karpenter và GPU NodePool | Batch end-to-end, checkpoint và thu hồi Pod/GPU node có evidence |
+| P7 | 15-16/11 | Prometheus, OpenCost, manual baseline và cost instrumentation | Dashboard/raw metrics, cost contract và baseline tái lập được |
+| P8 | 17-19/11 | Security Group remediation, RDS recovery, pilot và campaign freeze | Hai kịch bản độc lập pass; đo cycle time và đủ preconditions trước freeze |
+| P9 | 20-25/11 | Official campaign, cleanup, evidence và raw analysis | Đủ sample theo contract; giữ failed trials, run manifests và raw evidence |
+| P9 cost append | 26-28/11 | Append delayed billing có version trước final dataset freeze | Chỉ freeze khi đủ sample và cost evidence; thiếu dữ liệu vẫn PENDING/INCONCLUSIVE |
+| P10 | 26-29/11 | Final acceptance audit, teardown/inventory, cost reconciliation, báo cáo/slide/video | Evidence được audit; dataset/package và bộ hồ sơ bảo vệ có thể kiểm tra |
+| P11 | 30/11-02/12 | Sửa lỗi trong scope, retest và diễn tập | Owner giải thích được kết quả/giới hạn; có video và evidence dự phòng |
+
+Linear dùng chính mã và tên phase `P2-P11` của repository. Tính năng milestone
+chỉ dùng để hiển thị phase trên Linear, không có bộ mã thứ hai. Linear giữ live issue/status/assignment/working dates; tài liệu này
+giữ scope và baseline lịch được owner yêu cầu. Thay đổi baseline phải đối chiếu
+hai bên, không tạo roadmap cạnh tranh. `.agent/docs/ROADMAP.md` là bản dẫn xuất.
+
+Capacity là 8 giờ/ngày cho toàn bộ học, làm, kiểm chứng, evidence và giải thích;
+2 giờ tăng thêm là dự phòng tự chọn, không cộng mặc định vào kế hoạch. Khoảng
+29/10-02/12 có trần lý thuyết 280 giờ tại 8 giờ/ngày; ngày khởi động 29/10 chỉ là
+một phần ngày, chưa có observed velocity. P2-P9 còn ước lượng thô khoảng 186-191
+giờ sau Task 1; thêm foundation/setup, final audit, báo cáo/slide và diễn tập phải
+nằm trong phần còn lại. Các số này không phải cam kết hoàn thành hoặc extra AWS
+runtime. Review effort sau mỗi gate và cập nhật từ thời gian thực tế.
+
+P9 dành 48 giờ trong 20-25/11 theo dự toán 44-48 giờ trước đó; chỉ khóa khả năng
+fit sau pilot có observed cycle time. Không rút trial/timeout/cleanup để giữ ngày.
+Runbook, video, evidence và dàn ý báo cáo được tạo dần từ P2-P9. Delayed Billing
+chỉ append file có version/timestamp trong 26-28/11 trước freeze; không thêm
+feature, sửa trial result hay đổi observed timestamp. Chưa đủ dữ liệu thì kéo
+mốc freeze và báo trạng thái thật. Mỗi AWS window cần riêng cost check, approved
+identity, stop time và teardown; lịch người làm không cho phép bật AWS xuyên lịch.
 
 ### 12.1. Scope gates
 
-- Nếu kro + Crossplane integration chưa tạo được S3 resource ổn định tại gate 09/10, dừng mở rộng và sửa vertical slice đầu tiên; không cài thêm công nghệ.
-- Nếu chưa có RAG end-to-end tại gate 12/10, Batch Training không được mở rộng ngoài skeleton.
-- Nếu GPU Spot không có capacity, dùng On-Demand cho trial chức năng và ghi rõ Spot là giới hạn thực nghiệm; không làm giả kết quả Spot.
-- Nếu RDS recovery không thể tự động hóa an toàn, giữ recovery workflow có bước phê duyệt và báo đúng mức tự động hóa thực tế.
-- Sau 18/10 không thêm portal, service mesh, multi-region, model registry hoặc công nghệ ngoài MVP.
+- Trượt bất kỳ gate nào, đặc biệt P2 02/11, P4 08/11, P6 14/11 hoặc freeze P8 19/11: rebaseline phần còn lại từ live state; không giảm trial count, acceptance, learning gate hoặc teardown.
+- Nếu kro + Crossplane chưa tạo S3 resource ổn định ở P3 05/11, dừng mở rộng và sửa vertical slice đầu tiên; không cài thêm công nghệ.
+- Nếu chưa có RAG end-to-end ở P4 08/11, Batch Training không mở rộng ngoài skeleton.
+- Nếu GPU Spot không có capacity, dùng On-Demand cho trial chức năng khi được duyệt và ghi rõ Spot là giới hạn; không làm giả kết quả Spot hoặc đổi nhãn trial để claim H5.
+- Nếu RDS recovery chưa thể tự động hóa an toàn, giữ bước phê duyệt và báo đúng mức tự động hóa.
+- Không thêm portal, service mesh, multi-region, model registry hoặc công nghệ ngoài MVP. Codex/Claude hỗ trợ song song không thay gate học và acceptance của owner.
 
 ## 13. Sản phẩm dự kiến bàn giao
 
