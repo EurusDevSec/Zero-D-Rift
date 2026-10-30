@@ -13,7 +13,7 @@ observed create/verify/destroy cycle.
 
 | Lab | Capability | Environment | Cost | Status |
 |---|---|---|---|---|
-| T01 | State and dependency graph | D0 then D1 | 0 USD | Drafted; waits for CLI pin |
+| T01 | P2 bootstrap graph: state, update vs replace, guardrails, teardown | D1 local | 0 USD | Ready (DRF-4) |
 | T02 | Variables, validation and plan assertions | D1 mock | 0 USD | Outline |
 | T03 | Module boundary and stable resource identity | D1 mock | 0 USD | Outline |
 | T04 | Update versus replacement and lifecycle risk | D1 mock | 0 USD | Outline |
