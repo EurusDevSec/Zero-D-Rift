@@ -104,6 +104,9 @@ For build, review, and ship requests, follow
 `.agent/workflows/main-workflow.md` and the active spec. Do not infer permission
 to deploy paid AWS resources from a planning or learning request.
 
+Codex and Claude share that workflow's coordination rules. Claude's entrypoint
+is `CLAUDE.md`; live Linear routing is `.agent/docs/LINEAR_DELIVERY.md`.
+
 ## 5. Learning-aware delivery
 
 Every feature follows:
@@ -136,7 +139,8 @@ mode. A feature can be functionally complete while its learning gate remains ope
 
 ## 7. Planning granularity
 
-- Roadmap: all phases through November 2026, with outcome and exit criteria.
+- Roadmap: all remaining phases through the current canonical rebaseline (now
+  early December 2026), with outcome and exit criteria.
 - Detailed spec: current phase only; outline the next phase when useful.
 - Parent task: normally 2–4 focused hours.
 - Subtask: normally 15–60 minutes with an observable result.
