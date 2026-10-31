@@ -4,6 +4,7 @@ Trạng thái: code xong, **chỉ plan, chưa apply**. Cluster chỉ được t�
 khi có duyệt riêng về giờ chạy và chi phí.
 Nguồn: SPEC-P2 Task 5, ADR-0003 (bootstrap trước controller), ADR-0007 (quyền vào cluster).
 Cần có trước: DRF-5 (phiên MFA), DRF-6 (backend S3), DRF-8 (network). Root plan hiện có 50 resource.
+Chạy thật theo [P2_L3_WINDOW](P2_L3_WINDOW.md) (DRF-10): xin duyệt window, freeze, dọn, inventory.
 
 ## Đích đến
 
