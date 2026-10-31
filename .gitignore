@@ -2,7 +2,7 @@
 /docs/research/nckh/
 
 # Owner personal thinking notes, kept out of Git.
-/KHUNG_TU_DUY.md
+/SO_TAY.md
 
 # Terraform local artifacts: state, plans, provider cache, private backend and run
 # values (DRF-7). Keep .terraform.lock.hcl tracked.
