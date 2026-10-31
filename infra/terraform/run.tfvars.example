@@ -1,0 +1,4 @@
+# Copy to run.tfvars (gitignored) for each approved run, then:
+#   terraform plan -var-file=run.tfvars
+run_id     = "P2-RUN-YYYYMMDD-NN"
+expires_at = "2026-11-02T12:00:00Z"

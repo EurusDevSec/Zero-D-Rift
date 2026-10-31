@@ -1,0 +1,7 @@
+# Copy to backend.hcl (gitignored) and fill the private values. Never commit it.
+# Contract: ADR-0007 "Decision — state backend".
+bucket       = "<private-dedicated-state-bucket>"
+key          = "zero-d-rift/p2/terraform.tfstate"
+region       = "us-east-1"
+encrypt      = true
+use_lockfile = true

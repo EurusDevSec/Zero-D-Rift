@@ -3,3 +3,22 @@
 
 # Owner personal thinking notes, kept out of Git.
 /KHUNG_TU_DUY.md
+
+# Terraform local artifacts: state, plans, provider cache, private backend and run
+# values (DRF-7). Keep .terraform.lock.hcl tracked.
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+tfplan
+crash.log
+crash.*.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+.terraformrc
+terraform.rc
+backend.hcl
+*.tfvars
+*.tfvars.json
