@@ -26,6 +26,8 @@ and static checks. DRF-8 added the network module and DRF-9 the EKS module (50 r
 | `tests/mocks/` | Shared mock values (fake account `000000000000`) so tests run without AWS |
 | `scripts/check.sh` | Static gate: CLI pin, fmt, validate, tests, lockfile, module pins, Git leaks, secrets |
 | `scripts/plan_assert.sh` | Plan gate on a saved plan (25 checks): network, EKS, nodes, add-ons, access entry, tags; `ADMIN_WINDOW=1` for a window plan |
+| `scripts/plan_fingerprint.sh` | File hash and value-free shape hash of a saved plan; the L3 window must reproduce the approved shape hash |
+| `scripts/inventory.sh` | Read-only AWS inventory (counts only) before create, after verify, after destroy; exit 0 only when just the retain allowlist is left |
 
 ## Pins
 
