@@ -2,7 +2,7 @@
 
 Root configuration for SPEC-P2 (`.agent/specs/SPEC-P2_REPRODUCIBLE_EKS_BOOTSTRAP.md`).
 DRF-7 built the skeleton only: pins, variables, tags, safe outputs, backend contract
-and static checks. DRF-8 added the network module (19 resources, plan only; not applied).
+and static checks. DRF-8 added the network module and DRF-9 the EKS module (50 resources, plan only; not applied).
 
 ## Layout
 
@@ -17,12 +17,15 @@ and static checks. DRF-8 added the network module (19 resources, plan only; not 
 | `locals.tf` | Mandatory tags (COST_PLAN §10), subnet CIDR layout |
 | `outputs.tf` | Safe outputs only |
 | `run.tfvars.example` | Per-run `run_id` and `expires_at` |
-| `main.tf` | Calls `modules/network` (DRF-8); `cluster` (DRF-9) comes later |
+| `main.tf` | Calls `modules/network` (DRF-8) and `modules/cluster` (DRF-9) |
 | `modules/network/` | VPC 6.7.3: 2 public + 2 DB subnets, IGW, no NAT, S3 gateway endpoint with bounded policy, default SG with no rules |
 | `tests/guardrails.tftest.hcl` | Guardrail and tag tests with a mocked AWS provider |
 | `tests/network.tftest.hcl` | Network contract tests (no NAT, subnet/route-table counts, Gateway endpoint) |
+| `modules/cluster/` | EKS 21.26.0: 1.35 standard support, API auth, bootstrap access entry, pinned add-ons and AL2023 AMI, IMDSv2 |
+| `tests/cluster.tftest.hcl` | EKS contract tests (admin only in window, bounded endpoint, pins, node limits) |
+| `tests/mocks/` | Shared mock values (fake account `000000000000`) so tests run without AWS |
 | `scripts/check.sh` | Static gate: CLI pin, fmt, validate, tests, lockfile, module pins, Git leaks, secrets |
-| `scripts/plan_assert.sh` | Plan gate on a saved plan: no NAT/EIP/RDS, counts, routes, no open ingress, endpoint policy, tags |
+| `scripts/plan_assert.sh` | Plan gate on a saved plan (25 checks): network, EKS, nodes, add-ons, access entry, tags; `ADMIN_WINDOW=1` for a window plan |
 
 ## Pins
 

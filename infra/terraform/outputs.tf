@@ -1,5 +1,4 @@
-# Safe outputs only: no account ID, ARN, endpoint or credential. EKS outputs are
-# added with the cluster (DRF-9) and reviewed then.
+# Safe outputs only: no account ID, ARN, endpoint or credential.
 output "region" {
   description = "AWS Region of the PoC."
   value       = var.region
@@ -48,4 +47,14 @@ output "db_subnet_group_name" {
 output "nat_gateway_count" {
   description = "Number of NAT Gateways; must stay 0 (ADR-0006)."
   value       = module.network.nat_gateway_count
+}
+
+output "bootstrap_admin_associations" {
+  description = "Admin associations on the bootstrap access entry; 0 outside an approved window."
+  value       = module.cluster.bootstrap_admin_associations
+}
+
+output "access_entry_keys" {
+  description = "Access entries managed by Terraform."
+  value       = module.cluster.access_entry_keys
 }

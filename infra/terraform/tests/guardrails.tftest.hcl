@@ -1,10 +1,16 @@
 # Guardrail contract tests. mock_provider means no AWS call and no credentials.
 # Run: terraform test
-mock_provider "aws" {}
+mock_provider "aws" {
+  source = "./tests/mocks"
+}
+mock_provider "tls" {
+  source = "./tests/mocks"
+}
 
 variables {
-  run_id     = "P2-TEST-20261031-01"
-  expires_at = "2026-11-02T12:00:00Z"
+  run_id                       = "P2-TEST-20261031-01"
+  expires_at                   = "2026-11-02T12:00:00Z"
+  endpoint_public_access_cidrs = ["203.0.113.10/32"] # TEST-NET-3, documentation range
 }
 
 run "defaults_are_valid_and_tagged" {
