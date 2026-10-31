@@ -45,7 +45,7 @@ else
 fi
 
 # 5. Module calls use only approved exact versions.
-bad_modules="$(grep -rhn --include='*.tf' -A1 'source *= *"terraform-aws-modules/' . \
+bad_modules="$(grep -rhn --include='*.tf' --exclude-dir=.terraform -A1 'source *= *"terraform-aws-modules/' . \
     | grep -E 'version *=' \
     | grep -v -E '"(= )?(6\.7\.3|21\.26\.0|4\.0\.0)"' || true)"
 [[ -z "$bad_modules" ]] && pass "module version pins" || fail "unapproved module version: $bad_modules"
