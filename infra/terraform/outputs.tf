@@ -1,5 +1,5 @@
-# Safe outputs only: no account ID, ARN, endpoint or credential. Network and EKS
-# outputs are added with their resources (DRF-8, DRF-9) and reviewed then.
+# Safe outputs only: no account ID, ARN, endpoint or credential. EKS outputs are
+# added with the cluster (DRF-9) and reviewed then.
 output "region" {
   description = "AWS Region of the PoC."
   value       = var.region
@@ -28,4 +28,24 @@ output "subnet_plan" {
 output "common_tags" {
   description = "Tags applied to every taggable AWS resource."
   value       = local.common_tags
+}
+
+output "vpc_id" {
+  description = "VPC ID."
+  value       = module.network.vpc_id
+}
+
+output "public_subnet_ids" {
+  description = "Public worker subnet IDs."
+  value       = module.network.public_subnet_ids
+}
+
+output "db_subnet_group_name" {
+  description = "DB subnet group for a later private RDS."
+  value       = module.network.db_subnet_group_name
+}
+
+output "nat_gateway_count" {
+  description = "Number of NAT Gateways; must stay 0 (ADR-0006)."
+  value       = module.network.nat_gateway_count
 }
