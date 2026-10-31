@@ -75,15 +75,87 @@ variable "system_node_ami_type" {
   }
 }
 
+variable "system_node_ami_release_version" {
+  description = "Exact EKS-optimized AL2023 AMI release (SSM .../1.35/amazon-linux-2023/x86_64/standard/recommended/release_version, read 31/10/2026)."
+  type        = string
+  default     = "1.35.9-20261026"
+
+  validation {
+    condition     = can(regex("^1[.]35[.][0-9]+-[0-9]{8}$", var.system_node_ami_release_version))
+    error_message = "Pin an exact 1.35 AMI release such as 1.35.9-20261026; never 'latest'."
+  }
+}
+
+variable "system_node_instance_type" {
+  description = "Instance type of the system node group (priced in COST_PLAN §5.2)."
+  type        = string
+  default     = "m6i.large"
+
+  validation {
+    condition     = contains(["m6i.large", "t3.medium"], var.system_node_instance_type)
+    error_message = "Only priced types are allowed: m6i.large or t3.medium."
+  }
+}
+
 variable "system_node_desired_size" {
   description = "Desired number of system nodes."
+  type        = number
+  default     = 1
+
+  validation {
+    condition     = var.system_node_desired_size >= 1 && var.system_node_desired_size <= 2
+    error_message = "system_node_desired_size must be 1 or 2 (5 vCPU On-Demand quota, 2 vCPU per node)."
+  }
+}
+
+variable "system_node_max_size" {
+  description = "Maximum number of system nodes."
   type        = number
   default     = 2
 
   validation {
-    condition     = var.system_node_desired_size >= 1 && var.system_node_desired_size <= 3
-    error_message = "system_node_desired_size must be between 1 and 3."
+    condition     = var.system_node_max_size >= 1 && var.system_node_max_size <= 2
+    error_message = "system_node_max_size must be 1 or 2 (5 vCPU On-Demand quota)."
   }
+}
+
+variable "addon_versions" {
+  description = "Exact EKS add-on versions: the default version for 1.35 from describe-addon-versions, read 31/10/2026."
+  type        = map(string)
+  default = {
+    vpc-cni    = "v1.22.4-eksbuild.10"
+    kube-proxy = "v1.35.3-eksbuild.62"
+    coredns    = "v1.13.2-eksbuild.62"
+  }
+
+  validation {
+    condition     = alltrue([for k in ["vpc-cni", "kube-proxy", "coredns"] : can(regex("^v[0-9]+[.][0-9]+[.][0-9]+-eksbuild[.][0-9]+$", var.addon_versions[k]))])
+    error_message = "Pin exact versions (vX.Y.Z-eksbuild.N) for vpc-cni, kube-proxy and coredns."
+  }
+}
+
+variable "endpoint_public_access_cidrs" {
+  description = "Workstation CIDRs allowed to reach the public EKS API; set in run.tfvars, never in Git."
+  type        = list(string)
+
+  validation {
+    condition = length(var.endpoint_public_access_cidrs) >= 1 && alltrue([
+      for c in var.endpoint_public_access_cidrs : can(cidrhost(c, 0)) && tonumber(split("/", c)[1]) >= 24
+    ])
+    error_message = "Give 1 or more valid CIDRs of /24 or narrower; 0.0.0.0/0 is not allowed."
+  }
+}
+
+variable "bootstrap_role_name" {
+  description = "IAM role that gets the bootstrap access entry (created in DRF-5)."
+  type        = string
+  default     = "zero-drift-bootstrap"
+}
+
+variable "bootstrap_cluster_admin" {
+  description = "Grant cluster admin to the bootstrap role. true only inside an approved window; false removes it."
+  type        = bool
+  default     = false
 }
 
 # Run metadata for the tag contract (docs/finops/COST_PLAN.md §10). No defaults:

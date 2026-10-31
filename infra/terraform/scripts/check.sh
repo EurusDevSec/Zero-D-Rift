@@ -57,10 +57,12 @@ leaks="$(git -C "$repo" ls-files --cached --others --exclude-standard -- infra/t
 
 # 7. Sensitive patterns in files Git would see: AWS keys, account IDs, ARNs with
 #    an account, private keys, secret assignments. This script holds the patterns,
-#    so it is excluded from its own scan.
+#    so it is excluded from its own scan. The obvious test fake 000000000000
+#    (tests/mocks) is masked before matching; any other 12-digit ID still fails.
 pattern='(AKIA|ASIA)[A-Z0-9]{16}|arn:aws[a-z-]*:[a-z0-9-]*:[a-z0-9-]*:[0-9]{12}|(^|[^0-9A-Za-z])[0-9]{12}([^0-9A-Za-z]|$)|BEGIN [A-Z ]*PRIVATE KEY|aws_secret_access_key|aws_session_token'
 hits="$(git -C "$repo" ls-files --cached --others --exclude-standard -z -- infra/terraform ':!infra/terraform/scripts/check.sh' \
-    | (cd "$repo" && xargs -0 grep -n -I -E "$pattern" -- 2>/dev/null) || true)"
+    | (cd "$repo" && xargs -0 grep -n -I -E "$pattern" -- 2>/dev/null) \
+    | sed -E 's/0{12}/<FAKE>/g' | grep -E "$pattern" || true)"
 [[ -z "$hits" ]] && pass "no AWS key/account ID/private key patterns" || fail "sensitive pattern: $hits"
 
 echo

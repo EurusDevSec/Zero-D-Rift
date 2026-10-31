@@ -67,7 +67,7 @@ Kết quả đúng: `Terraform has been successfully initialized!`. Lần đầu
 ./scripts/check.sh
 ```
 
-Phải thấy `RESULT: PASS`. Lệnh này đã gồm `terraform test`: 9 test của guardrails và network chạy với AWS giả.
+Phải thấy `RESULT: PASS`. Lệnh này đã gồm `terraform test` (guardrails, network, cluster) chạy với AWS giả. Plan từ DRF-9 trở đi gồm cả EKS: xem `P2_EKS.md`.
 
 ## Bước 3 — Plan thật (chỉ đọc AWS, không tạo gì)
 
