@@ -1,0 +1,215 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "ReadOnlyDiscovery",
+      "Effect": "Allow",
+      "Action": [
+        "ec2:Describe*",
+        "eks:Describe*",
+        "eks:List*",
+        "iam:Get*",
+        "iam:List*",
+        "iam:SimulateCustomPolicy",
+        "iam:SimulatePrincipalPolicy",
+        "access-analyzer:ValidatePolicy",
+        "logs:DescribeLogGroups",
+        "logs:ListTagsForResource",
+        "logs:ListTagsLogGroup",
+        "rds:Describe*",
+        "rds:ListTagsForResource",
+        "elasticloadbalancing:Describe*",
+        "autoscaling:Describe*",
+        "sqs:ListQueues",
+        "secretsmanager:ListSecrets",
+        "kms:ListAliases",
+        "s3:ListAllMyBuckets",
+        "tag:GetResources",
+        "pricing:GetProducts",
+        "budgets:ViewBudget",
+        "budgets:DescribeBudgetActionsForAccount",
+        "servicequotas:GetServiceQuota"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "PublicEksAmiParameters",
+      "Effect": "Allow",
+      "Action": "ssm:GetParameter",
+      "Resource": "arn:aws:ssm:us-east-1::parameter/aws/service/eks/*"
+    },
+    {
+      "Sid": "NetworkAndEksInHomeRegion",
+      "Effect": "Allow",
+      "Action": ["ec2:*", "eks:*"],
+      "Resource": "*",
+      "Condition": { "StringEquals": { "aws:RequestedRegion": "us-east-1" } }
+    },
+    {
+      "Sid": "EksControlPlaneLogGroup",
+      "Effect": "Allow",
+      "Action": [
+        "logs:CreateLogGroup",
+        "logs:DeleteLogGroup",
+        "logs:PutRetentionPolicy",
+        "logs:DeleteRetentionPolicy",
+        "logs:TagResource",
+        "logs:UntagResource",
+        "logs:TagLogGroup",
+        "logs:UntagLogGroup"
+      ],
+      "Resource": "arn:aws:logs:us-east-1:*:log-group:/aws/eks/zero-drift/*"
+    },
+    {
+      "Sid": "DbSubnetGroupOnly",
+      "Effect": "Allow",
+      "Action": [
+        "rds:CreateDBSubnetGroup",
+        "rds:ModifyDBSubnetGroup",
+        "rds:DeleteDBSubnetGroup",
+        "rds:AddTagsToResource",
+        "rds:RemoveTagsFromResource"
+      ],
+      "Resource": "arn:aws:rds:us-east-1:*:subgrp:zero-drift*"
+    },
+    {
+      "Sid": "ProjectEksRoles",
+      "Effect": "Allow",
+      "Action": [
+        "iam:CreateRole",
+        "iam:DeleteRole",
+        "iam:UpdateRole",
+        "iam:UpdateAssumeRolePolicy",
+        "iam:TagRole",
+        "iam:UntagRole",
+        "iam:DeleteRolePolicy"
+      ],
+      "Resource": [
+        "arn:aws:iam::*:role/zero-drift-cluster-*",
+        "arn:aws:iam::*:role/zero-drift-system-node-*"
+      ]
+    },
+    {
+      "Sid": "AttachOnlyEksManagedPolicies",
+      "Effect": "Allow",
+      "Action": ["iam:AttachRolePolicy", "iam:DetachRolePolicy"],
+      "Resource": [
+        "arn:aws:iam::*:role/zero-drift-cluster-*",
+        "arn:aws:iam::*:role/zero-drift-system-node-*"
+      ],
+      "Condition": {
+        "ArnEquals": {
+          "iam:PolicyARN": [
+            "arn:aws:iam::aws:policy/AmazonEKSClusterPolicy",
+            "arn:aws:iam::aws:policy/AmazonEKSWorkerNodePolicy",
+            "arn:aws:iam::aws:policy/AmazonEKS_CNI_Policy",
+            "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly"
+          ]
+        }
+      }
+    },
+    {
+      "Sid": "PassProjectRolesToEksOnly",
+      "Effect": "Allow",
+      "Action": "iam:PassRole",
+      "Resource": [
+        "arn:aws:iam::*:role/zero-drift-cluster-*",
+        "arn:aws:iam::*:role/zero-drift-system-node-*"
+      ],
+      "Condition": {
+        "StringEquals": { "iam:PassedToService": ["eks.amazonaws.com", "ec2.amazonaws.com"] }
+      }
+    },
+    {
+      "Sid": "EksOidcProvider",
+      "Effect": "Allow",
+      "Action": [
+        "iam:CreateOpenIDConnectProvider",
+        "iam:DeleteOpenIDConnectProvider",
+        "iam:UpdateOpenIDConnectProviderThumbprint",
+        "iam:AddClientIDToOpenIDConnectProvider",
+        "iam:RemoveClientIDFromOpenIDConnectProvider",
+        "iam:TagOpenIDConnectProvider",
+        "iam:UntagOpenIDConnectProvider"
+      ],
+      "Resource": "arn:aws:iam::*:oidc-provider/oidc.eks.us-east-1.amazonaws.com/id/*"
+    },
+    {
+      "Sid": "EksServiceLinkedRoles",
+      "Effect": "Allow",
+      "Action": "iam:CreateServiceLinkedRole",
+      "Resource": "*",
+      "Condition": {
+        "StringEquals": {
+          "iam:AWSServiceName": ["eks.amazonaws.com", "eks-nodegroup.amazonaws.com", "autoscaling.amazonaws.com"]
+        }
+      }
+    },
+    {
+      "Sid": "StateBucketRead",
+      "Effect": "Allow",
+      "Action": [
+        "s3:ListBucket",
+        "s3:ListBucketVersions",
+        "s3:GetBucketVersioning",
+        "s3:GetEncryptionConfiguration",
+        "s3:GetBucketPublicAccessBlock",
+        "s3:GetBucketOwnershipControls",
+        "s3:GetBucketPolicy",
+        "s3:GetBucketTagging"
+      ],
+      "Resource": "arn:aws:s3:::zero-d-rift-tfstate-*"
+    },
+    {
+      "Sid": "StateAndLockObjects",
+      "Effect": "Allow",
+      "Action": ["s3:GetObject", "s3:PutObject", "s3:DeleteObject"],
+      "Resource": "arn:aws:s3:::zero-d-rift-tfstate-*/*"
+    },
+    {
+      "Sid": "DenyCostlyEc2",
+      "Effect": "Deny",
+      "Action": [
+        "ec2:CreateNatGateway",
+        "ec2:AllocateAddress",
+        "ec2:AllocateHosts",
+        "ec2:CreateCapacityReservation",
+        "ec2:PurchaseReservedInstancesOffering",
+        "ec2:PurchaseHostReservation",
+        "ec2:PurchaseScheduledInstances"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "DenyUnpricedInstanceTypes",
+      "Effect": "Deny",
+      "Action": "ec2:RunInstances",
+      "Resource": "arn:aws:ec2:*:*:instance/*",
+      "Condition": { "StringNotEquals": { "ec2:InstanceType": ["m6i.large", "t3.medium"] } }
+    },
+    {
+      "Sid": "DenySelfEscalation",
+      "Effect": "Deny",
+      "NotAction": ["iam:Get*", "iam:List*", "iam:Simulate*"],
+      "Resource": [
+        "arn:aws:iam::*:role/zero-drift-bootstrap",
+        "arn:aws:iam::*:policy/zero-drift-terraform",
+        "arn:aws:iam::*:user/*"
+      ]
+    },
+    {
+      "Sid": "ProtectStateBucket",
+      "Effect": "Deny",
+      "Action": [
+        "s3:DeleteBucket",
+        "s3:PutBucketPolicy",
+        "s3:DeleteBucketPolicy",
+        "s3:PutBucketVersioning",
+        "s3:PutLifecycleConfiguration",
+        "s3:PutBucketPublicAccessBlock",
+        "s3:PutEncryptionConfiguration"
+      ],
+      "Resource": "arn:aws:s3:::zero-d-rift-tfstate-*"
+    }
+  ]
+}

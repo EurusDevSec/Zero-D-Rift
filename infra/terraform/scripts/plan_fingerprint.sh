@@ -10,10 +10,13 @@ set -euo pipefail
 plan="${1:?usage: plan_fingerprint.sh <saved plan file>}"
 [[ -f "$plan" ]] || { echo "no such plan file: $plan" >&2; exit 2; }
 
+# Byte-stable on any machine: jq on Windows ends lines with CRLF, and sort order
+# depends on the locale, so strip \r and sort in the C locale (v2, 04/11/2026;
+# v1 hashes recorded on 31/10 are not comparable).
 shape="$(terraform show -json "$plan" | jq -r '
     .resource_changes[]
     | select(.mode == "managed")
-    | "\(.change.actions | join("+")) \(.address)"' | sort)"
+    | "\(.change.actions | join("+")) \(.address)"' | tr -d '\r' | LC_ALL=C sort)"
 
 echo "resources: $(printf '%s\n' "$shape" | grep -c .)"
 echo "actions:   $(printf '%s\n' "$shape" | cut -d' ' -f1 | sort | uniq -c | awk '{printf "%s=%s ", $2, $1}')"

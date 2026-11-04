@@ -87,6 +87,10 @@ module "eks" {
 
       labels = { role = "system" }
 
+      # Project-prefixed role name so the R1 Terraform policy can scope IAM by ARN
+      # (zero-drift-system-node-*) instead of the module default system-eks-node-group-*.
+      iam_role_name = "${var.name}-system-node"
+
       # IMDSv2 only, hop limit 1: Pods cannot reach the node's instance metadata.
       metadata_options = {
         http_endpoint               = "enabled"
