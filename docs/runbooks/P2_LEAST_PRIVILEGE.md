@@ -1,6 +1,11 @@
 # P2 R1 — thu hẹp quyền role bootstrap (chuẩn bị DRF-11)
 
-Trạng thái: **đã soạn và mới kiểm bằng mô phỏng; chưa gắn vào role thật.**
+Trạng thái: **đã soạn và mới kiểm bằng mô phỏng; HOÃN gắn vào role thật theo quyết định owner ngày 04/11/2026.**
+
+Role vẫn giữ `AdministratorAccess` cho tới khi các phase triển khai xong, để tránh bị dừng giữa chừng vì thiếu quyền.
+Làm lại R1 trước khi đóng băng campaign chính thức (DRF-27, mốc 19/11) hoặc ở DRF-29 (final acceptance).
+Lúc đó policy được rút gọn tiếp dựa trên CloudTrail Event history của các lần chạy thật (giữ 90 ngày).
+
 Các bước 3–5 thay đổi IAM, nên owner phải duyệt riêng trong chat trước khi chạy.
 
 Nguồn: DRF-5 D1 (admin chỉ là tạm, phải thu hẹp trước L3), ADR-0007.

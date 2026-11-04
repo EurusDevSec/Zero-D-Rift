@@ -73,3 +73,28 @@ Sau khi gắn, kiểm bằng:
 - Trình mô phỏng không khớp `eks:CreateCluster` với ARN cluster cụ thể, nên ma trận kiểm hành động này trên `*`. Policy thật cũng cấp nó trên `*`.
 - `run.tfvars` (file riêng của owner) có một dòng hỏng `["/32"]`, do `MYIP` rỗng. Claude đã xóa đúng dòng đó. Runbook P2_EKS bước 2 giờ kiểm `MYIP` trước khi ghi.
 - Owner teach-back cho R1 (4 câu ở cuối runbook): chưa trả lời.
+
+## Quyết định owner 04/11/2026: hoãn R1, giữ AdministratorAccess
+
+Owner viết trong chat:
+
+> "tôi nghĩ nên để adminitrator access thì quá trình làm task từ đây về sau tránh gặp rắc rối tốn thời gian khi làm xong các phase rồi tính sau"
+
+Ghi nhận:
+- **Không gắn policy R1.** Role `zero-drift-bootstrap` giữ `AdministratorAccess`.
+  Quyết định này thay mốc "thu hẹp quyền trước L3" của DRF-5 D1. Owner chấp nhận rủi ro còn lại.
+- **Rủi ro còn lại:** một phiên MFA bị lộ hoặc một lệnh gõ nhầm có thể làm mọi việc trong account, gồm tạo NAT/GPU, tạo IAM user hay key, xóa bucket state.
+- **Lớp bảo vệ vẫn còn:**
+  - MFA bắt buộc, phiên 1 giờ;
+  - `plan_assert` chặn NAT, EIP, loại máy chưa duyệt giá, sai IAM;
+  - Budget đo gross (B1-a), cảnh báo 50/75/90;
+  - `inventory.sh` trước và sau mỗi window;
+  - S1–S7 và freeze trong P2_L3_WINDOW.
+- **Lớp bảo vệ mất đi:** các Deny cứng ở tầng IAM (NAT, EIP, loại máy, tự nâng quyền, bảo vệ bucket state). Chỉ còn kiểm ở tầng plan.
+- **Làm lại R1:** trước DRF-27 (đóng băng campaign, 19/11) hoặc ở DRF-29.
+  Lợi ích của việc hoãn: lúc đó đã có CloudTrail Event history của các lần chạy thật, nên rút được policy sát hơn bậc 1.
+- **Phần còn dùng ngay:**
+  - `plan_fingerprint.sh` v2 và hash chuẩn mới (bắt buộc cho window request DRF-11);
+  - check 12 của `plan_assert`;
+  - tên role `zero-drift-system-node-*`;
+  - file policy và `iam_check.sh`, để sẵn cho lần làm lại.

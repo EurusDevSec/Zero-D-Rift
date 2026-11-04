@@ -63,7 +63,7 @@ Gặp **bất kỳ** điều nào dưới đây thì dừng tạo mới và chuy
 | # | Tình huống | Làm gì |
 |---|---|---|
 | S1 | `plan_assert` FAIL, hoặc shape hash khác bản đã duyệt | **Không apply.** Chưa tạo gì nên không cần dọn. Sửa code, xin duyệt lại. |
-| S2 | Apply lỗi giữa chừng | Không thử lại quá 1 lần. Chạy destroy những gì đã tạo, ghi lỗi làm evidence. Nếu lỗi là `AccessDenied` do policy R1: ghi đúng action bị thiếu, destroy, rồi sửa policy bằng IAM user break-glass ở **ngoài** window (xem P2_LEAST_PRIVILEGE). |
+| S2 | Apply lỗi giữa chừng | Không thử lại quá 1 lần. Chạy destroy những gì đã tạo, ghi lỗi làm evidence. (Chỉ khi R1 đã gắn) Nếu lỗi là `AccessDenied` do policy R1: ghi đúng action bị thiếu, destroy, rồi sửa policy bằng IAM user break-glass ở **ngoài** window (xem P2_LEAST_PRIVILEGE). |
 | S3 | Node không Ready sau 30 phút kể từ khi apply xong | Thu log và trạng thái, rồi destroy. |
 | S4 | Inventory thấy thứ không có trong plan (NAT, EIP, load balancer, instance thừa, volume lạ) | Destroy, rồi dọn tay thứ còn sót. Ghi lại như một lỗi. |
 | S5 | Tới giờ freeze (kết thúc cứng − 2 giờ) | Chỉ còn export evidence và dọn. |
@@ -149,7 +149,8 @@ ADMIN_WINDOW=1 ./scripts/plan_assert.sh tfplan
 
 `shape sha256` **phải khớp** giá trị trong window request. Khác là gặp S1: dừng.
 `file sha256` lần nào plan cũng khác, vì file plan có ghi thời gian; điều đó bình thường.
-Hash ở mẫu trên tính bằng `plan_fingerprint.sh` v2 (04/11: bỏ ``, sort theo locale C).
+Hash ở mẫu trên tính bằng `plan_fingerprint.sh` v2 (04/11: bỏ `
+`, sort theo locale C).
 Hash v1 ngày 31/10 (`41f63a72…`, `0f168745…`) không dùng được nữa, vì nó phụ thuộc máy chạy.
 
 Chỉ khi cả 3 điều trên đều đúng và owner đã gõ duyệt:
@@ -269,7 +270,7 @@ Ngày hôm sau:
 | Giữ | Vì sao | Hạn hoặc lần xem lại |
 |---|---|---|
 | Bucket state (DRF-6) | Chứa state và lock của mọi lần chạy; tốn gần 0 USD/tháng | Owner review 03/11/2026, sau đó 7 ngày một lần |
-| Role `zero-drift-bootstrap`, IAM user + MFA (DRF-5) | Đường vào AWS; IAM không tính phí | Thu hẹp quyền trước L3 (rủi ro R1) |
+| Role `zero-drift-bootstrap`, IAM user + MFA (DRF-5) | Đường vào AWS; IAM không tính phí | R1 hoãn theo quyết định owner 04/11; vẫn giữ admin, làm lại trước DRF-27 |
 | Budget `zero-d-rift-project` | Lưới an toàn; Budget không có action thì miễn phí | Hết kỳ ngày 01/01/2027 (xem quyết định B2) |
 
 Tất cả những thứ khác phải bị xóa sau window:

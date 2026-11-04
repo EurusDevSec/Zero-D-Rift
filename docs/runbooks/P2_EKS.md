@@ -36,7 +36,7 @@ Access entry: role zero-drift-bootstrap (STANDARD); quyền admin CHỈ khi boot
 
 | Danh tính | Quyền AWS | Quyền trong Kubernetes | Ai tạo, ai xóa |
 |---|---|---|---|
-| Role `zero-drift-bootstrap` (người, qua MFA) | Admin (DRF-5 D1; least privilege làm trước L3) | Entry STANDARD; `AmazonEKSClusterAdminPolicy` chỉ khi `bootstrap_cluster_admin=true` | Role: CLI DRF-5. Entry và association: Terraform |
+| Role `zero-drift-bootstrap` (người, qua MFA) | Admin (DRF-5 D1; R1 hoãn theo quyết định owner 04/11, làm lại trước DRF-27) | Entry STANDARD; `AmazonEKSClusterAdminPolicy` chỉ khi `bootstrap_cluster_admin=true` | Role: CLI DRF-5. Entry và association: Terraform |
 | Role cluster (EKS dùng) | `AmazonEKSClusterPolicy` | — | Terraform (module EKS) |
 | Role node | `AmazonEKSWorkerNodePolicy`, `AmazonEKS_CNI_Policy`, `AmazonEC2ContainerRegistryReadOnly` | EKS tự map cho node | Terraform (module EKS) |
 | IAM user `<USER>` + MFA (break-glass) | Admin qua console | Không có entry; sửa quyền bằng EKS API khi cần | Thủ công (DRF-5) |
