@@ -17,6 +17,8 @@ here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$here/../../iam"   # file:// must be a relative path on Git Bash
 policy="zero-drift-terraform-policy.json"
 acct="$(aws sts get-caller-identity --query Account --output text)"
+# simulate-custom-policy rejects file:// for its list argument; pass compact JSON.
+policy_json="$(jq -c . "$policy")"
 
 failed=0
 pass() { echo "PASS  $1"; }
@@ -31,10 +33,11 @@ if [[ "$mode" != "--principal" ]]; then
 fi
 
 # expect | action | resource (ACCT is replaced) | context "key=value[;key=value]"
+# eks:CreateCluster is authorized on "*" (the simulator matches no cluster ARN for it).
 matrix='
 allowed|ec2:CreateVpc|arn:aws:ec2:us-east-1:ACCT:vpc/*|aws:RequestedRegion=us-east-1
 implicitDeny|ec2:CreateVpc|arn:aws:ec2:us-west-2:ACCT:vpc/*|aws:RequestedRegion=us-west-2
-allowed|eks:CreateCluster|arn:aws:eks:us-east-1:ACCT:cluster/zero-drift|aws:RequestedRegion=us-east-1
+allowed|eks:CreateCluster|*|aws:RequestedRegion=us-east-1
 allowed|ec2:RunInstances|arn:aws:ec2:us-east-1:ACCT:instance/*|aws:RequestedRegion=us-east-1;ec2:InstanceType=m6i.large
 explicitDeny|ec2:RunInstances|arn:aws:ec2:us-east-1:ACCT:instance/*|aws:RequestedRegion=us-east-1;ec2:InstanceType=g4dn.xlarge
 explicitDeny|ec2:CreateNatGateway|arn:aws:ec2:us-east-1:ACCT:natgateway/*|aws:RequestedRegion=us-east-1
@@ -80,7 +83,7 @@ while IFS='|' read -r expect action resource ctx; do
         got="$(aws iam simulate-principal-policy --policy-source-arn "arn:aws:iam::$acct:role/zero-drift-bootstrap" \
             "${args[@]}" --query 'EvaluationResults[0].EvalDecision' --output text)"
     else
-        got="$(aws iam simulate-custom-policy --policy-input-list "file://$policy" \
+        got="$(aws iam simulate-custom-policy --policy-input-list "$policy_json" \
             "${args[@]}" --query 'EvaluationResults[0].EvalDecision' --output text)"
     fi
     shown="${resource//$acct/<ACCOUNT>}"

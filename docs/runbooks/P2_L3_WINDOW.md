@@ -42,8 +42,8 @@ expires_at (tag): giờ kết thúc cứng, dạng UTC ...Z
 Freeze-new-create: kết thúc cứng − 2 giờ
 Người dọn (teardown owner): HoangLV, có mặt suốt window
 Git revision:     <commit trên main>
-Plan shape sha256 (window, 51 resource): 0f16874574067ba338874ba413c7124ba195fb4c249a09b96a2db4a4319c9879
-Plan shape sha256 (mặc định, 50):        41f63a72e8f447dec01b34642a89c2e8233af1e7ee38c747bce75baab5565fbc
+Plan shape sha256 (window, 51 resource): 95f61444096ecd86dba558e179925d2341292784c25c4a26163f90f003ea72b8
+Plan shape sha256 (mặc định, 50):        d9fe3d7989f0a934343eaa96197b1ad6407eaa3051402990a1e1a0fed5ac44a0
 Ước tính:         ≈ 0.21 USD/giờ → ≈ 1.3 USD cho 6 giờ; trần window 2.6 USD
 P2 đã tiêu (gross, trước credit): ___ USD; P2 còn lại sau window: ___ USD (phải ≥ 0 với trần 5 USD)
 Owner duyệt: "Duyệt window P2-L3-YYYYMMDD-01" (gõ trong chat)
@@ -149,6 +149,8 @@ ADMIN_WINDOW=1 ./scripts/plan_assert.sh tfplan
 
 `shape sha256` **phải khớp** giá trị trong window request. Khác là gặp S1: dừng.
 `file sha256` lần nào plan cũng khác, vì file plan có ghi thời gian; điều đó bình thường.
+Hash ở mẫu trên tính bằng `plan_fingerprint.sh` v2 (04/11: bỏ ``, sort theo locale C).
+Hash v1 ngày 31/10 (`41f63a72…`, `0f168745…`) không dùng được nữa, vì nó phụ thuộc máy chạy.
 
 Chỉ khi cả 3 điều trên đều đúng và owner đã gõ duyệt:
 

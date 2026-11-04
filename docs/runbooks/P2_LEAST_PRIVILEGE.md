@@ -167,7 +167,7 @@ Muốn quay lại thì làm theo phần Hoàn tác.
    ./scripts/plan_fingerprint.sh tfplan
    ```
 
-   `shape sha256` phải ra `41f63a72…`. Đổi tên role không đổi địa chỉ resource, nên shape giữ nguyên.
+   `shape sha256` phải ra `d9fe3d79…` (bản đầy đủ ở P2_L3_WINDOW phần A). Đổi tên role không đổi địa chỉ resource, nên shape giữ nguyên. Điều này đã kiểm ngày 04/11, khi so plan trước và sau khi đổi tên.
 
    ```bash
    rm tfplan
