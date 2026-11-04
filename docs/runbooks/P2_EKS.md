@@ -82,11 +82,23 @@ trong `variables.tf`. Đã đọc ngày 31/10: `1.35.9-20261026`, và 3 add-on n
 MYIP=$(curl -s https://checkip.amazonaws.com)
 ```
 
+Kiểm biến không rỗng (nếu `curl` lỗi, `MYIP` rỗng và sẽ sinh dòng hỏng `["/32"]`):
+
+```bash
+test -n "$MYIP" && echo "IP OK" || echo "MYIP rong, chay lai lenh curl"
+```
+
+Xóa dòng cũ (nếu có) rồi ghi dòng mới, để file chỉ có **một** dòng `endpoint_public_access_cidrs`:
+
+```bash
+sed -i '/^endpoint_public_access_cidrs/d' run.tfvars
+```
+
 ```bash
 echo "endpoint_public_access_cidrs = [\"$MYIP/32\"]" >> run.tfvars
 ```
 
-Mở `run.tfvars` và kiểm chỉ có **một** dòng `endpoint_public_access_cidrs`. Không dán IP vào Git hay Linear.
+Không dán IP vào Git hay Linear.
 Sau đó chạy `terraform fmt run.tfvars` để căn lại hàng. Nếu không, bước `fmt -check` trong `check.sh` sẽ báo FAIL.
 
 ## Bước 3 — Kiểm tĩnh, plan, plan gate
@@ -111,7 +123,7 @@ Kết quả đúng: `Plan: 50 to add, 0 to change, 0 to destroy.`
 ./scripts/plan_assert.sh tfplan
 ```
 
-Phải ra 25 dòng `PASS`. Phần EKS kiểm các điều sau:
+Phải ra 26 dòng `PASS`. Phần EKS kiểm các điều sau:
 - version 1.35, support STANDARD, auth API, tắt creator admin;
 - endpoint private bật, endpoint public chỉ mở cho dải /24 hoặc hẹp hơn;
 - log audit + authenticator giữ 3 ngày, không có KMS key riêng;
@@ -120,7 +132,8 @@ Phải ra 25 dòng `PASS`. Phần EKS kiểm các điều sau:
 - 3 add-on đều pin bản;
 - entry cho role bootstrap;
 - có OIDC;
-- không có admin association.
+- không có admin association;
+- IAM nằm trong phạm vi policy R1: 2 role có prefix `zero-drift-`, 4 managed policy của EKS.
 
 ```bash
 rm tfplan

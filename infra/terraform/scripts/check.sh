@@ -60,10 +60,21 @@ leaks="$(git -C "$repo" ls-files --cached --others --exclude-standard -- infra/t
 #    so it is excluded from its own scan. The obvious test fake 000000000000
 #    (tests/mocks) is masked before matching; any other 12-digit ID still fails.
 pattern='(AKIA|ASIA)[A-Z0-9]{16}|arn:aws[a-z-]*:[a-z0-9-]*:[a-z0-9-]*:[0-9]{12}|(^|[^0-9A-Za-z])[0-9]{12}([^0-9A-Za-z]|$)|BEGIN [A-Z ]*PRIVATE KEY|aws_secret_access_key|aws_session_token'
-hits="$(git -C "$repo" ls-files --cached --others --exclude-standard -z -- infra/terraform ':!infra/terraform/scripts/check.sh' \
+hits="$(git -C "$repo" ls-files --cached --others --exclude-standard -z -- infra/terraform infra/iam ':!infra/terraform/scripts/check.sh' \
     | (cd "$repo" && xargs -0 grep -n -I -E "$pattern" -- 2>/dev/null) \
     | sed -E 's/0{12}/<FAKE>/g' | grep -E "$pattern" || true)"
 [[ -z "$hits" ]] && pass "no AWS key/account ID/private key patterns" || fail "sensitive pattern: $hits"
+
+# 8. R1 Terraform policy: valid JSON and under the 6144 non-whitespace
+#    character limit of a customer managed policy.
+pol="$repo/infra/iam/zero-drift-terraform-policy.json"
+if jq empty "$pol" 2>/dev/null; then
+    size="$(tr -d ' 
+	' < "$pol" | wc -c)"
+    (( size <= 6144 )) && pass "R1 policy JSON valid, $size/6144 chars" || fail "R1 policy is $size chars, limit 6144"
+else
+    fail "R1 policy missing or invalid JSON: $pol"
+fi
 
 echo
 if (( failed )); then echo "RESULT: FAIL"; exit 1; fi

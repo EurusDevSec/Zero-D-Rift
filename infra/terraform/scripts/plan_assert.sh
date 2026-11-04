@@ -103,6 +103,14 @@ untagged="$(q '[.resource_changes[] | select(.change.after | has("tags_all")) | 
     or ([.change.after.tags_all | has("Project", "Owner", "Environment", "ManagedBy", "RunId", "ExpiresAt")] | all | not)) | .address] | join(" ")')"
 [[ -z "$untagged" ]] && pass "mandatory tags on every taggable resource" || fail "missing tags: $untagged"
 
+# 12. IAM stays inside the R1 Terraform policy scope: roles only under the
+#     zero-drift-cluster-/zero-drift-system-node- prefixes, attachments only the
+#     four EKS managed policies (infra/iam/zero-drift-terraform-policy.json).
+roles="$(q '[.resource_changes[] | select(.type == "aws_iam_role") | .change.after | (.name_prefix // .name)] | sort | join(" ")')"
+atts="$(q '[.resource_changes[] | select(.type == "aws_iam_role_policy_attachment") | .change.after.policy_arn | split("/") | last] | sort | join(" ")')"
+[[ "$roles" == "zero-drift-cluster- zero-drift-system-node-" && "$atts" == "AmazonEC2ContainerRegistryReadOnly AmazonEKSClusterPolicy AmazonEKSWorkerNodePolicy AmazonEKS_CNI_Policy" ]] \
+    && pass "IAM within R1 policy scope (2 prefixed roles, 4 EKS managed policies)" || fail "IAM scope: roles='$roles' attachments='$atts'"
+
 echo
 if (( failed )); then echo "RESULT: FAIL"; exit 1; fi
 echo "RESULT: PASS (plan only; proves nothing about AWS runtime)"

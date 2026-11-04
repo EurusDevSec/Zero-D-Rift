@@ -63,7 +63,7 @@ Gặp **bất kỳ** điều nào dưới đây thì dừng tạo mới và chuy
 | # | Tình huống | Làm gì |
 |---|---|---|
 | S1 | `plan_assert` FAIL, hoặc shape hash khác bản đã duyệt | **Không apply.** Chưa tạo gì nên không cần dọn. Sửa code, xin duyệt lại. |
-| S2 | Apply lỗi giữa chừng | Không thử lại quá 1 lần. Chạy destroy những gì đã tạo, ghi lỗi làm evidence. |
+| S2 | Apply lỗi giữa chừng | Không thử lại quá 1 lần. Chạy destroy những gì đã tạo, ghi lỗi làm evidence. Nếu lỗi là `AccessDenied` do policy R1: ghi đúng action bị thiếu, destroy, rồi sửa policy bằng IAM user break-glass ở **ngoài** window (xem P2_LEAST_PRIVILEGE). |
 | S3 | Node không Ready sau 30 phút kể từ khi apply xong | Thu log và trạng thái, rồi destroy. |
 | S4 | Inventory thấy thứ không có trong plan (NAT, EIP, load balancer, instance thừa, volume lạ) | Destroy, rồi dọn tay thứ còn sót. Ghi lại như một lỗi. |
 | S5 | Tới giờ freeze (kết thúc cứng − 2 giờ) | Chỉ còn export evidence và dọn. |
@@ -141,7 +141,7 @@ terraform plan -var-file=run.tfvars -var bootstrap_cluster_admin=true -out=tfpla
 ADMIN_WINDOW=1 ./scripts/plan_assert.sh tfplan
 ```
 
-Đúng là 24 dòng `PASS` và `RESULT: PASS`.
+Đúng là 25 dòng `PASS` và `RESULT: PASS`.
 
 ```bash
 ./scripts/plan_fingerprint.sh tfplan
