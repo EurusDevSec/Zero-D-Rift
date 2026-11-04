@@ -91,7 +91,7 @@ Lưu ý:
 2. Phiên còn ít nhất 30 phút. Lệnh dưới in giờ hết hạn (UTC); giờ VN = UTC + 7:
 
 ```bash
-jq -r '.Credentials.Expiration' ~/.aws/cli/cache/*.json
+cat ~/.aws/cli/cache/*.json | jq -r '.Credentials.Expiration'
 ```
 
 3. Số bucket hiện có. Quota mặc định là 10 000, nên chỉ cần thấy con số nhỏ:

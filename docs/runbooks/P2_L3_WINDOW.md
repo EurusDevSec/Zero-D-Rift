@@ -106,10 +106,12 @@ Cài kubectl là **cài CLI**, cần owner duyệt riêng. Có thể owner tự 
    echo "$(cat kubectl.exe.sha256)  kubectl.exe" | sha256sum -c
    ```
 
-4. Cho bản mới đứng **trước** bản của gcloud trong PATH. Thêm dòng này vào `~/.bashrc`, rồi mở terminal mới:
+4. Cho bản mới đứng **trước** bản của gcloud trong PATH. Có 2 cách:
+   - mỗi lần mở terminal, chạy lệnh export ở phần C (đang dùng cách này);
+   - hoặc owner **tự** thêm dòng dưới vào cuối `~/.bashrc`. Claude bị chặn sửa file khởi động shell, và chặn như vậy là đúng.
 
    ```bash
-   echo 'export PATH="/r/_Dev_tools/kubectl:$PATH"' >> ~/.bashrc
+   [[ ":$PATH:" == *":/r/_Dev_tools/kubectl:"* ]] || export PATH="/r/_Dev_tools/kubectl:$PATH"
    ```
 
 5. Kiểm lại, phải ra đúng `$KV`:
@@ -118,7 +120,9 @@ Cài kubectl là **cài CLI**, cần owner duyệt riêng. Có thể owner tự 
    kubectl version --client
    ```
 
-Hoàn tác: xóa dòng PATH khỏi `~/.bashrc`, rồi xóa thư mục `/r/_Dev_tools/kubectl`.
+Đã cài ngày 04/11/2026: `v1.35.10`, sha256 `c546d84d…10531b4`, khớp với file `.sha256` chính thức.
+
+Hoàn tác: xóa dòng PATH khỏi `~/.bashrc` (nếu đã thêm), rồi xóa thư mục `/r/_Dev_tools/kubectl`.
 
 ## C. Chuẩn bị (T−30 phút) — chỉ đọc
 
@@ -135,6 +139,12 @@ zdr-bootstrap
 ```bash
 export AWS_PROFILE=zdr-tf AWS_REGION=us-east-1
 ```
+
+```bash
+export PATH="/r/_Dev_tools/kubectl:$PATH"
+```
+
+Lệnh `kubectl version --client` phải ra `v1.35.10`. Nếu ra `v1.33.5-dispatcher` thì máy đang dùng bản của gcloud, tức PATH chưa đúng.
 
 **Không** export `MSYS_NO_PATHCONV=1` cho cả terminal, vì nó làm `check.sh` hỏng ở `git -C`.
 `inventory.sh` tự đặt biến này bên trong script.
@@ -166,7 +176,7 @@ EKS cần khoảng 20 phút để tạo, nên **gõ `zdr-bootstrap` ngay trướ
 Chỉ bắt đầu apply khi phiên còn ít nhất 40 phút:
 
 ```bash
-jq -r '.Credentials.Expiration' ~/.aws/cli/cache/*.json
+cat ~/.aws/cli/cache/*.json | jq -r '.Credentials.Expiration'
 ```
 
 ```bash

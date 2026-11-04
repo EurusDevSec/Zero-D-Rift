@@ -24,6 +24,15 @@ ami_pin="$(sed -nE 's/^ *default *= *"(1[.]35[.][0-9]+-[0-9]{8})".*/\1/p' "$here
 
 echo "smoke $(date -u +%Y-%m-%dT%H:%M:%SZ) cluster=$name region=$AWS_REGION"
 
+# kubectl must be within one minor of the 1.35 API server (1.34-1.36); the gcloud
+# SDK copy on the workstation is 1.33. Stop before touching anything.
+kminor="$(kubectl version --client -o json | jq -r '.clientVersion.minor' | tr -d '+')"
+if (( kminor < 34 || kminor > 36 )); then
+    echo "FAIL  kubectl client 1.$kminor is outside 1.34-1.36; export PATH=\"/r/_Dev_tools/kubectl:\$PATH\" (runbook C0)"
+    exit 1
+fi
+pass "kubectl client 1.$kminor (within one minor of 1.35)"
+
 # 1. Control plane: version, support, auth mode, endpoints, logs.
 c="$(aws eks describe-cluster --name "$name" --output json)"
 j() { jq -r "$1" <<< "$c"; }

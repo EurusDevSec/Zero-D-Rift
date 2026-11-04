@@ -184,7 +184,7 @@ aws sts get-caller-identity --profile zdr-bootstrap --query Arn --output text | 
 Phiên hết hạn lúc nào (chỉ in thời điểm, không in key):
 
 ```bash
-jq -r '.Credentials.Expiration' ~/.aws/cli/cache/*.json
+cat ~/.aws/cli/cache/*.json | jq -r '.Credentials.Expiration'
 ```
 
 Thử ngược: assume **không có** MFA phải bị từ chối (`AccessDenied`):
@@ -272,7 +272,7 @@ aws sts get-caller-identity --profile zdr-bootstrap --query Arn --output text | 
 Phải in một giờ hết hạn trong tương lai:
 
 ```bash
-jq -r '.Credentials.Expiration' ~/.aws/cli/cache/*.json
+cat ~/.aws/cli/cache/*.json | jq -r '.Credentials.Expiration'
 ```
 
 Nếu một dòng sai, làm lại đúng bước tương ứng (1, 2 hoặc 3) phía trên.
