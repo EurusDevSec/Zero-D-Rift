@@ -28,6 +28,7 @@ and static checks. DRF-8 added the network module and DRF-9 the EKS module (50 r
 | `scripts/plan_assert.sh` | Plan gate on a saved plan (26 checks): network, EKS, nodes, add-ons, access entry, IAM scope, tags; `ADMIN_WINDOW=1` for a window plan |
 | `scripts/plan_fingerprint.sh` | File hash and value-free shape hash of a saved plan; the L3 window must reproduce the approved shape hash |
 | `scripts/iam_check.sh` | Read-only R1 check: Access Analyzer + IAM simulation of `infra/iam/zero-drift-terraform-policy.json` (or the live role with `--principal`) |
+| `scripts/smoke.sh` | L3 runtime smoke test (DRF-11 AC-03): control plane, OIDC, add-ons, nodes, IMDS, SGs, S3 endpoint route, DNS; read-only on AWS, two short-lived probe Pods |
 | `scripts/inventory.sh` | Read-only AWS inventory (counts only) before create, after verify, after destroy; exit 0 only when just the retain allowlist is left |
 
 ## Pins
