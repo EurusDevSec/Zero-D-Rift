@@ -88,8 +88,9 @@ aws eks update-kubeconfig --name "$name" --region "$AWS_REGION" > /dev/null
 check "API server minor" "$(kubectl version -o json | jq -r '.serverVersion.minor' | tr -d '+')" 35
 check "Ready nodes" "$(kubectl get nodes -o json | jq '[.items[] | select(any(.status.conditions[]; .type == "Ready" and .status == "True"))] | length')" 1
 check "node OS is Amazon Linux 2023" "$(kubectl get nodes -o json | jq -r '[.items[].status.nodeInfo.osImage | startswith("Amazon Linux 2023")] | all')" true
+# CoreDNS Pods keep the historical label k8s-app=kube-dns.
 for app in coredns kube-proxy aws-node; do
-    sel="k8s-app=$app"
+    sel="k8s-app=$app"; [[ "$app" == coredns ]] && sel="k8s-app=kube-dns"
     total="$(kubectl -n kube-system get pods -l "$sel" -o json | jq '.items | length')"
     running="$(kubectl -n kube-system get pods -l "$sel" -o json | jq '[.items[] | select(.status.phase == "Running")] | length')"
     [[ "$total" -ge 1 && "$total" == "$running" ]] && pass "kube-system $app: $running/$total Running" || fail "kube-system $app: $running/$total Running"
@@ -113,13 +114,16 @@ if [[ "${SKIP_POD_TESTS:-0}" != 1 ]]; then
     fi
     # PROBE_OK proves the Pod really ran, so an image-pull failure cannot pass
     # as "no token". The token PUT must time out: hop limit 1 drops the reply.
+    # The Pod waits 5 s and prints one line at the end: output written before
+    # kubectl attaches is lost (seen in the 04/11 window), and the token itself
+    # is never printed, only its length.
     out="$(kubectl run zdr-smoke-imds --image=public.ecr.aws/docker/library/amazonlinux:2023 --restart=Never --rm -i --quiet \
-        --pod-running-timeout=3m --command -- sh -c 'echo PROBE_OK; curl -s -m 3 -X PUT -H "X-aws-ec2-metadata-token-ttl-seconds: 60" http://169.254.169.254/latest/api/token || true' 2>/dev/null || true)"
-    rest="$(grep -v '^PROBE_OK$' <<< "$out" | tr -d '[:space:]' || true)"
-    if ! grep -q '^PROBE_OK$' <<< "$out"; then fail "IMDS probe Pod did not run"
-    elif [[ -z "$rest" ]]; then pass "Pod cannot get an IMDSv2 token (hop limit 1)"
+        --pod-running-timeout=3m --command -- sh -c 'sleep 5; t="$(curl -s -m 3 -X PUT -H "X-aws-ec2-metadata-token-ttl-seconds: 60" http://169.254.169.254/latest/api/token || true)"; echo "PROBE_OK token_len=${#t}"' 2>/dev/null || true)"
+    len="$(sed -n 's/^PROBE_OK token_len=\([0-9]*\).*/\1/p' <<< "$out" | tr -d '\r' | head -n 1)"
+    if [[ -z "$len" ]]; then fail "IMDS probe Pod did not run"
+    elif [[ "$len" == 0 ]]; then pass "Pod cannot get an IMDSv2 token (hop limit 1)"
     else fail "Pod got an IMDS token"; fi
-    unset out rest
+    unset out len
 fi
 
 echo
