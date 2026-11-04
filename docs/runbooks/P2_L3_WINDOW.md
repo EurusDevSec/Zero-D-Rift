@@ -270,6 +270,23 @@ Nếu thấy NAT, EIP, load balancer, RDS hoặc nhiều hơn 1 instance thì g�
 - không chạy thêm thử nghiệm nào;
 - chỉ export evidence, rồi dọn.
 
+**Làm mới MFA cho đúng (bài học 04/11):** khi phiên cũ còn hơn 15 phút, CLI dùng lại cache và
+không hỏi mã MFA, nên giờ hết hạn không đổi. Phải xóa cache trước:
+
+```bash
+rm -f ~/.aws/cli/cache/*.json
+```
+
+```bash
+aws sts get-caller-identity --profile zdr-bootstrap --query Arn --output text | sed -E 's/[0-9]{12}/<ACCOUNT>/'
+```
+
+```bash
+cat ~/.aws/cli/cache/*.json | jq -r '.Credentials.Expiration'
+```
+
+Giờ in ra phải cách hiện tại khoảng 1 giờ.
+
 1. Gỡ quyền admin (tùy chọn, là phép thử DRF-5 AC-04). Làm mới MFA, rồi:
 
    ```bash

@@ -48,6 +48,8 @@ check load_balancers_classic 0 aws elb describe-load-balancers --query 'length(L
 # Data services (P3+, checked so a leftover cannot hide)
 check rds_instances         0 aws rds describe-db-instances --query 'length(DBInstances)' --output text
 check rds_snapshots_manual  0 aws rds describe-db-snapshots --snapshot-type manual --query 'length(DBSnapshots)' --output text
+check rds_clusters          0 aws rds describe-db-clusters --query 'length(DBClusters)' --output text
+check rds_cluster_snapshots_manual 0 aws rds describe-db-cluster-snapshots --snapshot-type manual --query 'length(DBClusterSnapshots)' --output text
 check rds_subnet_groups     0 aws rds describe-db-subnet-groups --query 'length(DBSubnetGroups)' --output text
 check sqs_queues            0 aws sqs list-queues --query 'length(QueueUrls || `[]`)' --output text
 check secrets               0 aws secretsmanager list-secrets --query 'length(SecretList)' --output text
