@@ -74,6 +74,56 @@ Vì sao không trông vào Budget để phanh: Budget lấy số liệu billing 
 nên một window 6 giờ có thể hết mà email vẫn chưa tới. Đồng hồ, inventory và destroy mới là
 phanh thật. Budget chỉ là lưới an toàn cuối.
 
+## C0. Công cụ: kubectl 1.35 (làm một lần, trước ngày window)
+
+kubectl chỉ được hỗ trợ khi lệch tối đa 1 bản minor so với cluster. Cluster chạy 1.35,
+nên cần kubectl 1.34–1.36. Máy owner đang có `v1.33.5-dispatcher` (đi kèm Google Cloud SDK), lệch 2 bản.
+Cài kubectl là **cài CLI**, cần owner duyệt riêng. Có thể owner tự cài theo các lệnh dưới.
+
+1. Đọc bản patch mới nhất của dòng 1.35 rồi ghi lại số bản:
+
+   ```bash
+   KV=$(curl -L -s https://dl.k8s.io/release/stable-1.35.txt); echo "$KV"
+   ```
+
+2. Tải file chạy và file checksum từ trang chính thức `dl.k8s.io`:
+
+   ```bash
+   mkdir -p /r/_Dev_tools/kubectl && cd /r/_Dev_tools/kubectl
+   ```
+
+   ```bash
+   curl -LO "https://dl.k8s.io/release/$KV/bin/windows/amd64/kubectl.exe"
+   ```
+
+   ```bash
+   curl -LO "https://dl.k8s.io/release/$KV/bin/windows/amd64/kubectl.exe.sha256"
+   ```
+
+3. Kiểm checksum. Phải in ra `kubectl.exe: OK`:
+
+   ```bash
+   echo "$(cat kubectl.exe.sha256)  kubectl.exe" | sha256sum -c
+   ```
+
+4. Cho bản mới đứng **trước** bản của gcloud trong PATH. Có 2 cách:
+   - mỗi lần mở terminal, chạy lệnh export ở phần C (đang dùng cách này);
+   - hoặc owner **tự** thêm dòng dưới vào cuối `~/.bashrc`. Claude bị chặn sửa file khởi động shell, và chặn như vậy là đúng.
+
+   ```bash
+   [[ ":$PATH:" == *":/r/_Dev_tools/kubectl:"* ]] || export PATH="/r/_Dev_tools/kubectl:$PATH"
+   ```
+
+5. Kiểm lại, phải ra đúng `$KV`:
+
+   ```bash
+   kubectl version --client
+   ```
+
+Đã cài ngày 04/11/2026: `v1.35.10`, sha256 `c546d84d…10531b4`, khớp với file `.sha256` chính thức.
+
+Hoàn tác: xóa dòng PATH khỏi `~/.bashrc` (nếu đã thêm), rồi xóa thư mục `/r/_Dev_tools/kubectl`.
+
 ## C. Chuẩn bị (T−30 phút) — chỉ đọc
 
 Mở Git Bash, rồi:
@@ -89,6 +139,12 @@ zdr-bootstrap
 ```bash
 export AWS_PROFILE=zdr-tf AWS_REGION=us-east-1
 ```
+
+```bash
+export PATH="/r/_Dev_tools/kubectl:$PATH"
+```
+
+Lệnh `kubectl version --client` phải ra `v1.35.10`. Nếu ra `v1.33.5-dispatcher` thì máy đang dùng bản của gcloud, tức PATH chưa đúng.
 
 **Không** export `MSYS_NO_PATHCONV=1` cho cả terminal, vì nó làm `check.sh` hỏng ở `git -C`.
 `inventory.sh` tự đặt biến này bên trong script.
@@ -120,7 +176,7 @@ EKS cần khoảng 20 phút để tạo, nên **gõ `zdr-bootstrap` ngay trướ
 Chỉ bắt đầu apply khi phiên còn ít nhất 40 phút:
 
 ```bash
-jq -r '.Credentials.Expiration' ~/.aws/cli/cache/*.json
+cat ~/.aws/cli/cache/*.json | jq -r '.Credentials.Expiration'
 ```
 
 ```bash
@@ -163,23 +219,31 @@ terraform apply tfplan
 rm tfplan
 ```
 
-## E. Kiểm (chi tiết smoke thuộc DRF-11)
+## E. Kiểm runtime (DRF-11 AC-03)
+
+Chạy smoke test, rồi lưu output làm evidence:
 
 ```bash
-aws eks update-kubeconfig --name zero-drift --region us-east-1
+./scripts/smoke.sh | tee smoke.out
 ```
 
-```bash
-kubectl get nodes
-```
+Script chỉ đọc AWS. Trong Kubernetes nó tạo 2 Pod thử, dùng xong thì xóa. Phải ra `RESULT: PASS`.
 
-Phải có 1 node `Ready`.
+Những gì script kiểm:
+- **Control plane:** ACTIVE, 1.35, STANDARD, auth API, endpoint private bật, endpoint public chỉ mở cho dải /24 hoặc hẹp hơn, log audit + authenticator.
+- **OIDC:** issuer của cluster đã đăng ký thành IAM provider.
+- **Add-on:** vpc-cni, kube-proxy, coredns đều ACTIVE và đúng bản đã pin trong `variables.tf`.
+- **Node group:** ACTIVE, AL2023, đúng bản AMI pin, m6i.large On-Demand, desired 1, max 2.
+- **Máy EC2:** 1 node đang chạy; IMDSv2 bắt buộc, hop limit 1; có IPv4 public.
+- **Security group:** không có ingress từ 0.0.0.0/0, không mở port 22.
+- **S3 endpoint:** Gateway ở trạng thái available; route table đẩy prefix list của S3 qua endpoint; không có route NAT nào.
+- **Kubernetes:** API server 1.35; 1 node Ready chạy Amazon Linux 2023; coredns, kube-proxy, aws-node đều Running.
+- **Quyền:** có entry cho role bootstrap. Script in ra số admin association: trong window là 1, sau khi gỡ là 0.
+- **Pod DNS:** tên trong cluster và tên AWS đều phân giải được.
+- **Pod và IMDS:** Pod không lấy được token IMDSv2, vì hop limit 1 làm rơi gói trả lời.
 
-```bash
-kubectl -n kube-system get pods
-```
-
-Phải thấy coredns, kube-proxy và aws-node đều `Running`.
+`smoke.out` không chứa account, IP hay ID. Chép nội dung vào evidence rồi `rm smoke.out`.
+Nếu có FAIL: đó là S3 hoặc S4. Giữ output làm evidence, **không** sửa tay trên AWS.
 
 ```bash
 ./scripts/inventory.sh

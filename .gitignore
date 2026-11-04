@@ -22,3 +22,5 @@ terraform.rc
 backend.hcl
 *.tfvars
 *.tfvars.json
+# DRF-11 smoke test output (copy into evidence, then delete)
+infra/terraform/smoke.out
