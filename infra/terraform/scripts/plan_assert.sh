@@ -122,24 +122,35 @@ want_roles="zero-drift-cluster- zero-drift-system-node-"
 
 # 13. P3 provider IRSA role (DRF-36, SPEC-P3 Task 4). Default plan: no inline
 #     role policy. P3 window: web identity trust for exactly the provider-aws-s3
-#     ServiceAccount with audience sts.amazonaws.com; S3 actions only (never s3:*
-#     or IAM) on arn:aws:s3:::zero-drift-p3-* only; within the 10240-char limit.
+#     ServiceAccount with audience sts.amazonaws.com; S3 actions only (never IAM)
+#     on arn:aws:s3:::zero-drift-p3-* only; within the 10240-char limit. That
+#     resource also matches object ARNs (* crosses "/"), so the only action
+#     wildcard allowed is s3:GetBucket* (s3:Get* would allow GetObject).
 inline="$(count aws_iam_role_policy)"
 if [[ "${P3_WINDOW:-0}" != 1 ]]; then
     [[ "$inline" == 0 ]] && pass "no P3 provider role policy outside a P3 window" || fail "$inline inline role polic(ies) planned without P3_WINDOW=1"
 else
-    trust="$(q '.resource_changes[] | select(.type == "aws_iam_role" and .change.after.name == "zero-drift-p3-crossplane-s3") | .change.after.assume_role_policy')"
-    tr_ok="$(jq -r '[(.Statement | length == 1),
-        (.Statement[0] | .Effect == "Allow" and .Action == "sts:AssumeRoleWithWebIdentity"
-            and (.Principal.Federated | test(":oidc-provider/oidc[.]eks[.]us-east-1[.]amazonaws[.]com/id/"))
-            and ([.Condition.StringEquals | to_entries[] | select(.key | endswith(":sub")) | .value] == ["system:serviceaccount:crossplane-system:provider-aws-s3"])
-            and ([.Condition.StringEquals | to_entries[] | select(.key | endswith(":aud")) | .value] == ["sts.amazonaws.com"]))] | all' <<< "$trust" 2>/dev/null || echo false)"
-    [[ "$tr_ok" == true ]] && pass "P3 role trust: one web identity statement, sub provider-aws-s3, aud sts" || fail "P3 role trust policy is not the approved shape"
+    # On a first plan the trust policy is unknown: it embeds the OIDC provider of
+    # a cluster that does not exist yet (seen 05/11, P3-L3-20261105-01). Then it
+    # is covered by terraform test (p3_irsa) and, after apply, by
+    # p3_iam_check.sh --principal, which reads the live trust document.
+    role_sel='.resource_changes[] | select(.type == "aws_iam_role" and .change.after.name == "zero-drift-p3-crossplane-s3")'
+    if [[ "$(q "$role_sel | .change.after_unknown.assume_role_policy // false")" == true ]]; then
+        echo "INFO  P3 role trust unknown until the cluster OIDC exists: verify after apply with p3_iam_check.sh --principal"
+    else
+        trust="$(q "$role_sel | .change.after.assume_role_policy")"
+        tr_ok="$(jq -r '[(.Statement | length == 1),
+            (.Statement[0] | .Effect == "Allow" and .Action == "sts:AssumeRoleWithWebIdentity"
+                and (.Principal.Federated | test(":oidc-provider/oidc[.]eks[.]us-east-1[.]amazonaws[.]com/id/"))
+                and ([.Condition.StringEquals | to_entries[] | select(.key | endswith(":sub")) | .value] == ["system:serviceaccount:crossplane-system:provider-aws-s3"])
+                and ([.Condition.StringEquals | to_entries[] | select(.key | endswith(":aud")) | .value] == ["sts.amazonaws.com"]))] | all' <<< "$trust" 2>/dev/null || echo false)"
+        [[ "$tr_ok" == true ]] && pass "P3 role trust: one web identity statement, sub provider-aws-s3, aud sts" || fail "P3 role trust policy is not the approved shape"
+    fi
     perm="$(q '.resource_changes[] | select(.type == "aws_iam_role_policy") | .change.after.policy')"
     pm_ok="$(jq -r '[.Statement[] | .Effect == "Allow"
         and ([.Resource] | flatten == ["arn:aws:s3:::zero-drift-p3-*"])
-        and ([.Action] | flatten | all(startswith("s3:") and . != "s3:*"))] | all' <<< "$perm" 2>/dev/null || echo false)"
-    [[ "$pm_ok" == true ]] && pass "P3 role policy: S3 actions only, on arn:aws:s3:::zero-drift-p3-* only" || fail "P3 role policy: wildcard resource, non-S3 or s3:* action"
+        and ([.Action] | flatten | all(startswith("s3:") and (contains("*") | not) or . == "s3:GetBucket*"))] | all' <<< "$perm" 2>/dev/null || echo false)"
+    [[ "$pm_ok" == true ]] && pass "P3 role policy: S3 actions only, no action wildcard but s3:GetBucket*, on arn:aws:s3:::zero-drift-p3-* only" || fail "P3 role policy: wildcard resource, non-S3 action, or an action wildcard that can match objects"
     size="$(jq -c . <<< "$perm" | tr -d ' \r\n\t' | wc -c)"
     (( size <= 10240 )) && pass "P3 role policy size $size/10240" || fail "P3 role policy is $size chars, limit 10240"
 fi

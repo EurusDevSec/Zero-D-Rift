@@ -22,7 +22,7 @@ Runbook nền:
 Pod provider-aws-s3 ── token OIDC do EKS ký (sub = system:serviceaccount:crossplane-system:provider-aws-s3)
         │
         ▼  sts:AssumeRoleWithWebIdentity (role chỉ tin đúng sub + aud này)
-IAM role zero-drift-p3-crossplane-s3 ── chỉ s3:CreateBucket/DeleteBucket/PutBucketTagging/Get*/List*
+IAM role zero-drift-p3-crossplane-s3 ── chỉ Create/Delete/ListBucket, PutBucketTagging, GetBucket* và 4 Get…Configuration
                                        trên arn:aws:s3:::zero-drift-p3-*  (không object, không IAM)
 ```
 
@@ -125,7 +125,7 @@ Nếu quên cờ này, plan sẽ xóa luôn role. Khi đó provider mất quyề
 ### Giới hạn của phần A
 
 - Role P3 nằm ngoài phạm vi policy R1 (`infra/iam/zero-drift-terraform-policy.json` chỉ cho phép role `zero-drift-cluster-*` và `zero-drift-system-node-*`, và không có `iam:PutRolePolicy`). Hiện tại Terraform dùng AdministratorAccess (R1 hoãn tới DRF-27/29), nên window không bị chặn. Khi làm lại R1 thì phải thêm role `zero-drift-p3-*` và `PutRolePolicy`/`GetRolePolicy`.
-- `s3:Get*` và `s3:List*` là wildcard ở **action**, không phải ở resource: provider đọc rất nhiều thuộc tính con của bucket mỗi lần refresh. Resource chỉ gồm ARN bucket có prefix, nên các action trên object không bao giờ khớp.
+- **Bài học 05/11:** resource `arn:aws:s3:::zero-drift-p3-*` khớp **cả ARN object** (`bucket/key`), vì `*` đi qua được dấu `/`. Bản đầu dùng `s3:Get*` và bị mô phỏng IAM bắt được: `GetObject` ra `allowed`. Hiện chỉ cho phép wildcard `s3:GetBucket*` (tên action chỉ thuộc bucket); `plan_assert` check 13 và `terraform test` đều chặn mọi wildcard khác.
 
 ---
 
@@ -301,7 +301,7 @@ expires_at (tag): 2026-11-05T20:15:00Z (cũng là tag ExpiresAt của bucket tro
 Teardown owner:   HoangLV, có mặt suốt window; không rời máy khi cluster còn chạy (S7)
 Git revision:     <commit main sau khi merge #23>
 Plan:             53 to add (50 P2 + admin + role P3 + inline policy)
-Plan shape sha256: ________ (Claude điền sau bước A1, trước khi xin duyệt)
+Plan shape sha256: 3588a091e4eaaccad746e669a4c4fa8c8167038fca78e9cbfe05e534a597c853 (53 create, plan 05/11 15:31Z)
 Node:             1 × m6i.large (D7, đo ở DRF-39)
 Ước tính:         ≈ 0.21 USD/giờ (EKS 0.10 + m6i.large 0.096 + EBS/IPv4/log) → ≈ 0.85 USD cho 4 giờ
 Trần P3 (D8):     3 USD gross, tính cả retry, dọn, S3, log
@@ -314,10 +314,10 @@ Owner duyệt:      "Duyệt window P3-L3-20261105-01" (gõ trong chat)
 | Phút | Bước | Lệnh / nơi | Phải thấy |
 |---|---|---|---|
 | −30 | Chuẩn bị chỉ đọc | P2_L3_WINDOW C: `inventory.sh` (có thêm `p3_iam_roles`), kiểm IP, sửa `run_id`/`expires_at` trong `run.tfvars` | `RESULT: CLEAN`; IP khớp |
-| 0 | Plan + cổng kiểm | Runbook A1 (`-var bootstrap_cluster_admin=true -var enable_p3_provider_role=true`) | 53 to add; `plan_assert` PASS; shape hash **khớp** request; `p3_iam_check` PASS |
+| 0 | Plan + cổng kiểm | Runbook A1 (`-var bootstrap_cluster_admin=true -var enable_p3_provider_role=true`) | 53 to add; `plan_assert` PASS (dòng INFO về trust là bình thường ở plan đầu); shape hash **khớp** request; `p3_iam_check` PASS |
 | 0 | Apply | `terraform apply tfplan` (phiên MFA còn ≥ 40 phút) | Apply complete, khoảng 15–20 phút |
 | +20 | Smoke P2 | `./scripts/smoke.sh` | `RESULT: PASS` |
-| +25 | Role P3 sống | Runbook A2 (`p3_iam_check --principal`, lấy `ROLE_ARN`) | PASS |
+| +25 | Role P3 sống | Runbook A2 (`p3_iam_check --principal`, lấy `ROLE_ARN`) | PASS, có dòng `live trust: this cluster's OIDC…` |
 | +30 | Argo CD + root app | Runbook B2 | 8 app Synced/Healthy; 2 provider HEALTHY |
 | +40 | IRSA | Runbook B3 | Pod provider có `AWS_ROLE_ARN` |
 | +45 | Instance hợp lệ | Xem dưới (C2) | Instance `ACTIVE/Ready`; bucket có thật, đủ tag; Deployment 1/1 |
