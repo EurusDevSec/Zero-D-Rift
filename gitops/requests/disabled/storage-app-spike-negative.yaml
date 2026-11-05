@@ -10,5 +10,5 @@ metadata:
   namespace: zdr-requests
 spec:
   bucketName: zdr-outside-p3-d4163e
-  runId: P3-L3-YYYYMMDD-01
-  expiresAt: "2026-11-06T00:00:00Z"
+  runId: P3-L3-20261105-01
+  expiresAt: "2026-11-05T20:15:00Z"

@@ -58,6 +58,7 @@ check kms_customer_aliases  0 aws kms list-aliases --query "length(Aliases[?!sta
 # Logs and identity in the project boundary
 check eks_log_groups        0 aws logs describe-log-groups --log-group-name-prefix /aws/eks --query 'length(logGroups)' --output text
 check oidc_providers        0 aws iam list-open-id-connect-providers --query 'length(OpenIDConnectProviderList)' --output text
+check p3_iam_roles          0 aws iam list-roles --query "length(Roles[?starts_with(RoleName, 'zero-drift-p3-')])" --output text
 
 # Retain allowlist (COST_PLAN §11.3): the Terraform state bucket only.
 check s3_buckets            1 aws s3api list-buckets --query 'length(Buckets)' --output text
