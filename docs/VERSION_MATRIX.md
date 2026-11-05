@@ -143,3 +143,22 @@ status remains `UNVERIFIED`.
 - OpenCost is deliberately not pinned as compatible with Kubernetes 1.35 yet.
 - kind is the proposed local-first environment; AWS-specific claims remain blocked
   until EKS evidence exists.
+
+## 7. P3 control-plane pins (2026-11-05)
+
+Rechecked on 2026-11-05 for SPEC-P3 Task 1 (DRF-34). Digests, sources and CRD
+findings: `docs/evidence/p3/DRF34_P3_PINS_20261105.md`. These supersede the §2
+candidates for Argo CD, Crossplane and the AWS provider; other rows are unchanged.
+
+| Component | Pin | Digest | Status |
+| --- | --- | --- | --- |
+| Argo CD | `v3.5.7` (upstream `manifests/install.yaml`) | image `sha256:16df57da…4647de0db`; manifest sha256 `09bfbb90…a4551f5beb77` | `SOURCE_VERIFIED` |
+| Crossplane core | chart/app `2.4.3` | image `sha256:1c66261d…aa2be638` | `SOURCE_VERIFIED` |
+| provider-family-aws | `v2.8.1` | `sha256:ea0d1ff9…2db25f92` | `SOURCE_VERIFIED`; built on crossplane-runtime v2.4.0 |
+| provider-aws-s3 | `v2.8.1` | `sha256:4e627727…807919bd` | `SOURCE_VERIFIED`; only AWS service package in P3 |
+| kro | chart/image `v0.9.4`, `rbac.mode=aggregation` | image `sha256:eaf9fbad…3376fb9` | `SOURCE_VERIFIED` |
+| kind | `v0.33.0` installed at `/r/_Dev_tools/kind` | binary sha256 `4b22adaa…1515c9fc` | Installed 2026-11-05 |
+
+S3 bucket API for P3: `s3.aws.m.upbound.io/v1beta1` `Bucket` (namespaced). It has
+no `deletionPolicy`; deletion is controlled by `managementPolicies`. Runtime status
+moves to `RUNTIME_VERIFIED` only after the P3 kind lab (L2) and EKS window (L3).
