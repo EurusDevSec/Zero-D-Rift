@@ -179,6 +179,15 @@ ACCEPTED only if this lab passes. kind evidence never proves IRSA or AWS behavio
       ProviderConfig, kro and the RGD, with explicit sync order (sync waves).
 - [ ] `gitops/requests/`: one valid instance and one negative instance (disabled
       by default, enabled only for the negative test).
+- [ ] Sync policy (fixes Codex review 05/11, finding 2). Argo CD does not prune by
+      default and refuses to sync an Application that becomes empty, so:
+      - `requests` Application: `automated` with `prune: true`, `selfHeal: true`
+        and `allowEmpty: true`, so removing the last instance from Git deletes it.
+      - `platform` Applications: `automated` with `selfHeal: true`, `prune: false`.
+        Controllers are never removed by a Git change; they are removed only by the
+        teardown sequence in Task 5.
+      - Every Application can have reconcile stopped by removing `spec.syncPolicy.automated`
+        (`kubectl patch`), which the teardown uses before deleting what it manages.
 - [ ] Static checks: no `latest` tags, every image/chart pinned, only allowlisted
       provider packages, no Secret objects, bucket names inside the prefix.
 - [ ] Server-side dry run of the manifests in the Task 2 kind cluster when possible.
@@ -195,6 +204,11 @@ ACCEPTED only if this lab passes. kind evidence never proves IRSA or AWS behavio
 
 ## Task 5 — Approved L3 window (4–5 h) — DRF-15
 
+Prerequisite (fixes Codex review 05/11, finding 1): **no L3 window opens until
+Task 2 (DRF-39) has PASSED**. The Crossplane 2.4.3 + provider 2.8.1 pairing and kro
+v0.9.4 on Kubernetes 1.35 are only `SOURCE_VERIFIED` until then. Tasks 3 and 4 may be
+prepared in parallel with Task 2.
+
 - [ ] Window request (P2_L3_WINDOW template): run ID, plan, cap, stop time,
       teardown owner, fresh identity/cost/quota check, pre-inventory.
 - [ ] Recreate the P2 bootstrap plus the IRSA role; smoke as in P2.
@@ -202,17 +216,31 @@ ACCEPTED only if this lab passes. kind evidence never proves IRSA or AWS behavio
       every controller and ProviderRevision healthy; capture versions/digests.
 - [ ] Sync the valid instance: verify the bucket in AWS (head-bucket, tags), the
       Deployment available, and the instance Ready; record timestamps.
-- [ ] Negative test: enable the out-of-prefix instance; verify AccessDenied in
-      the MR conditions and instance not Ready while Argo shows Synced.
-- [ ] Deletion test: remove the instance from Git; verify the predicted effect on
-      the Deployment, MR and AWS bucket.
-- [ ] Teardown in order (§7.2 of the runbook): instances → MRs gone → kro →
-      Crossplane providers/core → Argo CD → admin removal → Terraform destroy →
-      immediate inventory (plus S3 buckets with the P3 prefix = 0).
+- [ ] Negative test: enable the out-of-prefix instance; observe for at most
+      **10 minutes**; verify AccessDenied in the MR conditions and instance not
+      Ready while Argo shows Synced. Then remove it from Git. If its MR stays in
+      deletion because of the Crossplane finalizer, first confirm with the
+      bootstrap identity that no bucket with that name exists in AWS, then remove
+      the finalizer by hand and record it as evidence.
+- [ ] Deletion test: remove the valid instance from Git; the `requests`
+      Application prunes it (Task 3 policy). Verify the predicted effect on the
+      Deployment, MR and AWS bucket (`managementPolicies` `*` → bucket deleted).
+- [ ] Teardown in this order. Crossplane, the provider and the IRSA role stay in
+      place until every MR is gone **and** `head-bucket` shows no P3 bucket in AWS:
+      1. Remove all instances from Git; wait until instances, MRs and AWS buckets
+         with the P3 prefix are gone.
+      2. Stop reconcile on each platform Application (remove
+         `spec.syncPolicy.automated`), then delete what it manages, in reverse
+         sync-wave order: RGD → kro → ProviderConfig → providers → Crossplane core.
+      3. Delete the Applications, then Argo CD itself (pinned install manifest).
+      4. Admin removal → Terraform destroy (the IRSA role goes with it) →
+         immediate inventory (plus S3 buckets with the P3 prefix = 0).
 
 Stop conditions: any controller unhealthy after one fix attempt; any bucket
 created outside the prefix; any MR stuck deleting for 15 minutes; session
-under 40 minutes before a destroy; freeze time reached.
+under 40 minutes before a destroy; freeze time reached. The 3 USD cap counts
+every retry, cleanup, S3 and log charge in the window; reprice before the window
+if D7 becomes 2 nodes.
 
 ## Task 6 — Evidence, review, teach-back (2 h) — DRF-15
 
@@ -278,8 +306,24 @@ Owner wrote: "được duyệt d1 -d 8 và thời gian hôm nay phài xong phase
   | T2 kind lab | DRF-39 | DRF-14 | DRF-34 |
   | T3 GitOps layout | DRF-35 | DRF-15 | DRF-34 |
   | T4 provider IRSA role | DRF-36 | DRF-15 | DRF-34 |
-  | T5 L3 window | DRF-37 | DRF-15 | DRF-35, DRF-36 |
+  | T5 L3 window | DRF-37 | DRF-15 | DRF-35, DRF-36, **DRF-39** (L2 must PASS) |
   | T6 evidence, review, teach-back | DRF-38 | DRF-15 | DRF-37 |
+
+## Independent review (Codex, 05/11/2026)
+
+Candidate base `acc208bb08d885052142f3f491118268b8e658bc`, head
+`dd3b77b6f36815778e4697887d6595cda38eeb9d`. Verdict REQUEST CHANGES with two MEDIUM
+findings; scope, boundaries, acceptance, IRSA ownership and the 3 USD cap judged sound.
+
+| Finding | Fix in this revision |
+|---|---|
+| 1. L3 did not require the L2 kind lab to PASS | Task 5 prerequisite added; DRF-39 now blocks DRF-37 in Linear |
+| 2. Deletion path did not fix how Argo CD prunes and stops reconciling | Task 3 sync policy (`prune`/`allowEmpty` for requests, no prune for platform); Task 5 teardown stops `automated` sync before deleting, keeps Crossplane/provider/IRSA until MRs and buckets are gone |
+| Note: bounded negative test and finalizer cleanup | Task 5: 10-minute observation, AWS check, then manual finalizer removal recorded as evidence |
+| Note: cap counts retries/cleanup; reprice for 2 nodes | Task 5 stop conditions |
+
+Limits stated by Codex: contract/document review only; no compatibility, IRSA or
+runtime cost proof.
 
 # 10. Open risks
 
