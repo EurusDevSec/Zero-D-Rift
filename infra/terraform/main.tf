@@ -31,3 +31,15 @@ module "cluster" {
   node_desired_size            = var.system_node_desired_size
   node_max_size                = var.system_node_max_size
 }
+
+# DRF-36 (SPEC-P3 Task 4): Crossplane provider IRSA role, created only for the
+# approved P3 window (enable_p3_provider_role = true in the window tfvars).
+module "p3_provider_irsa" {
+  source = "./modules/p3-provider-irsa"
+  count  = var.enable_p3_provider_role ? 1 : 0
+
+  role_name         = "zero-drift-p3-crossplane-s3"
+  oidc_provider_arn = module.cluster.oidc_provider_arn
+  oidc_issuer_url   = module.cluster.oidc_issuer_url
+  bucket_prefix     = "zero-drift-p3-"
+}

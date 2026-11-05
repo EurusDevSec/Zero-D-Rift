@@ -22,3 +22,13 @@ output "oidc_provider_enabled" {
   description = "Whether the IRSA OIDC provider is managed here."
   value       = module.eks.oidc_provider_arn != null
 }
+
+output "oidc_provider_arn" {
+  description = "IAM OIDC provider ARN, used only as an input to the P3 IRSA role (not a root output)."
+  value       = module.eks.oidc_provider_arn
+}
+
+output "oidc_issuer_url" {
+  description = "Cluster OIDC issuer URL, used only as an input to the P3 IRSA role."
+  value       = module.eks.cluster_oidc_issuer_url
+}

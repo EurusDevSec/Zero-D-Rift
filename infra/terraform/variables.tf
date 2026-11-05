@@ -158,6 +158,12 @@ variable "bootstrap_cluster_admin" {
   default     = false
 }
 
+variable "enable_p3_provider_role" {
+  description = "Create the P3 Crossplane provider IRSA role (DRF-36). true only for an approved P3 window."
+  type        = bool
+  default     = false
+}
+
 # Run metadata for the tag contract (docs/finops/COST_PLAN.md §10). No defaults:
 # every plan must name its run and expiry (see run.tfvars.example).
 variable "run_id" {

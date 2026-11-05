@@ -6,6 +6,9 @@
 # Inside an approved window (bootstrap_cluster_admin = true) the one admin
 # association is expected instead of forbidden:
 #   ADMIN_WINDOW=1 ./scripts/plan_assert.sh tfplan
+# A P3 window plan (enable_p3_provider_role = true, DRF-36) adds the Crossplane
+# provider IRSA role and its inline policy; check 13 then inspects them:
+#   ADMIN_WINDOW=1 P3_WINDOW=1 ./scripts/plan_assert.sh tfplan
 # The plan JSON stays in a pipe: it is never written to disk or printed.
 set -euo pipefail
 
@@ -38,9 +41,12 @@ iface="$(q '[.resource_changes[] | select(.type == "aws_vpc_endpoint" and .chang
 
 # 3. Approved managed resource counts: network 19 (2 AZs) + EKS 31 = 50,
 #    plus the admin association in window mode.
+#    P3 window: plus the provider IRSA role and its inline policy (DRF-36).
 admin_count=""
 [[ "${ADMIN_WINDOW:-0}" == 1 ]] && admin_count="aws_eks_access_policy_association=1 "
-expected="aws_cloudwatch_log_group=1 aws_db_subnet_group=1 aws_default_network_acl=1 aws_default_route_table=1 aws_default_security_group=1 aws_eks_access_entry=1 ${admin_count}aws_eks_addon=3 aws_eks_cluster=1 aws_eks_node_group=1 aws_iam_openid_connect_provider=1 aws_iam_role=2 aws_iam_role_policy_attachment=4 aws_internet_gateway=1 aws_launch_template=1 aws_route=1 aws_route_table=3 aws_route_table_association=4 aws_security_group=2 aws_security_group_rule=12 aws_subnet=4 aws_vpc=1 aws_vpc_endpoint=1 null_resource=1 time_sleep=1"
+roles_count="aws_iam_role=2 "
+[[ "${P3_WINDOW:-0}" == 1 ]] && roles_count="aws_iam_role=3 aws_iam_role_policy=1 "
+expected="aws_cloudwatch_log_group=1 aws_db_subnet_group=1 aws_default_network_acl=1 aws_default_route_table=1 aws_default_security_group=1 aws_eks_access_entry=1 ${admin_count}aws_eks_addon=3 aws_eks_cluster=1 aws_eks_node_group=1 aws_iam_openid_connect_provider=1 ${roles_count}aws_iam_role_policy_attachment=4 aws_internet_gateway=1 aws_launch_template=1 aws_route=1 aws_route_table=3 aws_route_table_association=4 aws_security_group=2 aws_security_group_rule=12 aws_subnet=4 aws_vpc=1 aws_vpc_endpoint=1 null_resource=1 time_sleep=1"
 actual="$(q '[.resource_changes[] | select(.mode == "managed") | .type] | group_by(.) | map("\(.[0])=\(length)") | join(" ")')"
 [[ "$actual" == "$expected" ]] && pass "resource counts: $(q '[.resource_changes[] | select(.mode == "managed")] | length') managed" || fail "resource counts: $actual"
 
@@ -106,10 +112,37 @@ untagged="$(q '[.resource_changes[] | select(.change.after | has("tags_all")) | 
 # 12. IAM stays inside the R1 Terraform policy scope: roles only under the
 #     zero-drift-cluster-/zero-drift-system-node- prefixes, attachments only the
 #     four EKS managed policies (infra/iam/zero-drift-terraform-policy.json).
+#     A P3 window adds exactly one role, zero-drift-p3-crossplane-s3 (check 13).
 roles="$(q '[.resource_changes[] | select(.type == "aws_iam_role") | .change.after | (.name_prefix // .name)] | sort | join(" ")')"
 atts="$(q '[.resource_changes[] | select(.type == "aws_iam_role_policy_attachment") | .change.after.policy_arn | split("/") | last] | sort | join(" ")')"
-[[ "$roles" == "zero-drift-cluster- zero-drift-system-node-" && "$atts" == "AmazonEC2ContainerRegistryReadOnly AmazonEKSClusterPolicy AmazonEKSWorkerNodePolicy AmazonEKS_CNI_Policy" ]] \
-    && pass "IAM within R1 policy scope (2 prefixed roles, 4 EKS managed policies)" || fail "IAM scope: roles='$roles' attachments='$atts'"
+want_roles="zero-drift-cluster- zero-drift-system-node-"
+[[ "${P3_WINDOW:-0}" == 1 ]] && want_roles="zero-drift-cluster- zero-drift-p3-crossplane-s3 zero-drift-system-node-"
+[[ "$roles" == "$want_roles" && "$atts" == "AmazonEC2ContainerRegistryReadOnly AmazonEKSClusterPolicy AmazonEKSWorkerNodePolicy AmazonEKS_CNI_Policy" ]] \
+    && pass "IAM within scope (roles: $want_roles; 4 EKS managed policies)" || fail "IAM scope: roles='$roles' attachments='$atts'"
+
+# 13. P3 provider IRSA role (DRF-36, SPEC-P3 Task 4). Default plan: no inline
+#     role policy. P3 window: web identity trust for exactly the provider-aws-s3
+#     ServiceAccount with audience sts.amazonaws.com; S3 actions only (never s3:*
+#     or IAM) on arn:aws:s3:::zero-drift-p3-* only; within the 10240-char limit.
+inline="$(count aws_iam_role_policy)"
+if [[ "${P3_WINDOW:-0}" != 1 ]]; then
+    [[ "$inline" == 0 ]] && pass "no P3 provider role policy outside a P3 window" || fail "$inline inline role polic(ies) planned without P3_WINDOW=1"
+else
+    trust="$(q '.resource_changes[] | select(.type == "aws_iam_role" and .change.after.name == "zero-drift-p3-crossplane-s3") | .change.after.assume_role_policy')"
+    tr_ok="$(jq -r '[(.Statement | length == 1),
+        (.Statement[0] | .Effect == "Allow" and .Action == "sts:AssumeRoleWithWebIdentity"
+            and (.Principal.Federated | test(":oidc-provider/oidc[.]eks[.]us-east-1[.]amazonaws[.]com/id/"))
+            and ([.Condition.StringEquals | to_entries[] | select(.key | endswith(":sub")) | .value] == ["system:serviceaccount:crossplane-system:provider-aws-s3"])
+            and ([.Condition.StringEquals | to_entries[] | select(.key | endswith(":aud")) | .value] == ["sts.amazonaws.com"]))] | all' <<< "$trust" 2>/dev/null || echo false)"
+    [[ "$tr_ok" == true ]] && pass "P3 role trust: one web identity statement, sub provider-aws-s3, aud sts" || fail "P3 role trust policy is not the approved shape"
+    perm="$(q '.resource_changes[] | select(.type == "aws_iam_role_policy") | .change.after.policy')"
+    pm_ok="$(jq -r '[.Statement[] | .Effect == "Allow"
+        and ([.Resource] | flatten == ["arn:aws:s3:::zero-drift-p3-*"])
+        and ([.Action] | flatten | all(startswith("s3:") and . != "s3:*"))] | all' <<< "$perm" 2>/dev/null || echo false)"
+    [[ "$pm_ok" == true ]] && pass "P3 role policy: S3 actions only, on arn:aws:s3:::zero-drift-p3-* only" || fail "P3 role policy: wildcard resource, non-S3 or s3:* action"
+    size="$(jq -c . <<< "$perm" | tr -d ' \r\n\t' | wc -c)"
+    (( size <= 10240 )) && pass "P3 role policy size $size/10240" || fail "P3 role policy is $size chars, limit 10240"
+fi
 
 echo
 if (( failed )); then echo "RESULT: FAIL"; exit 1; fi
