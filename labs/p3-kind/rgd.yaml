@@ -1,0 +1,55 @@
+# P3 kind lab (DRF-39) E4: one kro ResourceGraphDefinition = one new API
+# (ZdrRequest) that expands into a Deployment and a Crossplane Bucket.
+apiVersion: kro.run/v1alpha1
+kind: ResourceGraphDefinition
+metadata:
+  name: zdr-request
+spec:
+  schema:
+    apiVersion: v1alpha1
+    kind: ZdrRequest
+    spec:
+      bucketName: string
+      region: string | default="us-east-1"
+      replicas: integer | default=1
+    status:
+      availableReplicas: ${app.status.availableReplicas}
+  resources:
+    - id: app
+      template:
+        apiVersion: apps/v1
+        kind: Deployment
+        metadata:
+          name: ${schema.metadata.name}-app
+          namespace: ${schema.metadata.namespace}
+        spec:
+          replicas: ${schema.spec.replicas}
+          selector:
+            matchLabels:
+              app: ${schema.metadata.name}
+          template:
+            metadata:
+              labels:
+                app: ${schema.metadata.name}
+            spec:
+              containers:
+                - name: pause
+                  image: registry.k8s.io/pause:3.10@sha256:ee6521f290b2168b6e0935a181d4cff9be1ac3f505666ef0e3c98fae8199917a
+                  resources:
+                    requests: {cpu: 10m, memory: 16Mi}
+                    limits: {memory: 32Mi}
+    - id: bucket
+      # Without readyWhen kro calls the bucket ready as soon as the object
+      # exists, even while Crossplane reports Synced=False (DRF-39 E4).
+      readyWhen:
+        - ${bucket.status.?conditions.orValue([]).exists(c, c.type == "Ready" && c.status == "True")}
+      template:
+        apiVersion: s3.aws.m.upbound.io/v1beta1
+        kind: Bucket
+        metadata:
+          name: ${schema.spec.bucketName}
+          namespace: ${schema.metadata.namespace}
+        spec:
+          managementPolicies: ["Observe", "Create", "Update", "LateInitialize"]
+          forProvider:
+            region: ${schema.spec.region}

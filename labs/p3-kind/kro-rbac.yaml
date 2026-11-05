@@ -1,0 +1,24 @@
+# P3 kind lab (DRF-39). kro runs with rbac.mode=aggregation: it only gets the
+# extra rights from ClusterRoles carrying this label.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: kro-zdr-p3-children
+  labels:
+    rbac.kro.run/aggregate-to-controller: "true"
+rules:
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: [""]
+    resources: ["serviceaccounts"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: ["s3.aws.m.upbound.io"]
+    resources: ["buckets"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  # Each RGD creates a new kind in kro.run (here ZdrRequest). In aggregation mode
+  # kro gets no rights on it by default: without this rule the RGD stays
+  # Inactive with "cache sync timeout" (seen in DRF-39 E4).
+  - apiGroups: ["kro.run"]
+    resources: ["zdrrequests", "zdrrequests/status"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
