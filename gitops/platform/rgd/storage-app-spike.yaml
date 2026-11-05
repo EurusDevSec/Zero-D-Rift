@@ -44,7 +44,8 @@ spec:
               ExpiresAt: ${schema.spec.expiresAt}
     - id: app
       readyWhen:
-        - ${app.status.?availableReplicas.orValue(0) == schema.spec.replicas}
+        # readyWhen may only reference its own resource (schema is rejected).
+        - ${app.status.?availableReplicas.orValue(0) == app.spec.replicas}
       template:
         apiVersion: apps/v1
         kind: Deployment
