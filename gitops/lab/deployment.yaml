@@ -1,0 +1,28 @@
+# P3 kind lab (DRF-39): a plain Deployment that Argo CD syncs from Git.
+# The pause image does nothing, so readiness only reflects Kubernetes scheduling.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: zdr-lab-pause
+  namespace: zdr-lab
+  labels:
+    app: zdr-lab-pause
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: zdr-lab-pause
+  template:
+    metadata:
+      labels:
+        app: zdr-lab-pause
+    spec:
+      containers:
+        - name: pause
+          image: registry.k8s.io/pause:3.10@sha256:ee6521f290b2168b6e0935a181d4cff9be1ac3f505666ef0e3c98fae8199917a
+          resources:
+            requests:
+              cpu: 10m
+              memory: 16Mi
+            limits:
+              memory: 32Mi
