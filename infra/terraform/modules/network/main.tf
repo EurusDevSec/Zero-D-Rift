@@ -63,10 +63,21 @@ module "vpc_endpoints" {
 }
 
 # Bounded endpoint policy: traffic through the endpoint may reach only buckets in
-# this account, plus read-only access to the AWS-owned buckets that nodes need for
-# ECR image layers and AL2023 packages. The endpoint route wins for all S3 traffic
-# in this Region from the public subnets, so other accounts' buckets are denied.
+# this account, plus read-only access to the buckets that nodes need for image
+# layers and packages. The endpoint route wins for all S3 traffic in this Region
+# from the public subnets, so other accounts' buckets are denied.
+# P3 window 05/11 (DRF-37): quay.io (Argo CD) and registry.k8s.io (kro, pause)
+# redirect layer downloads to their own S3 buckets in us-east-1, so those pulls
+# failed with 403 through the endpoint. Both buckets are added read-only
+# (s3:GetObject): nodes can download layers but cannot write data out.
 locals {
+  layer_buckets = [
+    "prod-${var.region}-starport-layer-bucket", # ECR (AWS)
+    "al2023-repos-${var.region}-de612dc2",      # AL2023 packages (AWS)
+    "quayio-production-s3",                     # quay.io layers (us-east-1)
+    "prod-registry-k8s-io-${var.region}",       # registry.k8s.io layers
+  ]
+
   s3_endpoint_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -81,14 +92,11 @@ locals {
         }
       },
       {
-        Sid       = "AwsOwnedReadOnly"
+        Sid       = "LayerBucketsReadOnly"
         Effect    = "Allow"
         Principal = "*"
         Action    = "s3:GetObject"
-        Resource = [
-          "arn:aws:s3:::prod-${var.region}-starport-layer-bucket/*",
-          "arn:aws:s3:::al2023-repos-${var.region}-de612dc2/*",
-        ]
+        Resource  = [for b in local.layer_buckets : "arn:aws:s3:::${b}/*"]
       },
     ]
   })

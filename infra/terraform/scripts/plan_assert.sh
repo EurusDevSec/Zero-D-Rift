@@ -73,8 +73,12 @@ dsg="$(q '[.resource_changes[] | select(.type == "aws_default_security_group") |
 ep="$(q '.resource_changes[] | select(.type == "aws_vpc_endpoint") | .change.after.service_name')"
 [[ "$ep" == "com.amazonaws.us-east-1.s3" ]] && pass "S3 gateway endpoint service" || fail "endpoint service: $ep"
 pol="$(q '.resource_changes[] | select(.type == "aws_vpc_endpoint") | .change.after.policy // ""')"
-if jq -e '.Statement | length == 2 and (.[0].Condition.StringEquals["aws:ResourceAccount"] | type == "string") and (.[1].Action == "s3:GetObject")' <<< "$pol" > /dev/null 2>&1; then
-    pass "endpoint policy bounded (own account + AWS-owned read-only)"
+# Statement 2 may read objects only in the listed layer buckets (DRF-37: quay.io and
+# registry.k8s.io store layers in S3 us-east-1); any other bucket fails.
+layer_allow='["arn:aws:s3:::prod-us-east-1-starport-layer-bucket/*","arn:aws:s3:::al2023-repos-us-east-1-de612dc2/*","arn:aws:s3:::quayio-production-s3/*","arn:aws:s3:::prod-registry-k8s-io-us-east-1/*"]'
+if jq -e --argjson allow "$layer_allow" '.Statement | length == 2 and (.[0].Condition.StringEquals["aws:ResourceAccount"] | type == "string")
+        and (.[1].Action == "s3:GetObject") and ([.[1].Resource] | flatten | all(. as $r | $allow | index($r)))' <<< "$pol" > /dev/null 2>&1; then
+    pass "endpoint policy bounded (own account + read-only layer buckets)"
 else
     fail "endpoint policy is missing or not bounded"
 fi
