@@ -1,7 +1,7 @@
 ---
 id: SPEC-P3
 title: First resource graph — Argo CD, Crossplane and kro vertical slice
-status: DRAFT_FOR_OWNER_REVIEW
+status: OWNER_APPROVED_2026-11-05
 phase: P3
 start: 2026-11-05
 deadline: 2026-11-08 (PROPOSED; ver3 §12 window 03–05/11 already missed)
@@ -260,6 +260,26 @@ stop and fix it; do not add technology (ver3 §12.1).
 | D6 | Deletion semantics | Default: deleting the instance deletes the bucket. One extra check with an orphaning management policy only if the pinned CRD supports it, then manual cleanup under approval | Ver3 asks for a tested retain/delete path; keep it to one bucket |
 | D7 | Node capacity | Decide after Task 1 sizing: 1 × m6i.large if controllers fit with headroom, otherwise desired 2 for the window (+0.096 USD/h) | One node may not fit Argo + Crossplane + providers + kro |
 | D8 | P3 gross cap | 3 USD (≈ 4–6 h of EKS + 1–2 nodes ≈ 0.2–0.3 USD/h, plus S3 and logs), inside the 100 USD envelope | Same discipline as P2's 5 USD cap |
+
+## Owner approval (05/11/2026)
+
+Owner wrote: "được duyệt d1 -d 8 và thời gian hôm nay phài xong phase 3".
+
+- D1–D8 approved as proposed, including the P3 gross cap of 3 USD and the kind install.
+- Owner target: finish P3 on 05/11. Claude's note: the L3 window (Task 5) still needs
+  its own execution approval with a fresh plan, cost and stop time, and P3 completion
+  (§8) still needs independent review and the owner teach-back. If any gate is not
+  met on 05/11, P3 stays open and the real state is reported.
+- Linear tracking (sub-issues, blocked-by chain in Linear):
+
+  | Task | Issue | Parent | Blocked by |
+  |---|---|---|---|
+  | T1 contract, pins, CRDs, sizing | DRF-34 | DRF-14 | — |
+  | T2 kind lab | DRF-39 | DRF-14 | DRF-34 |
+  | T3 GitOps layout | DRF-35 | DRF-15 | DRF-34 |
+  | T4 provider IRSA role | DRF-36 | DRF-15 | DRF-34 |
+  | T5 L3 window | DRF-37 | DRF-15 | DRF-35, DRF-36 |
+  | T6 evidence, review, teach-back | DRF-38 | DRF-15 | DRF-37 |
 
 # 10. Open risks
 
