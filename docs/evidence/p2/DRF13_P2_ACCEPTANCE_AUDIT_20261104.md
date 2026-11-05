@@ -43,7 +43,7 @@ Candidate: `main` tại `c881fd0` (sau PR #17). Nguồn: `.agent/specs/SPEC-P2_R
 |---|---|
 | Plan, create, verify, destroy với evidence đã che | Đạt |
 | Không còn tài nguyên trả phí chưa duyệt | Đạt ngay sau destroy; chờ inventory trễ + Billing (DRF-12 AC-04) |
-| Owner đạt `PRACTICED` + `EXPLAINED` cho Terraform/state/dependency/teardown | **Chưa đạt.** Owner đã thực hành (MFA, merge, duyệt, đọc kết quả) nhưng chưa trả lời teach-back SPEC §7. Ngày 04/11 owner chọn bỏ qua teach-back của P2_L3_WINDOW phần H |
+| Owner đạt `PRACTICED` + `EXPLAINED` cho Terraform/state/dependency/teardown | **Đạt** ngày 05/11 (lab local + teach-back SPEC §7, xem AC-02). Teach-back phần H của P2_L3_WINDOW vẫn bỏ qua theo quyết định owner 04/11 |
 
 ## AC-02 — Lab owner ngày 05/11/2026
 
@@ -74,13 +74,26 @@ system_nodes); state cuối 0 resource. Khớp với "9 add" và "9 destroyed; s
 | 5. Phân biệt lỗi Terraform, lỗi AWS authorization, node không join | Chưa có |
 | 6. Inventory nào bắt buộc trước khi tuyên bố teardown xong | Chưa có lời giải thích (đã thực hành ở window 04/11) |
 
+### Teach-back bằng lời owner (chat, 05/11/2026)
+
+Owner tự gõ câu trả lời cho phần còn thiếu, Claude chỉ đặt câu hỏi. Tóm tắt sát ý owner:
+
+| Câu | Owner trả lời | Đánh giá của Claude |
+|---|---|---|
+| 1. State | State lưu trạng thái và ID, Terraform so code với nó; lộ state thì người khác biết account ID, ARN, endpoint cluster, CA cert, cả bản đồ hệ thống | Đúng phần lộ. **Thiếu**: mất state thì Terraform không còn biết resource thật, sẽ tạo trùng và bỏ lại orphan; state có thể chứa secret dạng plaintext. (CA cert không phải bí mật, endpoint và ARN mới đáng lo) |
+| 4. Bỏ NAT | NAT ≈ 0,045 USD/giờ (> 30 USD/tháng) cộng phí theo GB, so với trần 100 USD. Bù bằng node ở subnet public có IPv4, ra Internet qua IGW miễn phí; không ingress, không 0.0.0.0/0, không SSH; IMDSv2 hop 1; S3 gateway endpoint; DB subnet private không có đường ra. Trade-off: an ninh dựa vào SG thay vì NAT, hợp PoC chứ không hợp production | Đúng và đủ. **Sửa nhỏ**: S3 gateway endpoint chỉ chở các layer image của ECR (nằm trên S3); lệnh gọi ECR API vẫn đi qua IGW vì không có interface endpoint |
+| 5. Phân biệt lỗi | Lỗi Terraform xảy ra trước khi gọi AWS (reference sai, validation biến, lock state), thấy qua validate/plan/check.sh. AWS từ chối: AccessDenied, "not authorized to perform", thấy trong output apply, CloudTrail, iam_check.sh. Node không join: apply xong nhưng `kubectl get nodes` trống hoặc NotReady, node group CREATE_FAILED hoặc health có NodeCreationFailure, xem qua kubectl và `aws eks describe-nodegroup` | Đúng, có cả dấu hiệu lẫn nơi xem |
+| 3b. NOOP không chứng minh gì | NOOP chỉ chứng minh code khớp state; không chứng minh resource thật chạy đúng (node Ready, app chạy), không chứng minh không có gì ngoài state: thứ tạo tay, thứ bị sót, thứ controller tạo (ENI, load balancer, EBS) | Đúng, có ý tốt về resource do controller tạo |
+| 6. Inventory trước khi tuyên bố teardown | `terraform state list | wc -l` = 0; `inventory.sh` CLEAN (mọi loại = 0, chỉ còn state bucket); chạy inventory lần nữa sau khi API cập nhật; xem Billing hôm sau | Đúng, khớp COST_PLAN §11.2 bước 8 |
+
 Kết luận AC-02: **PRACTICED đạt** (lab local có đoán trước + window L3 thật).
-**EXPLAINED đạt một phần**: dependency, idempotency, update vs replace. Còn thiếu câu 1, 4, 5, 6 và
-nửa sau câu 3. Owner giữ quyền nghiệm thu cuối.
+**EXPLAINED đạt** cho cả 6 câu SPEC §7, với 2 lỗ hổng nhỏ đã ghi (mất state / secret trong state;
+phạm vi của S3 gateway endpoint với ECR). Đã cập nhật `.agent/learning/CURRENT_STATUS.md` và
+`LEARNING_LOG.md`. Người đánh giá là Claude (implementer); owner giữ quyền nghiệm thu cuối.
 
 ## Kết luận
 
 - DRF-13 AC-01 (evidence đủ mapping tới SPEC): **đạt**, với 3 lưu ý: runbook lệch tên, re-plan dùng disposition thay vì plan cùng config, R1 hoãn.
-- DRF-13 AC-02 (owner explain): **đạt một phần**, xem mục trên. Claude không được viết thay phần còn thiếu.
+- DRF-13 AC-02 (owner explain): **đạt** (PRACTICED + EXPLAINED), có 2 lỗ hổng nhỏ ghi ở trên.
 - DRF-13 AC-03 (review độc lập): **chưa có**.
 - DRF-13 AC-04 (SPEC-P3): chưa được làm, vì gate P2 chưa đạt.

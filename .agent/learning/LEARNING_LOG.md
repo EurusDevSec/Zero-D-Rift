@@ -229,3 +229,39 @@ Status meanings:
   NetworkPolicy/RBAC suite or AWS reconciliation evidence exists. These gaps move
   to the bounded P2-P5 micro-labs and must not be described as mastered.
 - Status: EXPLAINED
+
+### 2026-11-05 — P2 Terraform lab, L3 window and teach-back (DRF-13 AC-02)
+
+- Phase/task: P2 / Task 9
+- Learning objective: Predict and explain the project Terraform state, dependency,
+  plan-change and teardown flow (SPEC-P2 §3, §7).
+- Source(s) consulted: SPEC-P2, ADR-0006, ADR-0007, COST_PLAN §11, P2 runbooks.
+- Prediction before lab: Owner predicted 9 adds with VPC first, parallel subnets and
+  endpoint, cluster group last, NOOP on re-plan, update (not replace) for a version
+  change, and replacement of EKS/OIDC/node on a cluster rename.
+- Micro-lab/change performed: Local `terraform_data` lab
+  `playground/runs/TF-T01-20261030-01` on 05/11 (plan 9, apply, NOOP, version change,
+  rename, destroy to state 0). Earlier: L3 window P2-L3-20261104-01 on AWS (apply 51,
+  smoke 33/33, admin removal, destroy 50) with owner approval, MFA and merges.
+- Expected vs actual: All predictions matched (version change 0/2/0; rename 3/6/3).
+  The reason for VPC-first was corrected from "first in the file" to "referenced by
+  others". `-/+` (replace) was new.
+- Evidence path: `docs/evidence/p2/DRF13_P2_ACCEPTANCE_AUDIT_20261104.md`,
+  `docs/evidence/p2/DRF11_L3_RUN_20261104.md`.
+- Explain in my own words: State maps code to real IDs; a leak exposes account ID,
+  ARNs, endpoint and the system map. NAT is removed for cost (≈ 0.045 USD/h plus
+  per-GB, against a 100 USD cap); compensated by public-subnet nodes through a free
+  IGW, no inbound/SSH, IMDSv2 hop 1, S3 gateway endpoint, private DB subnets; a PoC,
+  not production, trade-off. Terraform errors appear before AWS calls (reference,
+  variable validation, lock); authorization errors read AccessDenied/not authorized;
+  a node that cannot join shows empty/NotReady nodes or a failed node group health.
+  NOOP proves code matches state, not that resources work or that nothing exists
+  outside state; teardown needs state 0, inventory CLEAN, a delayed inventory and
+  next-day billing.
+- Failure I can now diagnose: Localize a bootstrap failure to Terraform, AWS IAM or
+  EKS node join; recognize resources created outside state.
+- Remaining gap: Losing state (Terraform would try to recreate and orphan real
+  resources) and plaintext secrets in state were not mentioned. The S3 gateway
+  endpoint only carries ECR image layers; ECR API calls still use the Internet path
+  because there are no interface endpoints.
+- Status: PRACTICED + EXPLAINED (project Terraform/state/dependency/teardown)
