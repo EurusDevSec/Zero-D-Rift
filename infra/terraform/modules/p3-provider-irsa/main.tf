@@ -25,10 +25,12 @@ locals {
     }]
   }
 
-  # Bucket-level actions only, on bucket ARNs with the approved prefix. There is
-  # no object ARN (bucket/*), so object actions (GetObject, PutObject) never match.
-  # s3:Get*/s3:List* cover the many bucket sub-resources the provider reads on
-  # every refresh (ACL, CORS, website, versioning, lifecycle, logging, ...).
+  # Bucket-level actions only. The resource arn:aws:s3:::<prefix>* ALSO matches
+  # object ARNs (<bucket>/<key>), because * crosses "/" (found by the IAM
+  # simulation on 05/11: s3:Get* allowed GetObject). So no s3:Get*/s3:List*:
+  # s3:GetBucket* names only bucket sub-resources (ACL, CORS, website,
+  # versioning, logging, tagging, policy, location, ...); the few bucket reads
+  # that do not start with GetBucket are listed one by one.
   permissions_policy = {
     Version = "2012-10-17"
     Statement = [{
@@ -37,9 +39,13 @@ locals {
       Action = [
         "s3:CreateBucket",
         "s3:DeleteBucket",
+        "s3:ListBucket",
         "s3:PutBucketTagging",
-        "s3:Get*",
-        "s3:List*",
+        "s3:GetBucket*",
+        "s3:GetAccelerateConfiguration",
+        "s3:GetEncryptionConfiguration",
+        "s3:GetLifecycleConfiguration",
+        "s3:GetReplicationConfiguration",
       ]
       Resource = ["arn:aws:s3:::${var.bucket_prefix}*"]
     }]

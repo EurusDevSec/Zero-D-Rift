@@ -60,9 +60,9 @@ run "window_role_trusts_one_service_account" {
   assert {
     condition = alltrue([
       for s in module.p3_provider_irsa[0].permissions_policy.Statement :
-      alltrue([for a in s.Action : startswith(a, "s3:") && a != "s3:*"])
+      alltrue([for a in s.Action : startswith(a, "s3:") && (!strcontains(a, "*") || a == "s3:GetBucket*")])
     ])
-    error_message = "Only S3 actions, never s3:* and never IAM."
+    error_message = "Only S3 actions, never IAM; the only action wildcard is s3:GetBucket* (the resource also matches objects)."
   }
 }
 

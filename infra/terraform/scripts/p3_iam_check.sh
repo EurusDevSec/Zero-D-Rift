@@ -26,6 +26,19 @@ if [[ "$src" != "--principal" ]]; then
     bad="$(jq '[.[] | select(. == "ERROR" or . == "SECURITY_WARNING")] | length' <<< "$findings")"
     [[ "$bad" == 0 ]] && pass "Access Analyzer: 0 ERROR/SECURITY_WARNING ($(jq -r 'group_by(.) | map("\(.[0])=\(length)") | join(" ") | if . == "" then "no findings" else . end' <<< "$findings"))" \
         || fail "Access Analyzer: $(jq -c . <<< "$findings")"
+else
+    # Live trust document (unknown at plan time, see plan_assert check 13): one
+    # web identity statement from THIS cluster's OIDC issuer, exact sub and aud.
+    issuer="$(aws eks describe-cluster --name "${CLUSTER_NAME:-zero-drift}" --query 'cluster.identity.oidc.issuer' --output text | sed 's#^https://##')"
+    trust="$(aws iam get-role --role-name "$role" --query 'Role.AssumeRolePolicyDocument' --output json)"
+    tr_ok="$(jq -r --arg i "$issuer" '[(.Statement | length == 1),
+        (.Statement[0] | .Effect == "Allow" and .Action == "sts:AssumeRoleWithWebIdentity"
+            and (.Principal.Federated | endswith(":oidc-provider/" + $i))
+            and (.Condition.StringEquals[$i + ":sub"] == "system:serviceaccount:crossplane-system:provider-aws-s3")
+            and (.Condition.StringEquals[$i + ":aud"] == "sts.amazonaws.com")
+            and (.Condition.StringEquals | length == 2))] | all' <<< "$trust" 2>/dev/null || echo false)"
+    [[ "$tr_ok" == true ]] && pass "live trust: this cluster's OIDC, sub provider-aws-s3, aud sts only" || fail "live trust policy is not the approved shape"
+    unset issuer trust
 fi
 
 # expect | action | resource
