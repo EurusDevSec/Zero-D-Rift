@@ -5,7 +5,7 @@ Runbook của P3 (SPEC-P3). Mỗi task thêm phần của mình:
 | Phần | Task | Trạng thái |
 |---|---|---|
 | A. IRSA role cho provider (Terraform) | DRF-36 (T4) | Viết 05/11, phần không cần AWS đã chạy |
-| B. GitOps: Argo CD sync `gitops/platform` và `gitops/requests` | DRF-35 (T3) | Xem PR của DRF-35 |
+| B. GitOps: Argo CD sync `gitops/platform` và `gitops/requests` | DRF-35 (T3) | Viết 05/11; đã tập trên kind (không AWS), trừ root app |
 | C. Window L3: tạo, kiểm, test âm, test xóa, dọn | DRF-37 (T5) | Chưa viết; cần owner duyệt window riêng |
 
 Runbook nền:
@@ -126,3 +126,153 @@ Nếu quên cờ này, plan sẽ xóa luôn role. Khi đó provider mất quyề
 
 - Role P3 nằm ngoài phạm vi policy R1 (`infra/iam/zero-drift-terraform-policy.json` chỉ cho phép role `zero-drift-cluster-*` và `zero-drift-system-node-*`, và không có `iam:PutRolePolicy`). Hiện tại Terraform dùng AdministratorAccess (R1 hoãn tới DRF-27/29), nên window không bị chặn. Khi làm lại R1 thì phải thêm role `zero-drift-p3-*` và `PutRolePolicy`/`GetRolePolicy`.
 - `s3:Get*` và `s3:List*` là wildcard ở **action**, không phải ở resource: provider đọc rất nhiều thuộc tính con của bucket mỗi lần refresh. Resource chỉ gồm ARN bucket có prefix, nên các action trên object không bao giờ khớp.
+
+---
+
+## B. GitOps: Argo CD dựng control plane từ Git (DRF-35)
+
+### Bố cục
+
+```
+gitops/bootstrap/root-app.yaml     ← áp tay 1 lần (app of apps)
+gitops/platform/apps/              ← các Application, chạy theo sync-wave
+  00-crossplane   (Helm 2.4.3, image @sha256)        wave 0
+  10-providers    (family + s3 @sha256, DRC)         wave 1
+  20-providerconfig (ClusterProviderConfig IRSA)     wave 2
+  30-kro          (Helm OCI 0.9.4, aggregation)      wave 3
+  35-kro-rbac     (ClusterRole aggregate)            wave 3
+  40-rgd          (StorageAppSpike)                  wave 4
+  90-requests     (gitops/requests, PRUNE)           wave 9
+gitops/requests/storage-app-spike-valid.yaml        ← bucket zero-drift-p3-spike-…
+gitops/requests/disabled/…-negative.yaml            ← KHÔNG sync (app không recurse)
+```
+
+Chính sách sync:
+- App platform: `selfHeal: true`, `prune: false`. Đổi Git **không bao giờ** gỡ controller.
+- App requests: `prune` + `selfHeal` + `allowEmpty`. Xóa file trong Git thì instance, rồi bucket, bị xóa theo.
+
+### B0. Kiểm tĩnh (không cần cluster)
+
+```bash
+cd /r/_Projects/Eurus_Workspace/Zero-D-Rift
+./gitops/check.sh
+```
+
+**Phải thấy:** `RESULT: PASS`, gồm:
+- 28 dòng PASS;
+- không có Secret, không có account ID;
+- mọi image và package đều có `@sha256`;
+- provider đúng allowlist;
+- chart pin đúng version;
+- chính sách sync đúng;
+- bucket nằm trong prefix;
+- RGD có `readyWhen`.
+
+### B1. Tập trên kind trước (không AWS, khoảng 15 phút)
+
+Làm bước 0–2 của [P3_L2_KIND_LAB](P3_L2_KIND_LAB.md): tạo cluster và cài Argo CD. **Không** cài Crossplane hay kro bằng tay; Argo sẽ cài. Sau đó:
+
+```bash
+REV=main      # hoặc tên nhánh đang sửa
+for f in gitops/platform/apps/*.yaml; do sed "s|targetRevision: main|targetRevision: $REV|" "$f" | kubectl apply -f -; done
+kubectl -n argocd get app -w            # đợi 7 app Synced  Healthy (khoảng 2–4 phút)
+kubectl get rgd                         # storage-app-spike  Active
+kubectl -n zdr-requests get storageappspike,deploy,bucket.s3.aws.m.upbound.io
+```
+
+**Phải thấy:**
+- 7 app `Synced Healthy`;
+- instance `spike` ở `IN_PROGRESS`;
+- Bucket `SYNCED=False … IAM Roles for Service Accounts …`: kind không có IRSA;
+- **chưa có Deployment**, vì Deployment phụ thuộc vào bucket nên kro chờ bucket trước.
+
+Đây là Synced ≠ Ready: Argo báo xanh hết, nhưng request chưa xong.
+
+> Ở đây áp từng app con, **không** dùng root app, vì `sed` chỉ đổi được revision của file trên máy. Root app đọc file app con từ Git, mà trong Git chúng trỏ `main`.
+
+**Tự thử:**
+1. Trong `gitops/platform/rgd/storage-app-spike.yaml`, đổi readyWhen của `app` thành `== schema.spec.replicas`, push lên nhánh, rồi refresh:
+
+   ```bash
+   kubectl -n argocd annotate app zdr-rgd argocd.argoproj.io/refresh=hard --overwrite
+   ```
+
+   **Phải thấy:** `kubectl get rgd` báo `Inactive … references unknown identifiers: [schema]`, trong khi Argo vẫn báo `zdr-rgd` Synced/Healthy.
+2. Chạy `kubectl explain storageappspike.spec`: đây là API mới mà kro vừa sinh ra.
+
+Dọn: `kind delete cluster --name zdr-p3-lab`.
+
+### B2. Trong window: cài Argo CD và bật root app (cần kubeconfig EKS và admin trong window)
+
+Cài Argo CD giống bước 2 của P3_L2_KIND_LAB (kiểm sha256, apply `--server-side`). Sau đó:
+
+```bash
+kubectl apply -f gitops/bootstrap/root-app.yaml
+kubectl -n argocd get app -w          # 8 app (root + 7) → Synced Healthy
+kubectl get providers.pkg.crossplane.io
+kubectl -n crossplane-system get sa provider-aws-s3
+```
+
+### B3. Gắn IRSA cho provider (ROLE_ARN lấy ở A2, không echo)
+
+```bash
+kubectl patch deploymentruntimeconfig provider-aws-s3 --type merge \
+  -p "{\"spec\":{\"serviceAccountTemplate\":{\"metadata\":{\"annotations\":{\"eks.amazonaws.com/role-arn\":\"$ROLE_ARN\"}}}}}"
+unset ROLE_ARN
+# Pod phải tạo lại thì webhook EKS mới gắn token IRSA:
+kubectl -n crossplane-system delete $(kubectl -n crossplane-system get pods -o name | grep provider-aws-s3)
+kubectl -n crossplane-system get pods -o json | jq '[.items[] | select(.metadata.name | startswith("provider-aws-s3")) | .spec.containers[0].env[]?.name] | index("AWS_ROLE_ARN") != null'
+kubectl -n argocd get app zdr-providers     # vẫn Synced: Argo bỏ qua annotation này
+```
+
+**Phải thấy:** jq in `true`, và `zdr-providers` vẫn `Synced`.
+
+Trên kind đã kiểm (với ARN giả có account `000000000000`):
+- SA nhận annotation sau khoảng 5 giây;
+- ép sync lại thì annotation vẫn còn;
+- app vẫn Synced.
+
+### B4. Test âm và test xóa: đổi qua Git (PR, rồi owner merge)
+
+| Test | Thay đổi trong Git | Phải thấy |
+|---|---|---|
+| Âm | `git mv gitops/requests/disabled/storage-app-spike-negative.yaml gitops/requests/` | Trong tối đa 10 phút: Bucket báo `AccessDenied`, instance không Ready, Argo vẫn Synced. Sau đó `git mv` trả file về `disabled/` |
+| Xóa | `git rm gitops/requests/storage-app-spike-valid.yaml` | Argo prune instance, kro xóa Deployment và Bucket MR, Crossplane xóa bucket AWS (policy mặc định `*`). Kiểm: `aws s3api head-bucket --bucket zero-drift-p3-spike-d4163e` phải báo `404`/`Not Found` |
+
+Đã tập prune trên kind bằng một nhánh tạm không có file valid:
+- instance mất sau khoảng 5 giây;
+- Bucket MR mất, không bị kẹt finalizer;
+- app vẫn `Synced/Healthy` dù thư mục rỗng (`allowEmpty`).
+
+Bucket trong lần tập đó **chưa từng được tạo trên AWS**, nên đường xóa bucket thật chỉ được chứng minh ở L3.
+
+### B5. Teardown platform (theo thứ tự)
+
+Điều kiện trước: không còn instance, không còn MR, và `head-bucket` báo không còn bucket P3 nào.
+
+```bash
+kubectl get managed -A                          # phải: No resources found
+# 1. Dừng ROOT trước: nếu không, selfHeal của root sẽ trả "automated" lại cho app con
+kubectl -n argocd patch app zdr-root --type json -p '[{"op":"remove","path":"/spec/syncPolicy/automated"}]'
+# 2. App con, ngược thứ tự wave: dừng sync, gắn finalizer cascade, xóa
+for a in zdr-requests zdr-rgd zdr-kro-rbac zdr-kro zdr-providerconfig zdr-providers zdr-crossplane; do
+  kubectl -n argocd patch app $a --type json -p '[{"op":"remove","path":"/spec/syncPolicy/automated"}]'
+  kubectl -n argocd patch app $a --type merge -p '{"metadata":{"finalizers":["resources-finalizer.argocd.argoproj.io"]}}'
+  kubectl -n argocd delete app $a --timeout=180s
+done
+kubectl -n argocd delete app zdr-root
+kubectl get providers.pkg.crossplane.io; kubectl get pods -A | grep -E 'crossplane|provider|kro'   # không còn gì
+```
+
+Sau đó xóa Argo CD (`kubectl delete -n argocd -f <manifest đã pin>`), gỡ admin, rồi `terraform destroy` (P2_L3_WINDOW).
+
+Đã tập trên kind (bỏ bước root):
+- 7 app bị xóa trong khoảng 30 giây; provider mất khoảng 20 giây;
+- không còn pod controller;
+- **còn 24 CRD** (21 core Crossplane, 3 kro), vì Helm không xóa CRD. Trên EKS, các CRD này đi cùng `terraform destroy`.
+
+### B6. Undo
+
+- Bỏ một request: xóa file trong `gitops/requests/` qua PR. App requests sẽ prune.
+- Bỏ cả platform: làm B5.
+- Bỏ phần IRSA: gỡ annotation khỏi DRC bằng `kubectl patch … --type json -p '[{"op":"remove","path":"/spec/serviceAccountTemplate/metadata/annotations"}]'`, rồi xóa pod provider.
