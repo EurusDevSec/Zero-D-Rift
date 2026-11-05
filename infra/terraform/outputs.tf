@@ -58,3 +58,11 @@ output "access_entry_keys" {
   description = "Access entries managed by Terraform."
   value       = module.cluster.access_entry_keys
 }
+
+output "p3_provider_role" {
+  description = "P3 provider IRSA role name and trusted subject, or null when disabled (no ARN: it holds the account ID)."
+  value = var.enable_p3_provider_role ? {
+    name    = module.p3_provider_irsa[0].role_name
+    subject = module.p3_provider_irsa[0].trust_subject
+  } : null
+}

@@ -23,9 +23,12 @@ and static checks. DRF-8 added the network module and DRF-9 the EKS module (50 r
 | `tests/network.tftest.hcl` | Network contract tests (no NAT, subnet/route-table counts, Gateway endpoint) |
 | `modules/cluster/` | EKS 21.26.0: 1.35 standard support, API auth, bootstrap access entry, pinned add-ons and AL2023 AMI, IMDSv2 |
 | `tests/cluster.tftest.hcl` | EKS contract tests (admin only in window, bounded endpoint, pins, node limits) |
+| `modules/p3-provider-irsa/` | DRF-36: Crossplane provider-aws-s3 IRSA role, trust = one ServiceAccount, S3 bucket actions on `zero-drift-p3-*` only; created only when `enable_p3_provider_role = true` |
+| `tests/p3_irsa.tftest.hcl` | P3 IRSA contract tests (off by default, exact sub/aud, prefix-only resource, name/prefix validation) |
 | `tests/mocks/` | Shared mock values (fake account `000000000000`) so tests run without AWS |
 | `scripts/check.sh` | Static gate: CLI pin, fmt, validate, tests, lockfile, module pins, Git leaks, secrets |
-| `scripts/plan_assert.sh` | Plan gate on a saved plan (26 checks): network, EKS, nodes, add-ons, access entry, IAM scope, tags; `ADMIN_WINDOW=1` for a window plan |
+| `scripts/plan_assert.sh` | Plan gate on a saved plan: network, EKS, nodes, add-ons, access entry, IAM scope, tags, P3 role (check 13); `ADMIN_WINDOW=1` for a window plan, `P3_WINDOW=1` when the P3 role is enabled |
+| `scripts/p3_iam_check.sh` | Read-only P3 role check: Access Analyzer + IAM simulation (P3 buckets allowed, everything else denied), from a saved plan or the live role |
 | `scripts/plan_fingerprint.sh` | File hash and value-free shape hash of a saved plan; the L3 window must reproduce the approved shape hash |
 | `scripts/iam_check.sh` | Read-only R1 check: Access Analyzer + IAM simulation of `infra/iam/zero-drift-terraform-policy.json` (or the live role with `--principal`) |
 | `scripts/smoke.sh` | L3 runtime smoke test (DRF-11 AC-03): control plane, OIDC, add-ons, nodes, IMDS, SGs, S3 endpoint route, DNS; read-only on AWS, two short-lived probe Pods |
