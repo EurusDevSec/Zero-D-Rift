@@ -1,0 +1,39 @@
+# Wave 3: kro 0.9.4 from the OCI chart, rbac.mode=aggregation; image pinned by
+# digest through the tag value (the chart renders repository:tag).
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: zdr-kro
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "3"
+spec:
+  project: default
+  source:
+    repoURL: registry.k8s.io/kro/charts
+    chart: kro
+    targetRevision: 0.9.4
+    helm:
+      releaseName: kro
+      valuesObject:
+        rbac:
+          mode: aggregation
+        image:
+          repository: registry.k8s.io/kro/kro
+          tag: v0.9.4@sha256:eaf9fbaddd9d7f6cf400a8d47ab066b14cbef22b92a79be7bbdc7b3673376fb9
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: kro-system
+  syncPolicy:
+    automated:
+      prune: false
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
+    retry:
+      limit: 10
+      backoff:
+        duration: 15s
+        factor: 2
+        maxDuration: 3m

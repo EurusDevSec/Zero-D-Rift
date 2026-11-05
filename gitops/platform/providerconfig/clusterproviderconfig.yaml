@@ -1,0 +1,10 @@
+# P3 (DRF-35). Managed resources use ClusterProviderConfig "default" unless they
+# say otherwise. Credentials come from IRSA: the provider Pod's ServiceAccount
+# token is exchanged for the zero-drift-p3-crossplane-s3 role (DRF-36). No Secret.
+apiVersion: aws.m.upbound.io/v1beta1
+kind: ClusterProviderConfig
+metadata:
+  name: default
+spec:
+  credentials:
+    source: IRSA

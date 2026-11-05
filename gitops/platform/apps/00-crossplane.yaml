@@ -1,0 +1,37 @@
+# Wave 0: Crossplane core, chart 2.4.3; the image is pinned by digest
+# (ignoreTag + repository@sha256), same digest as VERSION_MATRIX §7.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: zdr-crossplane
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+spec:
+  project: default
+  source:
+    repoURL: https://charts.crossplane.io/stable
+    chart: crossplane
+    targetRevision: 2.4.3
+    helm:
+      releaseName: crossplane
+      valuesObject:
+        image:
+          repository: xpkg.crossplane.io/crossplane/crossplane@sha256:1c66261d805a73cade46e2ac94b665c73aebd4a00844de5fcae4bcadaa2be638
+          ignoreTag: true
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: crossplane-system
+  syncPolicy:
+    automated:
+      prune: false
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
+    retry:
+      limit: 10
+      backoff:
+        duration: 15s
+        factor: 2
+        maxDuration: 3m

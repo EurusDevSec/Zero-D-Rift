@@ -1,0 +1,73 @@
+# P3 (DRF-35, SPEC-P3 D5/D6). One StorageAppSpike = one Deployment + one S3 bucket.
+# - Bucket: s3.aws.m.upbound.io/v1beta1 (namespaced, provider v2.8.1). No
+#   managementPolicies field = default "*": deleting the instance deletes the
+#   AWS bucket (D6). The IAM role only allows names starting zero-drift-p3-.
+# - Ready only when the bucket is Ready (Crossplane) AND the Deployment is
+#   available: without readyWhen kro reports Ready as soon as objects exist
+#   (DRF-39 E4).
+apiVersion: kro.run/v1alpha1
+kind: ResourceGraphDefinition
+metadata:
+  name: storage-app-spike
+spec:
+  schema:
+    apiVersion: v1alpha1
+    kind: StorageAppSpike
+    spec:
+      bucketName: string
+      runId: string
+      expiresAt: string
+      region: string | default="us-east-1"
+      replicas: integer | default=1
+    status:
+      availableReplicas: ${app.status.availableReplicas}
+      bucketArn: ${bucket.status.?atProvider.?arn.orValue("")}
+  resources:
+    - id: bucket
+      readyWhen:
+        - ${bucket.status.?conditions.orValue([]).exists(c, c.type == "Ready" && c.status == "True")}
+      template:
+        apiVersion: s3.aws.m.upbound.io/v1beta1
+        kind: Bucket
+        metadata:
+          name: ${schema.spec.bucketName}
+          namespace: ${schema.metadata.namespace}
+        spec:
+          forProvider:
+            region: ${schema.spec.region}
+            tags:
+              Project: Zero-D-Rift
+              Owner: HoangLV
+              Environment: PoC
+              ManagedBy: Crossplane
+              RunId: ${schema.spec.runId}
+              ExpiresAt: ${schema.spec.expiresAt}
+    - id: app
+      readyWhen:
+        - ${app.status.?availableReplicas.orValue(0) == schema.spec.replicas}
+      template:
+        apiVersion: apps/v1
+        kind: Deployment
+        metadata:
+          name: ${schema.metadata.name}-app
+          namespace: ${schema.metadata.namespace}
+        spec:
+          replicas: ${schema.spec.replicas}
+          selector:
+            matchLabels:
+              app: ${schema.metadata.name}
+          template:
+            metadata:
+              labels:
+                app: ${schema.metadata.name}
+            spec:
+              containers:
+                - name: pause
+                  image: registry.k8s.io/pause:3.10@sha256:ee6521f290b2168b6e0935a181d4cff9be1ac3f505666ef0e3c98fae8199917a
+                  env:
+                    # Graph edge: the Deployment waits for the bucket to exist.
+                    - name: BUCKET_NAME
+                      value: ${bucket.metadata.name}
+                  resources:
+                    requests: {cpu: 10m, memory: 16Mi}
+                    limits: {memory: 32Mi}

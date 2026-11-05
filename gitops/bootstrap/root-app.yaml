@@ -1,0 +1,22 @@
+# P3 (SPEC-P3 Task 3, DRF-35). The only object applied by hand; Argo CD then
+# creates every Application in gitops/platform/apps (app of apps).
+# Platform policy: selfHeal on, prune OFF: a Git change never removes a
+# controller; controllers go only through the teardown in Task 5.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: zdr-root
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/EurusDevSec/Zero-D-Rift.git
+    targetRevision: main
+    path: gitops/platform/apps
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argocd
+  syncPolicy:
+    automated:
+      prune: false
+      selfHeal: true

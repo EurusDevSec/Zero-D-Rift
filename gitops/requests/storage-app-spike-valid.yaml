@@ -1,0 +1,12 @@
+# P3 (DRF-35) valid request: bucket name inside the IAM prefix zero-drift-p3-.
+# Bucket names are global; the random suffix avoids clashing with other accounts.
+# runId/expiresAt are tags only; set them to the window values before the L3 run.
+apiVersion: kro.run/v1alpha1
+kind: StorageAppSpike
+metadata:
+  name: spike
+  namespace: zdr-requests
+spec:
+  bucketName: zero-drift-p3-spike-d4163e
+  runId: P3-L3-YYYYMMDD-01
+  expiresAt: "2026-11-06T00:00:00Z"
