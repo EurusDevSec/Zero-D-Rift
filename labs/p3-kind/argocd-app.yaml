@@ -1,0 +1,22 @@
+# P3 kind lab (DRF-39) E1/E2: Argo CD syncs gitops/lab from Git.
+# selfHeal starts false; E2 turns it on with kubectl patch.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: zdr-lab
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/EurusDevSec/Zero-D-Rift.git
+    targetRevision: main
+    path: gitops/lab
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: zdr-lab
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: false
+    syncOptions:
+      - CreateNamespace=true

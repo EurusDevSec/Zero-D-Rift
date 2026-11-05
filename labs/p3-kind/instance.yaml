@@ -1,0 +1,13 @@
+# P3 kind lab (DRF-39) E4: one request = one ZdrRequest object.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: zdr-e4
+---
+apiVersion: kro.run/v1alpha1
+kind: ZdrRequest
+metadata:
+  name: demo
+  namespace: zdr-e4
+spec:
+  bucketName: zero-drift-p3-lab-e4

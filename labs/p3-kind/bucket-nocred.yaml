@@ -1,0 +1,17 @@
+# P3 kind lab (DRF-39) E3: a Bucket managed resource in a cluster with NO AWS
+# credentials and NO ClusterProviderConfig. Nothing can reach AWS.
+# managementPolicies omits Delete, so even with credentials it would orphan.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: zdr-e3
+---
+apiVersion: s3.aws.m.upbound.io/v1beta1
+kind: Bucket
+metadata:
+  name: zero-drift-p3-lab-e3
+  namespace: zdr-e3
+spec:
+  managementPolicies: ["Observe", "Create", "Update", "LateInitialize"]
+  forProvider:
+    region: us-east-1

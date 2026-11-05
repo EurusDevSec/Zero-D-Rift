@@ -97,9 +97,11 @@ Trước khi đổi status sang `ACCEPTED`:
 
 1. [x] Owner giải thích được hai điều kind kiểm tra được và hai điều bắt buộc kiểm
    tra lại trên EKS.
-2. kind tạo cluster bằng image/digest đã pin.
-3. Observed Kubernetes version là 1.35.x.
-4. L2 task lưu run ID/log và cleanup cluster theo documented procedure.
+2. [x] kind tạo cluster bằng image/digest đã pin (DRF-39, 05/11/2026).
+3. [x] Observed Kubernetes version là 1.35.x (`v1.35.8`).
+4. [x] L2 task lưu run ID/log và cleanup cluster theo documented procedure
+   (`docs/evidence/p3/DRF14_L2_KIND_20261105.md`, `docs/runbooks/P3_L2_KIND_LAB.md`).
+   Chờ owner review để chuyển `ACCEPTED`.
 5. Nếu node image/digest thay đổi, `docs/VERSION_MATRIX.md` và ADR được review lại.
 
 # Revisit conditions
