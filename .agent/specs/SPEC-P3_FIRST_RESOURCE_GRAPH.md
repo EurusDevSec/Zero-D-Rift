@@ -229,9 +229,11 @@ prepared in parallel with Task 2.
       place until every MR is gone **and** `head-bucket` shows no P3 bucket in AWS:
       1. Remove all instances from Git; wait until instances, MRs and AWS buckets
          with the P3 prefix are gone.
-      2. Stop reconcile on each platform Application (remove
-         `spec.syncPolicy.automated`), then delete what it manages, in reverse
-         sync-wave order: RGD → kro → ProviderConfig → providers → Crossplane core.
+      2. Stop reconcile on the root app-of-apps first (DRF-35: its selfHeal would
+         otherwise restore `automated` on the children), then on each platform
+         Application (remove `spec.syncPolicy.automated`), then delete what it
+         manages, in reverse sync-wave order: RGD → kro → ProviderConfig →
+         providers → Crossplane core.
       3. Delete the Applications, then Argo CD itself (pinned install manifest).
       4. Admin removal → Terraform destroy (the IRSA role goes with it) →
          immediate inventory (plus S3 buckets with the P3 prefix = 0).

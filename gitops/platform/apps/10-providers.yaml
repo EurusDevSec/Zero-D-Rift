@@ -1,0 +1,40 @@
+# Wave 1: provider-family-aws + provider-aws-s3 v2.8.1 by digest, and the
+# DeploymentRuntimeConfig that fixes the ServiceAccount name for IRSA.
+# The IRSA role ARN annotation is added in the cluster at window time (it holds
+# the account ID, so it never goes into this public repo); ignoreDifferences +
+# RespectIgnoreDifferences keep selfHeal from removing it.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: zdr-providers
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/EurusDevSec/Zero-D-Rift.git
+    targetRevision: main
+    path: gitops/platform/providers
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: crossplane-system
+  ignoreDifferences:
+    - group: pkg.crossplane.io
+      kind: DeploymentRuntimeConfig
+      name: provider-aws-s3
+      jsonPointers:
+        - /spec/serviceAccountTemplate/metadata/annotations
+  syncPolicy:
+    automated:
+      prune: false
+      selfHeal: true
+    syncOptions:
+      - SkipDryRunOnMissingResource=true
+      - RespectIgnoreDifferences=true
+    retry:
+      limit: 10
+      backoff:
+        duration: 15s
+        factor: 2
+        maxDuration: 3m

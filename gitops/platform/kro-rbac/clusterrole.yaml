@@ -1,0 +1,19 @@
+# P3 (DRF-35). kro runs with rbac.mode=aggregation and only gets these extra
+# rights. DRF-39 showed both parts are required: the child kinds, and the kind
+# the RGD generates (without it the RGD stays Inactive: "cache sync timeout").
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: kro-zdr-p3-children
+  labels:
+    rbac.kro.run/aggregate-to-controller: "true"
+rules:
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: ["s3.aws.m.upbound.io"]
+    resources: ["buckets"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: ["kro.run"]
+    resources: ["storageappspikes", "storageappspikes/status"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]

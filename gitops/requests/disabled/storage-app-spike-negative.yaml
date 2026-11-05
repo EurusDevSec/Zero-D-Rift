@@ -1,0 +1,14 @@
+# P3 (DRF-35) NEGATIVE request, disabled: the requests Application does not
+# recurse, so this file is ignored here. Task 5 moves it to gitops/requests/ for
+# at most 10 minutes. Its bucket name is OUTSIDE the IAM prefix zero-drift-p3-,
+# so the expected result is AccessDenied on the Bucket and the instance never
+# Ready, while Argo CD still shows Synced.
+apiVersion: kro.run/v1alpha1
+kind: StorageAppSpike
+metadata:
+  name: spike-negative
+  namespace: zdr-requests
+spec:
+  bucketName: zdr-outside-p3-d4163e
+  runId: P3-L3-20261105-01
+  expiresAt: "2026-11-05T20:15:00Z"

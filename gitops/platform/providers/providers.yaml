@@ -1,0 +1,30 @@
+# P3 platform (DRF-35), same as the DRF-39 kind lab. Crossplane providers pinned by digest.
+# skipDependencyResolution: digest pins have no semver, so Crossplane cannot
+# resolve provider-aws-s3 -> provider-family-aws; we install the family explicitly.
+apiVersion: pkg.crossplane.io/v1beta1
+kind: DeploymentRuntimeConfig
+metadata:
+  name: provider-aws-s3
+spec:
+  # IRSA: the window adds metadata.annotations["eks.amazonaws.com/role-arn"] here
+  # with kubectl (runbook P3_RESOURCE_GRAPH part B); Argo ignores that field.
+  serviceAccountTemplate:
+    metadata:
+      name: provider-aws-s3
+---
+apiVersion: pkg.crossplane.io/v1
+kind: Provider
+metadata:
+  name: provider-family-aws
+spec:
+  package: xpkg.crossplane.io/crossplane-contrib/provider-family-aws@sha256:ea0d1ff932c78d5a6ef34d6ca1c83a5e6a304173b0735a05fee389f82db25f92
+---
+apiVersion: pkg.crossplane.io/v1
+kind: Provider
+metadata:
+  name: provider-aws-s3
+spec:
+  package: xpkg.crossplane.io/crossplane-contrib/provider-aws-s3@sha256:4e6277277e91672d4a8b444f98b22723b4ca984d2e5845042188f429807919bd
+  skipDependencyResolution: true
+  runtimeConfigRef:
+    name: provider-aws-s3

@@ -1,0 +1,37 @@
+# Wave 9: user requests. Unlike the platform apps this one PRUNES: removing an
+# instance from Git deletes it (and, through kro and Crossplane, its bucket).
+# allowEmpty lets the last instance be removed. Only files directly in
+# gitops/requests are synced; gitops/requests/disabled/ is ignored until a file
+# is moved up (negative test, Task 5).
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: zdr-requests
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "9"
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/EurusDevSec/Zero-D-Rift.git
+    targetRevision: main
+    path: gitops/requests
+    directory:
+      recurse: false
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: zdr-requests
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+      allowEmpty: true
+    syncOptions:
+      - CreateNamespace=true
+      - SkipDryRunOnMissingResource=true
+    retry:
+      limit: 10
+      backoff:
+        duration: 15s
+        factor: 2
+        maxDuration: 3m
