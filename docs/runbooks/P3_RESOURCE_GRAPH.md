@@ -315,10 +315,9 @@ Owner duyệt:      "Duyệt window P3-L3-20261105-01" (gõ trong chat)
 |---|---|---|---|
 | −30 | Chuẩn bị chỉ đọc | P2_L3_WINDOW C: `inventory.sh` (có thêm `p3_iam_roles`), kiểm IP, sửa `run_id`/`expires_at` trong `run.tfvars` | `RESULT: CLEAN`; IP khớp |
 | 0 | Plan + cổng kiểm | Runbook A1 (`-var bootstrap_cluster_admin=true -var enable_p3_provider_role=true`) | 53 to add; `plan_assert` PASS (dòng INFO về trust là bình thường ở plan đầu); shape hash **khớp** request; `p3_iam_check` PASS |
-| +25 | Trust thật | `./scripts/p3_iam_check.sh --principal` có dòng `live trust: this cluster's OIDC…` | PASS |
 | 0 | Apply | `terraform apply tfplan` (phiên MFA còn ≥ 40 phút) | Apply complete, khoảng 15–20 phút |
 | +20 | Smoke P2 | `./scripts/smoke.sh` | `RESULT: PASS` |
-| +25 | Role P3 sống | Runbook A2 (`p3_iam_check --principal`, lấy `ROLE_ARN`) | PASS |
+| +25 | Role P3 sống | Runbook A2 (`p3_iam_check --principal`, lấy `ROLE_ARN`) | PASS, có dòng `live trust: this cluster's OIDC…` |
 | +30 | Argo CD + root app | Runbook B2 | 8 app Synced/Healthy; 2 provider HEALTHY |
 | +40 | IRSA | Runbook B3 | Pod provider có `AWS_ROLE_ARN` |
 | +45 | Instance hợp lệ | Xem dưới (C2) | Instance `ACTIVE/Ready`; bucket có thật, đủ tag; Deployment 1/1 |
