@@ -1,7 +1,7 @@
 # DRF-13 — Đối chiếu evidence P2 với SPEC-P2 (04/11/2026)
 
-Người đối chiếu: Claude (implementer của DRF-9..12). **Đây không phải review độc lập**: AC-03 của DRF-13
-cần agent khác (Codex) hoặc người khác ghi candidate, findings và limits.
+Người đối chiếu: Claude (implementer của DRF-9..12), nên phần đối chiếu này không phải review độc lập.
+Review độc lập (AC-03) do Codex làm, xem mục AC-03.
 Candidate: `main` tại `c881fd0` (sau PR #17). Nguồn: `.agent/specs/SPEC-P2_REPRODUCIBLE_EKS_BOOTSTRAP.md` §1, §4, §5 Task 8–9, §8.
 
 ## §1 MUST deliverables
@@ -91,9 +91,25 @@ Kết luận AC-02: **PRACTICED đạt** (lab local có đoán trước + window
 phạm vi của S3 gateway endpoint với ECR). Đã cập nhật `.agent/learning/CURRENT_STATUS.md` và
 `LEARNING_LOG.md`. Người đánh giá là Claude (implementer); owner giữ quyền nghiệm thu cuối.
 
+## AC-03 — Review độc lập (Codex, 05/11/2026)
+
+Owner nhờ Codex review PR #18 và dán kết quả vào chat. Claude chỉ chép lại, không sửa nội dung.
+
+| Trường | Giá trị |
+|---|---|
+| Reviewer | Codex (agent khác Claude, không viết các file này) |
+| Candidate | base `c881fd0e307b7942d6c07f411e7096ae4f9cb1ce`, head `c00fe7386dd8b9eab9af6ad8bab39624202cd230` |
+| Verdict | **APPROVE** về nội dung tài liệu/evidence; không có finding cần sửa trong 4 file |
+| Đã đối chiếu | SPEC-P2 với evidence nguồn: create 51, smoke 33/33, gỡ admin + `Forbidden`, destroy 50, state 0, inventory trễ CLEAN đều nhất quán. Learning evidence đủ cho AC-02 ở mức đã ghi, không cần làm lại lab. Runbook tách file, re-plan dùng disposition, R1 hoãn: không phải blocker |
+| Kiểm chạy | `terraform fmt` và `git diff --check` đạt; scan mẫu nhạy cảm trên 4 file: 0 match |
+| Giới hạn | `terraform validate` và mock test không hoàn tất (provider plugin không phản hồi; 3 failed, 13 skipped trước khi tới assertion). GitNexus chưa index repo. Review dựa trên diff và nguồn, không chạy lại AWS. Codex không đăng review lên GitHub/Linear và không merge |
+| Còn lại theo reviewer | Billing gross thực tế cho DRF-12 (ước tính 0,12 USD không thay được billing), owner nghiệm thu, cập nhật checkpoint |
+
+Commit sau `c00fe73` chỉ ghi lại review này và số Billing, không đổi nội dung đã review.
+
 ## Kết luận
 
 - DRF-13 AC-01 (evidence đủ mapping tới SPEC): **đạt**, với 3 lưu ý: runbook lệch tên, re-plan dùng disposition thay vì plan cùng config, R1 hoãn.
 - DRF-13 AC-02 (owner explain): **đạt** (PRACTICED + EXPLAINED), có 2 lỗ hổng nhỏ ghi ở trên.
-- DRF-13 AC-03 (review độc lập): **chưa có**.
+- DRF-13 AC-03 (review độc lập): **đạt**: Codex APPROVE candidate `c00fe73`, giới hạn ghi ở trên.
 - DRF-13 AC-04 (SPEC-P3): chưa được làm, vì gate P2 chưa đạt.
