@@ -1,14 +1,14 @@
 ---
 project: Zero D-Rift
-status: P2_ACCEPTED_P3_SPEC_DRAFT
+status: P3_L3_DONE_CLOSEOUT_PENDING
 active_phase: P3
-active_task: P3-T1
-active_feature: SPEC-P3 owner review and decisions D1-D8
+active_task: P3-T6
+active_feature: DRF-38 evidence, independent review, owner teach-back
 active_spec: .agent/specs/SPEC-P3_FIRST_RESOURCE_GRAPH.md
 current_learning: .agent/learning/CURRENT_STATUS.md
 mode: Coach
 authority: NO_INSTALL_NO_AWS_APPLY_UNTIL_TASK_GATES
-last_reviewed: 2026-11-05
+last_reviewed: 2026-11-06
 ---
 
 # Active Context
@@ -18,39 +18,42 @@ Follow [context governance](../references/context-governance.md).
 
 ## Current verified state
 
-- P2 accepted 05/11/2026: L3 window P2-L3-20261104-01 (apply 51, smoke 33/33,
-  admin removal Forbidden, destroy 50, state 0), delayed inventory CLEAN,
-  billing ≈ 0.07 USD in us-east-1 month to date. Evidence in `docs/evidence/p2/`
-  (DRF11_L3_RUN, DRF12_CLEANUP, DRF13 audit). Codex reviewed DRF-13: APPROVE.
-- Learning: Terraform `PRACTICED` + `EXPLAINED`; Argo CD, Crossplane, kro
-  `Conceptual only`.
-- AWS now holds only the retain allowlist: Terraform state bucket (review 12/11),
-  role `zero-drift-bootstrap`, MFA device. No cluster.
-- R1 least privilege deferred by the owner (04/11); Terraform role is still
-  AdministratorAccess. Redo before DRF-27 (19/11) or at DRF-29.
-- Tools: Terraform 1.16.4, kubectl v1.35.10 (`/r/_Dev_tools/kubectl`, per-terminal
-  PATH), Helm v4.2.2, k3d v5.8.3, Docker client. kind not installed.
-- [Linear routing](../docs/LINEAR_DELIVERY.md): P3 = DRF-14 (contract) and DRF-15
-  (resource graph). Linear owns live status; repository owns scope and evidence.
+- P2 accepted 05/11/2026 (evidence `docs/evidence/p2/`).
+- P3 Tasks 1–5 done (DRF-34, DRF-39, DRF-35, DRF-36, DRF-37). L3 window
+  P3-L3-20261105-01 ran 15:41–16:45Z on 05/11: graph, negative IAM test and
+  delete-through-Git passed on EKS; one stop fixed once (S3 endpoint blocked
+  quay.io/registry.k8s.io layers, PR #27); destroy 52, inventory CLEAN.
+  Evidence `docs/evidence/p3/DRF37_L3_WINDOW_20261105.md`.
+- Closeout audit: `docs/evidence/p3/DRF38_P3_ACCEPTANCE_AUDIT_20261106.md`
+  (self-check by Claude, not independent review).
+- Learning: Terraform `PRACTICED` + `EXPLAINED`; Argo CD, Crossplane, kro still
+  `Conceptual only` until the owner's teach-back.
+- AWS holds only the retain allowlist: Terraform state bucket, role
+  `zero-drift-bootstrap`, MFA device. No cluster, no P3 role.
+- R1 least privilege deferred; it lacks the `zero-drift-p3-*` role and
+  `PutRolePolicy`. Redo before DRF-27 (19/11) or at DRF-29.
+- Tools: Terraform 1.16.4, kubectl v1.35.10 (`/r/_Dev_tools/kubectl`), kind
+  v0.33.0 (`/r/_Dev_tools/kind`), Helm v4.2.2.
+- [Linear routing](../docs/LINEAR_DELIVERY.md): P3 = DRF-14, DRF-15 and sub-issues.
 
 ## Open decisions and blockers
 
-1. SPEC-P3 §9 decisions D1–D8 and the P3 gross cap need owner approval.
-2. Schedule: ver3 §12 P3 window 03–05/11 is missed; SPEC-P3 proposes 05–08/11.
-   Rebaseline of P4+ is the owner's decision (ver3 §12.1).
-3. kind install (Task 2) and every AWS window need separate approval.
-4. Crossplane 2.4.0 + provider 2.7.0 pairing and kro 0.9.4 on 1.35 are UNVERIFIED.
+1. Delayed inventory (06/11, needs a fresh MFA session) and billing check (owner,
+   Billing console).
+2. Independent review by Codex: request in DRF-38 audit §4.
+3. Owner teach-back: `docs/runbooks/P3_TEACHBACK_LAB.md`, then 6 answers (SPEC §7).
+4. ADR-0005 still PROPOSED (owner review).
+5. Schedule: P3 slipped past 05/11; P4+ rebaseline is the owner's decision.
 
 ## Next safe action
 
-Owner reviews SPEC-P3 and decides D1–D8. Then Task 1 (release recheck, digests,
-CRD reading, sizing), then the Task 2 kind lab after install approval.
+Owner runs the teach-back lab on kind and answers SPEC-P3 §7; Codex reviews the
+candidate `c98b4a1`. Claude records both verbatim, then updates learning status.
 
 ## Context expansion
 
-Use SPEC-P3 §1, §5 and §9; ADR-0003 (ownership), ADR-0005 (kind), ADR-0006
-(network), ADR-0007 (identity/state); VERSION_MATRIX §2–3; P2 runbooks for the
-EKS window. Live Git overrides this file; preserve dirty work.
+Use SPEC-P3 §4, §7, §8; DRF37/DRF38 evidence; runbooks `P3_RESOURCE_GRAPH.md`
+(window, lessons C5) and `P3_TEACHBACK_LAB.md`. Live Git overrides this file.
 
 ## Checkpoint rule
 
