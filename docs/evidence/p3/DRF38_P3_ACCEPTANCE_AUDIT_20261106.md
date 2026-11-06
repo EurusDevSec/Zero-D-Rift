@@ -20,12 +20,12 @@ Revision ứng viên: `main` = `c98b4a1be2ea98e88128e09ca1b8348eb1bd3a17` (merge
 |---|---|
 | Các kịch bản §4 có evidence L3 trên EKS | **Đạt** (bảng trên) |
 | Teardown sạch | **Đạt**: inventory 05/11 16:45Z CLEAN |
-| Inventory trễ sạch | **Chưa**: cần chạy `inventory.sh` hôm nay (06/11) với phiên MFA mới |
+| Inventory trễ sạch | **Đạt** 06/11 04:01Z (khoảng 11 giờ sau destroy), phiên MFA mới của owner: `RESULT: CLEAN`, 25 kiểm OK (gồm `eks_clusters=0`, `vpc_endpoints_live=0`, `oidc_providers=0`, `p3_iam_roles=0`, `s3_buckets=1`); role `zero-drift-p3-crossplane-s3` không tồn tại; bucket `zero-drift-p3-*`/`zdr-outside*` = 0; `terraform state list` = 0 |
 | Đối chiếu billing | **Chưa**: owner xem Billing → Bills (us-east-1, theo dịch vụ). Ước tính ≈ 0,22 USD; trần 3 USD |
 | Review độc lập ghi findings và limits | **Chưa**: yêu cầu cho Codex ở mục 4 |
 | Owner đạt `PRACTICED` + `EXPLAINED` cho luồng Git → Argo CD → kro → Crossplane → AWS và semantics xóa | **Chưa**: owner chạy `docs/runbooks/P3_TEACHBACK_LAB.md` và trả lời 6 câu §7 bằng lời của mình |
 
-**Kết luận hiện tại: P3 chưa hoàn thành.** Phần kỹ thuật đã có evidence L3; còn 4 cổng do người khác làm (owner, Codex).
+**Kết luận hiện tại: P3 chưa hoàn thành.** Phần kỹ thuật đã có evidence L3 và inventory trễ sạch; còn 3 cổng do người khác làm: billing (owner), review (Codex), teach-back (owner).
 
 ## 3. Lỗi và sửa trong P3 (để reviewer soi)
 
