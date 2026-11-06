@@ -38,7 +38,7 @@ Follow [context governance](../references/context-governance.md).
 
 ## Open decisions and blockers
 
-1. Delayed inventory (06/11, needs a fresh MFA session) and billing check (owner,
+1. Delayed inventory CLEAN 06/11 04:01Z. Billing check still open (owner,
    Billing console).
 2. Independent review by Codex: request in DRF-38 audit §4.
 3. Owner teach-back: `docs/runbooks/P3_TEACHBACK_LAB.md`, then 6 answers (SPEC §7).
