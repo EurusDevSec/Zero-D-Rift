@@ -16,8 +16,9 @@ spec:
     repoURL: https://github.com/EurusDevSec/Zero-D-Rift.git
     targetRevision: main
     path: gitops/requests
-    directory:
-      recurse: false
+    # No directory.recurse: the default (false) already ignores requests/disabled/.
+    # Writing recurse: false kept zdr-root OutOfSync, because Argo drops the
+    # default value when it stores the Application (L3 window 05/11).
   destination:
     server: https://kubernetes.default.svc
     namespace: zdr-requests

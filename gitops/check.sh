@@ -76,7 +76,7 @@ for f, d in apps:
     if name == "zdr-requests":
         res(a.get("prune") is True and a.get("selfHeal") is True and a.get("allowEmpty") is True,
             "zdr-requests: prune + selfHeal + allowEmpty")
-        res(d["spec"]["source"].get("directory", {}).get("recurse") is False,
+        res(d["spec"]["source"].get("directory", {}).get("recurse") is not True,
             "zdr-requests: does not recurse (requests/disabled is ignored)")
     else:
         res(a.get("prune") is False and a.get("selfHeal") is True, f"{name}: selfHeal, no prune")

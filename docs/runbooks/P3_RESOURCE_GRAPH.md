@@ -318,7 +318,8 @@ Owner duyệt:      "Duyệt window P3-L3-20261105-01" (gõ trong chat)
 | 0 | Apply | `terraform apply tfplan` (phiên MFA còn ≥ 40 phút) | Apply complete, khoảng 15–20 phút |
 | +20 | Smoke P2 | `./scripts/smoke.sh` | `RESULT: PASS` |
 | +25 | Role P3 sống | Runbook A2 (`p3_iam_check --principal`, lấy `ROLE_ARN`) | PASS, có dòng `live trust: this cluster's OIDC…` |
-| +30 | Argo CD + root app | Runbook B2 | 8 app Synced/Healthy; 2 provider HEALTHY |
+| +22 | Thăm dò registry | `kubectl run zdr-registry-probe --image=public.ecr.aws/docker/library/amazonlinux:2023 --restart=Never --rm -i --quiet -- bash -s < infra/terraform/scripts/registry_probe.sh` | Mọi dòng `final=200` hoặc `206`. `403` = endpoint S3 chặn bucket layer của registry đó (xem C5) |
+| +30 | Argo CD + root app | Runbook B2 | 7 app con Synced/Healthy; 2 provider HEALTHY. `zdr-root` cũng phải Synced (trước PR sửa `recurse`, nó luôn OutOfSync) |
 | +40 | IRSA | Runbook B3 | Pod provider có `AWS_ROLE_ARN` |
 | +45 | Instance hợp lệ | Xem dưới (C2) | Instance `ACTIVE/Ready`; bucket có thật, đủ tag; Deployment 1/1 |
 | +60 | Test âm (≤ 10 phút) | Owner merge PR "neg-on" | Bucket `AccessDenied`, instance không Ready, Argo `Synced` |
@@ -383,7 +384,34 @@ Nếu sau khi xóa mà MR âm kẹt ở finalizer quá 5 phút:
 | P4 | `AccessDenied` trên bucket **trong** prefix | Lỗi policy: sửa đúng 1 lần (thêm action, không nới resource), plan lại, `plan_assert`, apply |
 | P5 | Phiên MFA còn < 40 phút trước destroy | Làm mới MFA trước |
 
-### C5. Undo
+### C5. Bài học window P3-L3-20261105-01 (05/11)
+
+**1. Endpoint S3 chặn image của quay.io và registry.k8s.io.**
+quay.io và registry.k8s.io chuyển hướng việc tải layer sang bucket S3 riêng của họ ở us-east-1 (`quayio-production-s3`, `prod-registry-k8s-io-us-east-1`). Node trong VPC đi S3 qua gateway endpoint, mà policy endpoint (P2) chỉ cho bucket của account mình và ECR/AL2023, nên tải layer bị `403`. Mọi pod Argo kẹt ở `ImagePullBackOff`.
+- Đã sửa (PR #27): thêm 2 bucket vào statement chỉ đọc (`s3:GetObject`). `plan_assert` check 7 chỉ cho đúng 4 bucket.
+- Kind không thể lộ lỗi này: kind chạy trên máy cá nhân, không qua endpoint. Smoke P2 cũng không: probe của nó dùng image ECR Public.
+- Thêm registry mới (ví dụ ghcr.io, docker.io) thì phải chạy lại `registry_probe.sh` trước window.
+
+**2. `directory.recurse: false` làm `zdr-root` luôn OutOfSync.** Argo bỏ giá trị mặc định khi lưu Application, nên root thấy lệch mãi. Đã bỏ dòng đó (mặc định vẫn không recurse); `gitops/check.sh` giờ chỉ cấm `recurse: true`.
+
+**3. Danh sách file của PR stacked trên GitHub có thể cũ.** Đừng tin danh sách đó; giả lập merge để biết `main` sẽ đổi gì:
+
+```bash
+git fetch origin
+t=$(git merge-tree --write-tree origin/main origin/<nhánh>)
+git diff --stat origin/main "$t"
+```
+
+**4. kubectl 1.35 nằm trong thư mục con:** `export PATH="/r/_Dev_tools/kubectl:$PATH"` (không phải `/r/_Dev_tools`).
+
+**Tự thử (cần window có cluster, hoặc đọc lại evidence nếu không có):**
+1. Trước khi cài Argo, chạy lệnh thăm dò ở dòng +22. **Phải thấy:** quay.io và registry.k8s.io trỏ về `s3.…amazonaws.com`, còn xpkg.crossplane.io trỏ về `pkg-containers.githubusercontent.com`; tất cả `final=206`.
+2. Không cần AWS: trong `modules/network/main.tf`, xóa dòng `"quayio-production-s3"` khỏi `layer_buckets`, chạy `terraform plan` trên một plan window. Kiểm bằng tay: policy endpoint mất bucket quay → nếu apply, Argo sẽ `ImagePullBackOff` với `403`. Trả lại: `git checkout modules/network/main.tf`.
+3. Thêm `"attacker-bucket"` vào `layer_buckets` rồi chạy `plan_assert` trên plan đó. **Phải thấy:** `FAIL  endpoint policy is missing or not bounded`. Trả lại như bước 2.
+
+**Undo:** bỏ một bucket layer = xóa nó khỏi `layer_buckets`, plan (`1 to change`), apply trong window.
+
+### C6. Undo
 
 Không có bước undo riêng. Trình tự dọn ở cuối bảng C1 chính là undo:
 - teardown platform B5;
