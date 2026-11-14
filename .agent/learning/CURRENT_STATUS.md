@@ -1,8 +1,8 @@
 ---
-as_of: 2026-11-05
-active_phase: P2
-active_task: P2-T9
-task_status: LEARNING_GATE_EVIDENCE_RECORDED
+as_of: 2026-11-14
+active_phase: P4
+active_task: P4 SPEC (DRF-16, DRF-17)
+task_status: P3_TEACHBACK_RECORDED
 history: .agent/learning/LEARNING_LOG.md
 ---
 
@@ -19,18 +19,15 @@ in `LEARNING_LOG.md`; this file must not invent mastery from generated artifacts
 | IAM/IRSA and tenant boundaries | `EXPLAINED` | STS trust versus service permission and why namespace tenancy remains soft isolation |
 | Cost, quota and experiment guardrails | `EXPLAINED` | Fixed AWS cost, no-default-NAT PoC trade-off, teardown inventory and retained failed trials |
 | Terraform applied use | `PRACTICED` + `EXPLAINED` (05/11/2026) | Local `terraform_data` lab with predictions (dependency order, NOOP/exit code, update vs replace); one L3 EKS create/verify/destroy window; own-words answers to SPEC-P2 §7 (state sensitivity, no-NAT trade-off, failure localization, NOOP limits, teardown inventory). Gaps: losing state and plaintext secrets in state; ECR API still needs Internet without interface endpoints |
-| Crossplane and kro | Conceptual only | No hands-on controller or external-resource evidence |
+| Argo CD, kro, Crossplane | `PRACTICED` + `EXPLAINED` (14/11/2026), with a provenance limit | Kind lab parts 0–7 run by the owner. SPEC-P3 §7: Git → Argo (tracking-id) → kro renders the RGD into the MR → provider via IRSA; Argo green means only cluster = Git; selfHeal vs prune through Git and `managementPolicies: "*"`; DRC → SA → EKS webhook → STS and trust/permission layers; provider removed before MRs leaves finalizers and orphans; Terraform owns the role, Crossplane the bucket. Limit: Q3–Q6 were a pasted block close to Claude's wording; re-ask Q3–Q5 orally at P11 |
 
-## Current P2 learning gate
+## Current P3 learning gate
 
-As of 05/11/2026 the P2 learning evidence is recorded (DRF-13 AC-02): local lab with
-predictions, the L3 window P2-L3-20261104-01 and own-words SPEC §7 answers. See the
-2026-11-05 entry in `LEARNING_LOG.md` and
-`docs/evidence/p2/DRF13_P2_ACCEPTANCE_AUDIT_20261104.md`.
-
-P2 is not closed yet: DRF-13 still needs an independent review (AC-03), DRF-12
-billing reconciliation, and owner acceptance. Next learning focus after the gate:
-P3 controllers (Argo CD, Crossplane), starting at `Conceptual only`.
+As of 14/11/2026 the owner ran the P3 teach-back lab on kind, first answered Q1–Q2
+with errors, then corrected them and answered Q3–Q6. Controllers are `PRACTICED` +
+`EXPLAINED` with a provenance limit (audit §6.5).
+Evidence: `docs/evidence/p3/DRF38_P3_ACCEPTANCE_AUDIT_20261106.md` §6 and the
+2026-11-14 entry in `LEARNING_LOG.md`. P2 gate (DRF-13) evidence stays as recorded.
 
 ## Coaching rule
 

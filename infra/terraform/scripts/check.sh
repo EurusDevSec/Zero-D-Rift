@@ -33,6 +33,10 @@ if [[ -d .terraform ]]; then
     terraform test -no-color > /dev/null 2>&1 && pass "terraform test (guardrails, mocked AWS)" || fail "terraform test (run it directly to see why)"
 fi
 
+# 3c. plan_assert guards on synthetic plans: object actions and a wrong layer
+#     bucket set must fail (Codex review 14/11, DRF-38).
+bash tests/plan_assert_guards.sh > /dev/null 2>&1 && pass "plan_assert guard tests (synthetic plans)" || fail "plan_assert guard tests (run: bash tests/plan_assert_guards.sh)"
+
 # 4. Provider lockfile exists and pins exactly the approved builds.
 expected="aws=6.67.0 cloudinit=2.4.1 null=3.3.2 time=0.14.2 tls=4.4.1"
 if [[ -f .terraform.lock.hcl ]]; then

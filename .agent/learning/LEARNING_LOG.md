@@ -265,3 +265,30 @@ Status meanings:
   endpoint only carries ECR image layers; ECR API calls still use the Internet path
   because there are no interface endpoints.
 - Status: PRACTICED + EXPLAINED (project Terraform/state/dependency/teardown)
+
+### 2026-11-14 — P3 controller lab on kind and partial teach-back (DRF-38)
+
+- Phase/task: P3 / Task 6
+- Learning objective: Trace Git → Argo CD → kro → Crossplane → AWS and the delete
+  semantics by hand (SPEC-P3 §7).
+- Source(s) consulted: `docs/runbooks/P3_TEACHBACK_LAB.md`, DRF37 window evidence.
+- Prediction before lab: none recorded (hands-on mode).
+- Micro-lab/change performed: Owner ran lab parts 0–7 on kind `zdr-p3-lab`
+  (v1.35.8, Argo CD v3.5.7), typing every command and pasting output; Claude guided.
+- Expected vs actual: Parts 0–4 matched. A pasted `\` continuation silently created a
+  v1.37.0 cluster; owner recreated it. Part 5 differed: removing the provider app
+  deleted the Bucket CRD and the MR (no stuck MR); the kro instance and the
+  ClusterProviderConfig (`in-use`, `users=1`) stuck instead.
+- Evidence path: `docs/evidence/p3/DRF38_P3_ACCEPTANCE_AUDIT_20261106.md` §6.
+- Explain in my own words: Q1 and Q2 recorded verbatim in the audit. Argo green means
+  the cluster matches Git, nothing about AWS; debug order apps → instance → MR →
+  describe → provider log.
+- Failure I can now diagnose: Argo Synced/Healthy while the instance waits on a
+  dependency (observed, explanation partial).
+- Remaining gap (first answers): kro (not Crossplane) renders the RGD into the MR;
+  the Argo tracking annotation is the Argo→instance evidence; instance was
+  IN_PROGRESS and MR SYNCED False; Q3–Q6 not answered.
+- Second answers (same day): owner corrected Q1–Q2 and answered Q3–Q6 (verbatim in
+  audit §6.2). All match the lab output. Q3–Q6 came as a pasted block close to
+  Claude's wording, so authorship is not verified (audit §6.5); re-ask Q3–Q5 at P11.
+- Status: PRACTICED + EXPLAINED (Argo CD, kro, Crossplane), provenance limit noted
