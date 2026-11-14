@@ -229,12 +229,13 @@ sub-tasks.
 
 **C. ADR-0008 and ownership records (1 h)** — after A.
 
-- [ ] ADR-0008: shared RDS owned by Terraform; secrets read by direct SDK through
+- [x] ADR-0008: shared RDS owned by Terraform; secrets read by direct SDK through
       IRSA; workload IAM roles pre-created per tenant by Terraform; Crossplane
       receives no RDS or IAM permission; bootstrap credential confined to
-      `zdr-platform`. Alternatives and revisit conditions listed.
-- [ ] SYSTEM_DESIGN §8/§9, THREAT_MODEL §11 and VERSION_MATRIX §3 rows updated to
-      point at ADR-0008. No scope text in ver3 changes.
+      `zdr-platform`. Alternatives and revisit conditions listed. (`ACCEPTED`
+      14/11/2026 after Codex APPROVE.)
+- [x] SYSTEM_DESIGN §8/§9, THREAT_MODEL §6.5/§11, VERSION_MATRIX §3 and
+      ADR-0004 item 8 updated to point at ADR-0008. No scope text in ver3 changes.
 
 Gate: no code, image or Terraform change for P4 before part A is approved.
 

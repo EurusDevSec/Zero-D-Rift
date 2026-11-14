@@ -64,8 +64,8 @@ theo resource ownership trong ADR-0003.
 | `provider-aws-s3` | Selected candidate `v2.7.0` | Golden-path/checkpoint S3 nằm trong approved scope; exact managed resources và lifecycle policy cần design/spec. |
 | `provider-aws-ec2` | Selected candidate `v2.7.0` | Security Group drift experiment cần EC2 API group; không trao quyền quản lý bootstrap VPC/EKS. |
 | `provider-aws-sqs` | Conditional, `UNVERIFIED` | Shared SQS ownership chưa được chốt; chỉ chọn nếu ownership matrix giao lifecycle cho Crossplane. |
-| `provider-aws-rds` | Not selected for request path | ADR-0004 giữ shared RDS ngoài mỗi request; provisioning owner của shared/recovery RDS chưa được chốt. |
-| `provider-aws-iam` | Not selected | Bootstrap/workload IAM boundary chưa có least-privilege design; không cấp IAM management mặc định cho Crossplane. |
+| `provider-aws-rds` | Not selected | ADR-0004 giữ shared RDS ngoài mỗi request; ADR-0008 (ACCEPTED) giao shared RDS cho Terraform module `shared-rds`. Recovery RDS owner vẫn chốt ở P8. |
+| `provider-aws-iam` | Not selected | ADR-0008 (ACCEPTED): mọi role workload P4 do Terraform module `rag-identity` tạo sẵn; Crossplane không có quyền IAM. |
 | `provider-aws-eks` | Excluded | Terraform sở hữu EKS theo ADR-0003; cài package này sẽ làm mờ ownership boundary. |
 
 Provider v2.7.0 là candidate chung, không phải tuyên bố runtime compatibility.

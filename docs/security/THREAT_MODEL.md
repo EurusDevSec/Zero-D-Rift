@@ -262,8 +262,10 @@ resource ARN chỉ được pin khi resource names, Region và provider APIs đ�
 ### 6.5. Database and secret flow
 
 1. Secret source of truth là AWS Secrets Manager theo canonical scope.
-2. Exact integration để Pod nhận secret vẫn `UNVERIFIED`; không tự chọn External
-   Secrets Operator hoặc Secrets Store CSI trong Task 4.
+2. Integration để Pod nhận secret: direct AWS SDK qua IRSA, không External
+   Secrets Operator hay Secrets Store CSI (ADR-0008, ACCEPTED; runtime
+   `UNVERIFIED` đến P4-T4.1). Master và bootstrap credential chỉ ở
+   `zdr-platform`.
 3. IRSA/IAM chỉ cho phép đọc secret object được chỉ định.
 4. PostgreSQL role/GRANT quyết định quyền tạo schema, đọc bảng và truy cập data.
 5. Application dùng per-sandbox DB role; không nhận bootstrap/admin credential.
@@ -406,12 +408,12 @@ một security product mới.
 | Exact IRSA IAM actions and resource ARNs | `UNVERIFIED` | Generate from selected resources/provider API calls; run positive and negative L3 tests. |
 | IMDS restriction and node launch-template settings | `UNVERIFIED` | Verify AL2023/Karpenter node behavior on EKS. |
 | VPC CNI version, NetworkPolicy enablement and strict mode | `UNVERIFIED` | Pin add-on/config and run EKS connectivity matrix. |
-| Secret integration from Secrets Manager | `UNVERIFIED` | Compare direct SDK, CSI or external-sync trade-offs without adding technology silently. |
+| Secret integration from Secrets Manager | `ACCEPTED` — ADR-0008 | Direct SDK through IRSA chosen over CSI and external sync (SPEC-P4 D5, owner approved 2026-11-14). Runtime proof and cross-tenant negatives in P4-T4.1. |
 | Kubernetes secret encryption/KMS configuration | `UNVERIFIED` | Decide after EKS/bootstrap and cost review. |
 | Crossplane provider exact allowlist and lifecycle policy | `UNVERIFIED` | Complete L2 pairing, ownership and deletion/management-policy review. |
 | Karpenter controller/node-role IAM boundary | `UNVERIFIED` | Pin version-specific permissions and bounded `iam:PassRole` during P6. |
 | Kyverno failure policy and exception process | `UNVERIFIED` | Test required policies in Audit then Enforce; define who may approve exceptions. |
-| RDS database/schema privilege statements | `UNVERIFIED` | Implement per-sandbox roles and cross-tenant SQL negative tests. |
+| RDS database/schema privilege statements | `UNVERIFIED` | Three tiers fixed in ADR-0008 (master → `rag_bootstrap` → sandbox role). Statements and SQL negatives in P4-T2.1 (kind) and P4-T4.1 (EKS). |
 | Evidence storage path and run-manifest schema | `APPROVED_CONTRACT` | Task 6 contract v0.1.0 defines the planned immutable raw-data layout, manifest fields and redacted publication boundary; later harness/runtime enforcement remains unverified. |
 
 Residual risk remains even after controls: a compromised cluster admin, node kernel,
