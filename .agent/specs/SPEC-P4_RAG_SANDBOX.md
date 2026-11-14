@@ -609,7 +609,18 @@ Linear change. Commands: `check-context.sh` PASS, `git diff --check` PASS.
   for the owner, keep the requirement that the current attempt's Job succeeded.
 
 Fix (next revision on PR #33): §10 `readyWhen` row is now "no fallback; stop the
-L2 gate", with the reason. Re-check by Codex: pending.
+L2 gate", with the reason.
+
+**Review 3 — Codex re-check, 14/11/2026.** Revision
+`358da7326ec44f5d626086a70125333966b41f70`. Verdict: `APPROVE`; no finding in
+the re-check scope. §10 now has no fallback for `readyWhen` on a Job, stops the
+L2 gate and requires the current attempt's Job to succeed before Ready; no other
+text allows dropping that condition (the old option in §9.4 is review history);
+DRF-51 part C matches. `git diff --check 4c23916 358da73` PASS. Document and
+Linear read only; no runtime proof; no file, commit or Linear change.
+
+Independent review of the SPEC is complete. Owner approval of D1–D12 and the P4
+cap is still pending.
 
 # 10. Open risks
 
