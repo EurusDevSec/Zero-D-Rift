@@ -22,14 +22,15 @@ Revision ứng viên: `main` = `c98b4a1be2ea98e88128e09ca1b8348eb1bd3a17` (merge
 | Teardown sạch | **Đạt**: inventory 05/11 16:45Z CLEAN |
 | Inventory trễ sạch | **Đạt** 06/11 04:01Z (khoảng 11 giờ sau destroy), phiên MFA mới của owner: `RESULT: CLEAN`, 25 kiểm OK (gồm `eks_clusters=0`, `vpc_endpoints_live=0`, `oidc_providers=0`, `p3_iam_roles=0`, `s3_buckets=1`); role `zero-drift-p3-crossplane-s3` không tồn tại; bucket `zero-drift-p3-*`/`zdr-outside*` = 0; `terraform state list` = 0 |
 | Đối chiếu billing | **Đạt** 14/11 (owner đọc Billing → Bills, tháng 11/2026): tổng phí trước thuế `USD 0.00` trên 13 dịch vụ (gồm EKS, EC2, VPC, S3); thẻ "Highest AWS Region spend" `USD 0.29`, US East (N. Virginia). Ước tính P3 ≈ 0,22 USD; trần 3 USD. Giới hạn: 0,29 USD là cả tháng (gồm window P2 04/11), không tách được theo window; trang không cho thấy chi tiết từng dịch vụ trước khi trừ credit |
-| Review độc lập ghi findings và limits | **Đạt** 14/11: Codex, verdict REQUEST CHANGES với 1 finding MEDIUM (guard nhận quyền object). Đã sửa trong PR #31, kèm test âm (mục 3, #7; mục 5). Codex chưa xác nhận lại bản sửa |
+| Review độc lập ghi findings và limits | **Đạt** 14/11: Codex, verdict REQUEST CHANGES với 1 finding MEDIUM (guard nhận quyền object). Đã sửa trong PR #31, kèm test âm (mục 3, #7; mục 5). Codex kiểm lại bản sửa: APPROVE (mục 5) |
 | Owner đạt `PRACTICED` + `EXPLAINED` cho luồng Git → Argo CD → kro → Crossplane → AWS và semantics xóa | **Đạt, có giới hạn** 14/11: `PRACTICED` (lab kind, owner tự chạy phần 0–7). `EXPLAINED`: owner sửa câu 1–2 và trả lời câu 3–6, đúng với output lab. Giới hạn nguồn gốc của câu 3–6 ở mục 6.5 |
 
-**Kết luận 14/11/2026: các cổng §8 đã có evidence.** P3 đóng khi owner merge PR #31 và chấp nhận các giới hạn sau:
+**Kết luận 14/11/2026: P3 hoàn thành.** Đủ các cổng §8. Owner đã merge PR #31 (`114a7da`), chấp nhận đóng P3 kèm các giới hạn sau:
 - billing chỉ có tổng tháng, không tách theo window;
-- Codex chưa xác nhận lại bản sửa finding #7;
 - nguồn gốc câu trả lời teach-back 3–6 (mục 6.5);
 - các giới hạn kỹ thuật đã biết ở mục 4.
+
+Codex đã kiểm lại và APPROVE bản sửa finding #7.
 
 Lịch sử: sáng 14/11 owner dừng teach-back sau câu 2 ("thôi bỏ qua tốn thời gian quá nhanh qua phase 4 đi"). Sau đó owner đổi ý ("khoan đã phải xong p3 luôn hoàn chỉnh nhưng phải nhanh lên") và nộp đủ 3 cổng.
 
@@ -94,6 +95,18 @@ Owner chạy Codex với yêu cầu ở mục 4, rồi dán kết quả vào cha
 - Ý "check 7 chỉ kiểm tập con": cũng đã sửa.
 - Ý "chỉ kiểm kiểu chuỗi của ResourceAccount": giữ nguyên, vì đã có từ P2, ngoài phạm vi P3. Ghi lại để làm cùng lúc làm lại R1.
 - Codex chưa review lại bản sửa.
+
+**Kiểm lại bản sửa (Codex, 14/11/2026).** Owner chạy, rồi dán kết quả; Claude ghi nguyên văn:
+
+> Verdict: APPROVE bản sửa finding MEDIUM trong PR #31, revision `d1882da269c5d456449749f74896a90d99e024e5`.
+> Findings: Không còn finding trong phạm vi kiểm lại.
+>
+> * Check 13 và test Terraform dùng cùng allowlist 9 action mức bucket, chặn quyền object/IAM và wildcard ngoài quy định.
+> * Check 7 bắt buộc đúng danh sách 4 bucket layer.
+> * `bash tests/plan_assert_guards.sh`: 10/10 PASS.
+> * `terraform test -no-color '-filter=tests\p3_irsa.tftest.hcl'`: 4 passed, 0 failed.
+>
+> Chỉ kiểm tra cục bộ ba file được yêu cầu; không xác minh lại AWS/runtime hay các gate khác của P3. Không sửa source; Git cuối phiên sạch.
 
 ## 6. Teach-back của owner
 
