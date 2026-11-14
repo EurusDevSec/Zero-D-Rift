@@ -39,8 +39,9 @@ Follow [context governance](../references/context-governance.md).
   Helm v4.2.2.
 - SPEC-P4 drafted 14/11 (`DRAFT_OWNER_REVIEW_PENDING`), decisions D1–D12.
   Codex review 1 at `4431368`: REQUEST_CHANGES, 2 MAJOR (bootstrap fallback into
-  tenant namespace; no retry for a `Failed` Job). Both fixed on PR #33; Codex
-  re-check pending. Nothing for P4 is built.
+  tenant namespace; no retry for a `Failed` Job). Re-check at `4c23916`: both
+  fixed, 1 new MAJOR (`readyWhen` fallback could fake Ready), fixed on PR #33;
+  second re-check pending. Nothing for P4 is built.
 - [Linear routing](../docs/LINEAR_DELIVERY.md): P4 = 10 issues. DRF-40 (P4-T1,
   no sub-tasks); DRF-44 (P4-T2) → DRF-45, 46; DRF-49 (P4-T3) → DRF-50, 51;
   DRF-55 (P4-T4) → DRF-56, 57. Other DRF-41..63 and DRF-16/17 cancelled.

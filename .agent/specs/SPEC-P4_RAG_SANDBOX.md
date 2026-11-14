@@ -587,7 +587,29 @@ Fixes (next revision on PR #33): negative boundary 3 and D4 confine master and
 bootstrap to `zdr-platform`; §10 gives a fallback per kro feature and none that
 moves the Job; D9, P4-T2.1 A, P4-T3.2 A–C, P4-T4.1 E and scenario 6 define and
 test the `bootstrapAttempt` retry. The same revision regroups P4 into 10 issues
-at the owner's request. Re-check by Codex: pending.
+at the owner's request.
+
+**Review 2 — Codex re-check, 14/11/2026.** Revision
+`4c239163452f0c8f8bf8320fd13d859ace0354c6`. Verdict: `REQUEST_CHANGES` — 1
+MAJOR. Document re-check only; no runtime proof. No file, commit, AWS call or
+Linear change. Commands: `check-context.sh` PASS, `git diff --check` PASS.
+
+- Review 1 MAJOR 1: fixed. Jobs, ServiceAccounts and master/bootstrap
+  credentials stay in `zdr-platform`; no fallback moves a Job into a tenant.
+- Review 1 MAJOR 2: fixed in the contract. `bootstrapAttempt` creates a new Job;
+  terminal failure, retry through Git, kept password, L2/L3 checks and old-Job
+  cleanup are defined.
+- Regrouping: no step or AC lost; §9.2 keeps all six AC; the 10 kept Linear
+  issues match §9.3 codes, parents and blocked-by; the 14 merged issues are
+  Canceled and block nothing.
+- New MAJOR: the §10 fallback for `readyWhen` on a Job (drop the Job condition)
+  can report Ready falsely. If attempt 0 succeeded and attempt 1 fails, `/readyz`
+  can still pass on the old credential, contradicting scenarios 3 and 6 and the
+  negative case in P4-T3.2 C. Proposed: make it "no fallback", stop the L2 gate
+  for the owner, keep the requirement that the current attempt's Job succeeded.
+
+Fix (next revision on PR #33): §10 `readyWhen` row is now "no fallback; stop the
+L2 gate", with the reason. Re-check by Codex: pending.
 
 # 10. Open risks
 
@@ -601,10 +623,12 @@ at the owner's request. Re-check by Codex: pending.
     Stop the L2 gate and the owner re-decides the design before any EKS work. A
     Job in a tenant namespace would let anyone who may create workloads there use
     its ServiceAccount ([Kubernetes RBAC good practices](https://kubernetes.io/docs/concepts/security/rbac-good-practices/#workload-creation)).
-  - `readyWhen` on a Job fails: drop the Job condition; the Deployment readiness
-    (`/readyz` queries the schema with the sandbox secret) stays the gate, the
-    app retries a missing secret, and the status still shows the Job state. This
-    is a SPEC change that the owner approves at the L2 gate.
+  - `readyWhen` on a Job fails: no fallback. Stop the L2 gate and the owner
+    re-decides the design. Dropping the Job condition is not allowed: after a
+    successful attempt, a later attempt can fail while `/readyz` still passes on
+    the existing schema and secret, so the instance would report Ready with the
+    current bootstrap attempt failed (scenarios 3 and 6). The current attempt's
+    Job must have succeeded before the instance is Ready.
   - a renamed child is not removed by kro: `cleanup` and the runbook delete old
     bootstrap Jobs (D9).
 - GHCR layer downloads may be redirected to a storage host the S3 gateway
