@@ -2,7 +2,7 @@
 project: Zero D-Rift
 status: P4_SPEC_DRAFT_REVIEW_PENDING
 active_phase: P4
-active_task: P4-T1.1 SPEC-P4 review and owner approval (DRF-41)
+active_task: P4-T1 part A, SPEC-P4 Codex re-check and owner approval (DRF-40)
 active_feature: RAGSandbox (SPEC-P4)
 active_spec: .agent/specs/SPEC-P4_RAG_SANDBOX.md
 current_learning: .agent/learning/CURRENT_STATUS.md
@@ -37,11 +37,13 @@ Follow [context governance](../references/context-governance.md).
 - Tools: Terraform 1.16.4, kubectl v1.35.10 (`/r/_Dev_tools/kubectl`), kind
   v0.33.0 (`/r/_Dev_tools/kind`, default node v1.37.0, so always pass `--image`),
   Helm v4.2.2.
-- SPEC-P4 drafted 14/11 (`DRAFT_OWNER_REVIEW_PENDING`): 4 parent tasks, 20
-  sub-tasks, decisions D1–D12, no Codex review yet. Nothing for P4 is built.
-- [Linear routing](../docs/LINEAR_DELIVERY.md): P4 = DRF-40 (P4-T1), DRF-44
-  (P4-T2), DRF-49 (P4-T3), DRF-55 (P4-T4), sub-tasks DRF-41..63 with the code in
-  each title. DRF-16 and DRF-17 cancelled as superseded.
+- SPEC-P4 drafted 14/11 (`DRAFT_OWNER_REVIEW_PENDING`), decisions D1–D12.
+  Codex review 1 at `4431368`: REQUEST_CHANGES, 2 MAJOR (bootstrap fallback into
+  tenant namespace; no retry for a `Failed` Job). Both fixed on PR #33; Codex
+  re-check pending. Nothing for P4 is built.
+- [Linear routing](../docs/LINEAR_DELIVERY.md): P4 = 10 issues. DRF-40 (P4-T1,
+  no sub-tasks); DRF-44 (P4-T2) → DRF-45, 46; DRF-49 (P4-T3) → DRF-50, 51;
+  DRF-55 (P4-T4) → DRF-56, 57. Other DRF-41..63 and DRF-16/17 cancelled.
 
 ## Open decisions and blockers
 
@@ -51,14 +53,15 @@ Follow [context governance](../references/context-governance.md).
    rebaseline from live state without reducing trials, acceptance, learning gate
    or teardown. Rebaseline is the owner's decision.
 3. ADR-0005 still PROPOSED (owner review).
-4. SPEC-P4 §9.1 D1–D12 need the owner's decision, after a Codex review of the
-   draft. P4 code, image, Terraform and any AWS window wait for that. D8 (public
-   image on GHCR) and D10 (5 USD cap) are the two with outside effect.
+4. SPEC-P4 §9.1 D1–D12 need the owner's decision, after the Codex re-check.
+   P4 code, image, Terraform and any AWS window wait for that. D8 (public image
+   on GHCR) and D10 (5 USD cap) are the two with outside effect.
 
 ## Next safe action
 
-Owner runs a Codex review of SPEC-P4, then decides D1–D12 (DRF-41). After that:
-P4-T1.2 pins and prices (DRF-42) and P4-T1.3 ADR-0008 (DRF-43).
+Codex re-checks the fixes on PR #33, then the owner decides D1–D12 (DRF-40
+part A). After that: DRF-40 part B (pins and prices, owner's read-only session)
+and part C (ADR-0008).
 
 ## Context expansion
 

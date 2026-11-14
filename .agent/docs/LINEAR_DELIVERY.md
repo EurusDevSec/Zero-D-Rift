@@ -42,7 +42,8 @@ Task codes (from P4): a phase SPEC numbers its work `P<phase>-T<task>` for a par
 task and `P<phase>-T<task>.<n>` for a sub-task, and every Linear title starts with
 that code. Read the hierarchy from the code, not from the `DRF-` number. When a
 phase is split, create each parent just before its sub-tasks so the numbers run
-in the same order as the codes.
+in the same order as the codes. Keep a phase small: a sub-task is one PR or one
+lab session of up to about a day, with lettered parts inside it, not more issues.
 
 | Linear issue | Phase | Governing source / outcome |
 |---|---|---|
@@ -62,10 +63,11 @@ in the same order as the codes.
 | [DRF-14](https://linear.app/zero-door/issue/DRF-14/platform-contract-pin-controllers-va-duyet-spec-p3) | P3 | Platform contract: pin controllers và duyệt SPEC-P3 — ver3/current experiment contract; future SPEC pending |
 | [DRF-15](https://linear.app/zero-door/issue/DRF-15/resource-graph-mot-cr-tao-s3-va-deployment-on-djinh) | P3 | Resource graph: một CR tạo S3 và Deployment ổn định — ver3/current experiment contract; future SPEC pending |
 | DRF-16, DRF-17 | P4 | Outline issues, cancelled as superseded on 14/11/2026; replaced by the four P4-T tasks below |
-| [DRF-40](https://linear.app/zero-door/issue/DRF-40) | P4 | P4-T1 — Hợp đồng P4: quyết định, pin và ownership; SPEC-P4 §5, sub-tasks DRF-41..43 |
-| [DRF-44](https://linear.app/zero-door/issue/DRF-44) | P4 | P4-T2 — Shared service: RDS PostgreSQL/pgvector và ranh giới credential; SPEC-P4 §5, sub-tasks DRF-45..48 |
-| [DRF-49](https://linear.app/zero-door/issue/DRF-49) | P4 | P4-T3 — RAGSandbox: một request tạo môi trường dùng được; SPEC-P4 §5, sub-tasks DRF-50..54 |
-| [DRF-55](https://linear.app/zero-door/issue/DRF-55) | P4 | P4-T4 — Window L3 trên EKS và nghiệm thu P4; SPEC-P4 §5, sub-tasks DRF-56..63 |
+| [DRF-40](https://linear.app/zero-door/issue/DRF-40) | P4 | P4-T1 — Hợp đồng P4: SPEC, quyết định, pin và ADR-0008; SPEC-P4 §5, no sub-tasks |
+| [DRF-44](https://linear.app/zero-door/issue/DRF-44) | P4 | P4-T2 — Shared service: RDS PostgreSQL/pgvector và ranh giới credential; sub-tasks DRF-45, DRF-46 |
+| [DRF-49](https://linear.app/zero-door/issue/DRF-49) | P4 | P4-T3 — RAGSandbox: một request tạo môi trường dùng được; sub-tasks DRF-50, DRF-51 |
+| [DRF-55](https://linear.app/zero-door/issue/DRF-55) | P4 | P4-T4 — Window L3 trên EKS và nghiệm thu P4; sub-tasks DRF-56, DRF-57 |
+| DRF-41..43, 47, 48, 52..54, 58..63 | P4 | Cancelled 14/11/2026 as merged when P4 went from 24 to 10 issues (SPEC-P4 §9.3) |
 | [DRF-18](https://linear.app/zero-door/issue/DRF-18/tenant-guardrails-negative-suite-chung-minh-soft-isolation) | P5 | Tenant guardrails: negative suite chứng minh soft isolation — ver3/current experiment contract; future SPEC pending |
 | [DRF-19](https://linear.app/zero-door/issue/DRF-19/batch-contract-queue-checkpoint-gpu-quota-va-lifecycle) | P6 | Batch contract: queue, checkpoint, GPU quota và lifecycle — ver3/current experiment contract; future SPEC pending |
 | [DRF-20](https://linear.app/zero-door/issue/DRF-20/batchtrainingjob-outcome-checkpoint-va-node-reclamation) | P6 | BatchTrainingJob: outcome, checkpoint và node reclamation — ver3/current experiment contract; future SPEC pending |
