@@ -74,10 +74,11 @@ ep="$(q '.resource_changes[] | select(.type == "aws_vpc_endpoint") | .change.aft
 [[ "$ep" == "com.amazonaws.us-east-1.s3" ]] && pass "S3 gateway endpoint service" || fail "endpoint service: $ep"
 pol="$(q '.resource_changes[] | select(.type == "aws_vpc_endpoint") | .change.after.policy // ""')"
 # Statement 2 may read objects only in the listed layer buckets (DRF-37: quay.io and
-# registry.k8s.io store layers in S3 us-east-1); any other bucket fails.
+# registry.k8s.io store layers in S3 us-east-1). The set must equal the list:
+# any other bucket, or a missing one, fails (Codex review 14/11).
 layer_allow='["arn:aws:s3:::prod-us-east-1-starport-layer-bucket/*","arn:aws:s3:::al2023-repos-us-east-1-de612dc2/*","arn:aws:s3:::quayio-production-s3/*","arn:aws:s3:::prod-registry-k8s-io-us-east-1/*"]'
 if jq -e --argjson allow "$layer_allow" '.Statement | length == 2 and (.[0].Condition.StringEquals["aws:ResourceAccount"] | type == "string")
-        and (.[1].Action == "s3:GetObject") and ([.[1].Resource] | flatten | all(. as $r | $allow | index($r)))' <<< "$pol" > /dev/null 2>&1; then
+        and (.[1].Action == "s3:GetObject") and (([.[1].Resource] | flatten | sort) == ($allow | sort))' <<< "$pol" > /dev/null 2>&1; then
     pass "endpoint policy bounded (own account + read-only layer buckets)"
 else
     fail "endpoint policy is missing or not bounded"
@@ -128,8 +129,10 @@ want_roles="zero-drift-cluster- zero-drift-system-node-"
 #     role policy. P3 window: web identity trust for exactly the provider-aws-s3
 #     ServiceAccount with audience sts.amazonaws.com; S3 actions only (never IAM)
 #     on arn:aws:s3:::zero-drift-p3-* only; within the 10240-char limit. That
-#     resource also matches object ARNs (* crosses "/"), so the only action
-#     wildcard allowed is s3:GetBucket* (s3:Get* would allow GetObject).
+#     resource also matches object ARNs (* crosses "/"), so every action must be
+#     in the approved bucket-level list below: an object action such as
+#     s3:DeleteObject has no wildcard yet still fails (Codex review 14/11).
+#     Same list as tests/p3_irsa.tftest.hcl; keep both in sync.
 inline="$(count aws_iam_role_policy)"
 if [[ "${P3_WINDOW:-0}" != 1 ]]; then
     [[ "$inline" == 0 ]] && pass "no P3 provider role policy outside a P3 window" || fail "$inline inline role polic(ies) planned without P3_WINDOW=1"
@@ -151,10 +154,11 @@ else
         [[ "$tr_ok" == true ]] && pass "P3 role trust: one web identity statement, sub provider-aws-s3, aud sts" || fail "P3 role trust policy is not the approved shape"
     fi
     perm="$(q '.resource_changes[] | select(.type == "aws_iam_role_policy") | .change.after.policy')"
-    pm_ok="$(jq -r '[.Statement[] | .Effect == "Allow"
+    p3_actions='["s3:CreateBucket","s3:DeleteBucket","s3:ListBucket","s3:PutBucketTagging","s3:GetBucket*","s3:GetAccelerateConfiguration","s3:GetEncryptionConfiguration","s3:GetLifecycleConfiguration","s3:GetReplicationConfiguration"]'
+    pm_ok="$(jq -r --argjson allow "$p3_actions" '[.Statement[] | .Effect == "Allow"
         and ([.Resource] | flatten == ["arn:aws:s3:::zero-drift-p3-*"])
-        and ([.Action] | flatten | all(startswith("s3:") and (contains("*") | not) or . == "s3:GetBucket*"))] | all' <<< "$perm" 2>/dev/null || echo false)"
-    [[ "$pm_ok" == true ]] && pass "P3 role policy: S3 actions only, no action wildcard but s3:GetBucket*, on arn:aws:s3:::zero-drift-p3-* only" || fail "P3 role policy: wildcard resource, non-S3 action, or an action wildcard that can match objects"
+        and ([.Action] | flatten | all(. as $a | $allow | index($a)))] | all' <<< "$perm" 2>/dev/null || echo false)"
+    [[ "$pm_ok" == true ]] && pass "P3 role policy: approved bucket-level S3 actions only, on arn:aws:s3:::zero-drift-p3-* only" || fail "P3 role policy: wildcard resource, or an action outside the approved bucket-level list (object, IAM or wildcard)"
     size="$(jq -c . <<< "$perm" | tr -d ' \r\n\t' | wc -c)"
     (( size <= 10240 )) && pass "P3 role policy size $size/10240" || fail "P3 role policy is $size chars, limit 10240"
 fi

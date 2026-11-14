@@ -2,7 +2,7 @@
 as_of: 2026-11-14
 active_phase: P4
 active_task: P4 SPEC (DRF-16, DRF-17)
-task_status: P3_TEACHBACK_PARTIAL
+task_status: P3_TEACHBACK_RECORDED
 history: .agent/learning/LEARNING_LOG.md
 ---
 
@@ -19,13 +19,13 @@ in `LEARNING_LOG.md`; this file must not invent mastery from generated artifacts
 | IAM/IRSA and tenant boundaries | `EXPLAINED` | STS trust versus service permission and why namespace tenancy remains soft isolation |
 | Cost, quota and experiment guardrails | `EXPLAINED` | Fixed AWS cost, no-default-NAT PoC trade-off, teardown inventory and retained failed trials |
 | Terraform applied use | `PRACTICED` + `EXPLAINED` (05/11/2026) | Local `terraform_data` lab with predictions (dependency order, NOOP/exit code, update vs replace); one L3 EKS create/verify/destroy window; own-words answers to SPEC-P2 §7 (state sensitivity, no-NAT trade-off, failure localization, NOOP limits, teardown inventory). Gaps: losing state and plaintext secrets in state; ECR API still needs Internet without interface endpoints |
-| Argo CD, kro, Crossplane | `PRACTICED` (14/11/2026); `EXPLAINED` not reached | Kind lab parts 0–7 run by the owner (sync from Git, drift, readiness debugging, selfHeal vs Git delete, IRSA env injection, IAM test break, provider removed before MR). Own words: Argo green means cluster matches Git only; debug order apps → instance → MR → describe → provider log. Gaps: confused kro and Crossplane roles (kro, not Crossplane, renders the RGD into the MR); misread instance/MR status; SPEC-P3 §7 Q3–Q6 not answered |
+| Argo CD, kro, Crossplane | `PRACTICED` + `EXPLAINED` (14/11/2026), with a provenance limit | Kind lab parts 0–7 run by the owner. SPEC-P3 §7: Git → Argo (tracking-id) → kro renders the RGD into the MR → provider via IRSA; Argo green means only cluster = Git; selfHeal vs prune through Git and `managementPolicies: "*"`; DRC → SA → EKS webhook → STS and trust/permission layers; provider removed before MRs leaves finalizers and orphans; Terraform owns the role, Crossplane the bucket. Limit: Q3–Q6 were a pasted block close to Claude's wording; re-ask Q3–Q5 orally at P11 |
 
 ## Current P3 learning gate
 
-As of 14/11/2026 the owner ran the P3 teach-back lab on kind and answered SPEC-P3 §7
-Q1–Q2 only, then chose to move to P4. P3 controllers are `PRACTICED`, not
-`EXPLAINED`. Owed: correct Q1 (kro vs Crossplane), Q2 (status reading), answer Q3–Q6.
+As of 14/11/2026 the owner ran the P3 teach-back lab on kind, first answered Q1–Q2
+with errors, then corrected them and answered Q3–Q6. Controllers are `PRACTICED` +
+`EXPLAINED` with a provenance limit (audit §6.5).
 Evidence: `docs/evidence/p3/DRF38_P3_ACCEPTANCE_AUDIT_20261106.md` §6 and the
 2026-11-14 entry in `LEARNING_LOG.md`. P2 gate (DRF-13) evidence stays as recorded.
 

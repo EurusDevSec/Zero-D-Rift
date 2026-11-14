@@ -60,9 +60,15 @@ run "window_role_trusts_one_service_account" {
   assert {
     condition = alltrue([
       for s in module.p3_provider_irsa[0].permissions_policy.Statement :
-      alltrue([for a in s.Action : startswith(a, "s3:") && (!strcontains(a, "*") || a == "s3:GetBucket*")])
+      alltrue([for a in s.Action : contains([
+        "s3:CreateBucket", "s3:DeleteBucket", "s3:ListBucket", "s3:PutBucketTagging", "s3:GetBucket*",
+        "s3:GetAccelerateConfiguration", "s3:GetEncryptionConfiguration",
+        "s3:GetLifecycleConfiguration", "s3:GetReplicationConfiguration",
+      ], a)])
     ])
-    error_message = "Only S3 actions, never IAM; the only action wildcard is s3:GetBucket* (the resource also matches objects)."
+    # Same list as plan_assert.sh check 13. The resource also matches object ARNs,
+    # so an object action without a wildcard (s3:DeleteObject) must fail too.
+    error_message = "Only the approved bucket-level S3 actions: no object action, no IAM, no wildcard but s3:GetBucket*."
   }
 }
 

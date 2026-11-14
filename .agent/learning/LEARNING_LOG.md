@@ -285,8 +285,10 @@ Status meanings:
   describe → provider log.
 - Failure I can now diagnose: Argo Synced/Healthy while the instance waits on a
   dependency (observed, explanation partial).
-- Remaining gap: kro (not Crossplane) renders the RGD into the MR; Argo tracking
-  annotation is the Argo→instance evidence; instance was IN_PROGRESS and MR
-  SYNCED False; Q3–Q6 (delete semantics, IRSA chain, teardown order, Terraform vs
-  Git ownership) not answered. Owner chose to move to P4.
-- Status: PRACTICED (Argo CD, kro, Crossplane on kind)
+- Remaining gap (first answers): kro (not Crossplane) renders the RGD into the MR;
+  the Argo tracking annotation is the Argo→instance evidence; instance was
+  IN_PROGRESS and MR SYNCED False; Q3–Q6 not answered.
+- Second answers (same day): owner corrected Q1–Q2 and answered Q3–Q6 (verbatim in
+  audit §6.2). All match the lab output. Q3–Q6 came as a pasted block close to
+  Claude's wording, so authorship is not verified (audit §6.5); re-ask Q3–Q5 at P11.
+- Status: PRACTICED + EXPLAINED (Argo CD, kro, Crossplane), provenance limit noted

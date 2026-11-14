@@ -125,7 +125,18 @@ Nếu quên cờ này, plan sẽ xóa luôn role. Khi đó provider mất quyề
 ### Giới hạn của phần A
 
 - Role P3 nằm ngoài phạm vi policy R1 (`infra/iam/zero-drift-terraform-policy.json` chỉ cho phép role `zero-drift-cluster-*` và `zero-drift-system-node-*`, và không có `iam:PutRolePolicy`). Hiện tại Terraform dùng AdministratorAccess (R1 hoãn tới DRF-27/29), nên window không bị chặn. Khi làm lại R1 thì phải thêm role `zero-drift-p3-*` và `PutRolePolicy`/`GetRolePolicy`.
-- **Bài học 05/11:** resource `arn:aws:s3:::zero-drift-p3-*` khớp **cả ARN object** (`bucket/key`), vì `*` đi qua được dấu `/`. Bản đầu dùng `s3:Get*` và bị mô phỏng IAM bắt được: `GetObject` ra `allowed`. Hiện chỉ cho phép wildcard `s3:GetBucket*` (tên action chỉ thuộc bucket); `plan_assert` check 13 và `terraform test` đều chặn mọi wildcard khác.
+- **Bài học 05/11:** resource `arn:aws:s3:::zero-drift-p3-*` khớp **cả ARN object** (`bucket/key`), vì `*` đi qua được dấu `/`. Bản đầu dùng `s3:Get*` và bị mô phỏng IAM bắt được: `GetObject` ra `allowed`. Hiện chỉ cho phép wildcard `s3:GetBucket*` (tên action chỉ thuộc bucket).
+- **Bài học 14/11 (review Codex):** chặn wildcard chưa đủ. `s3:DeleteObject` không có `*` nhưng vẫn là quyền object, và guard cũ vẫn cho qua. Giờ `plan_assert` check 13 và `terraform test` chỉ nhận **đúng danh sách** action mức bucket đã duyệt. `tests/plan_assert_guards.sh` thử thêm `DeleteObject`/`GetObject`/`PutObject`/`s3:Get*`/`iam:PassRole` và phải thấy FAIL; `check.sh` chạy nó.
+
+**Tự thử (không cần AWS, khoảng 1 phút):**
+
+```bash
+cd /r/_Projects/Eurus_Workspace/Zero-D-Rift/infra/terraform
+bash tests/plan_assert_guards.sh                      # phải thấy 10 dòng ok, RESULT: PASS
+git show c98b4a1:infra/terraform/scripts/plan_assert.sh > /tmp/pa_old.sh
+PLAN_ASSERT=/tmp/pa_old.sh bash tests/plan_assert_guards.sh | grep -E "WRONG|RESULT"   # bản cũ: 4 WRONG, RESULT: FAIL
+rm /tmp/pa_old.sh
+```
 
 ---
 

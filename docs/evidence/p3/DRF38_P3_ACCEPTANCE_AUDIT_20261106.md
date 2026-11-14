@@ -21,13 +21,17 @@ Revision ứng viên: `main` = `c98b4a1be2ea98e88128e09ca1b8348eb1bd3a17` (merge
 | Các kịch bản §4 có evidence L3 trên EKS | **Đạt** (bảng trên) |
 | Teardown sạch | **Đạt**: inventory 05/11 16:45Z CLEAN |
 | Inventory trễ sạch | **Đạt** 06/11 04:01Z (khoảng 11 giờ sau destroy), phiên MFA mới của owner: `RESULT: CLEAN`, 25 kiểm OK (gồm `eks_clusters=0`, `vpc_endpoints_live=0`, `oidc_providers=0`, `p3_iam_roles=0`, `s3_buckets=1`); role `zero-drift-p3-crossplane-s3` không tồn tại; bucket `zero-drift-p3-*`/`zdr-outside*` = 0; `terraform state list` = 0 |
-| Đối chiếu billing | **Chưa**: owner xem Billing → Bills (us-east-1, theo dịch vụ). Ước tính ≈ 0,22 USD; trần 3 USD |
-| Review độc lập ghi findings và limits | **Chưa**: yêu cầu cho Codex ở mục 4 |
-| Owner đạt `PRACTICED` + `EXPLAINED` cho luồng Git → Argo CD → kro → Crossplane → AWS và semantics xóa | **Chưa đạt**: `PRACTICED` có (lab kind 14/11, owner tự chạy phần 0–7). `EXPLAINED` mới một phần: trả lời 2/6 câu, có lỗi vai trò kro/Crossplane; câu 3–6 chưa trả lời (mục 6) |
+| Đối chiếu billing | **Đạt** 14/11 (owner đọc Billing → Bills, tháng 11/2026): tổng phí trước thuế `USD 0.00` trên 13 dịch vụ (gồm EKS, EC2, VPC, S3); thẻ "Highest AWS Region spend" `USD 0.29`, US East (N. Virginia). Ước tính P3 ≈ 0,22 USD; trần 3 USD. Giới hạn: 0,29 USD là cả tháng (gồm window P2 04/11), không tách được theo window; trang không cho thấy chi tiết từng dịch vụ trước khi trừ credit |
+| Review độc lập ghi findings và limits | **Đạt** 14/11: Codex, verdict REQUEST CHANGES với 1 finding MEDIUM (guard nhận quyền object). Đã sửa trong PR #31, kèm test âm (mục 3, #7; mục 5). Codex chưa xác nhận lại bản sửa |
+| Owner đạt `PRACTICED` + `EXPLAINED` cho luồng Git → Argo CD → kro → Crossplane → AWS và semantics xóa | **Đạt, có giới hạn** 14/11: `PRACTICED` (lab kind, owner tự chạy phần 0–7). `EXPLAINED`: owner sửa câu 1–2 và trả lời câu 3–6, đúng với output lab. Giới hạn nguồn gốc của câu 3–6 ở mục 6.5 |
 
-**Kết luận hiện tại: P3 chưa hoàn thành.** Phần kỹ thuật đã có evidence L3 và inventory trễ sạch; còn 3 cổng do người khác làm: billing (owner), review (Codex), teach-back (owner).
+**Kết luận 14/11/2026: các cổng §8 đã có evidence.** P3 đóng khi owner merge PR #31 và chấp nhận các giới hạn sau:
+- billing chỉ có tổng tháng, không tách theo window;
+- Codex chưa xác nhận lại bản sửa finding #7;
+- nguồn gốc câu trả lời teach-back 3–6 (mục 6.5);
+- các giới hạn kỹ thuật đã biết ở mục 4.
 
-**Quyết định của owner 14/11/2026:** dừng teach-back sau câu 2 và chuyển sang P4 ("thôi bỏ qua tốn thời gian quá nhanh qua phase 4 đi"). P3 **không** được đánh dấu hoàn thành; 3 cổng vẫn mở và được mang theo: billing, review Codex, teach-back câu 3–6 cùng phần sửa câu 1–2.
+Lịch sử: sáng 14/11 owner dừng teach-back sau câu 2 ("thôi bỏ qua tốn thời gian quá nhanh qua phase 4 đi"). Sau đó owner đổi ý ("khoan đã phải xong p3 luôn hoàn chỉnh nhưng phải nhanh lên") và nộp đủ 3 cổng.
 
 ## 3. Lỗi và sửa trong P3 (để reviewer soi)
 
@@ -39,6 +43,7 @@ Revision ứng viên: `main` = `c98b4a1be2ea98e88128e09ca1b8348eb1bd3a17` (merge
 | 4 | `directory.recurse: false` làm `zdr-root` luôn OutOfSync | Window L3 | PR #28: bỏ giá trị mặc định; check.sh cấm `recurse: true`. Đã kiểm lại trên kind 14/11 (L2): `zdr-root` `Synced/Healthy` ở `ee34db4`. Chưa kiểm lại trên EKS |
 | 5 | kro `readyWhen` tham chiếu `schema` làm RGD Inactive | Sync thật trên kind | PR #23 |
 | 6 | kro aggregation thiếu RBAC cho kind sinh ra (cache sync timeout) | Lab kind | PR #21/#23: ClusterRole aggregate |
+| 7 | Guard check 13 và `terraform test` nhận mọi action `s3:` không có `*`, nên `s3:DeleteObject`/`GetObject`/`PutObject` lọt qua (resource `zero-drift-p3-*` khớp cả object). Check 7 chỉ kiểm tập con, chưa bắt buộc đủ 4 bucket. Policy đang triển khai không có các quyền này | Review Codex 14/11 (MEDIUM) | PR #31: allowlist đúng 9 action mức bucket ở cả hai nơi; check 7 so khớp đúng tập 4 bucket; `tests/plan_assert_guards.sh` có 10 ca (bản cũ ra 4 WRONG) và `check.sh` chạy nó |
 
 ## 4. Yêu cầu review độc lập (cho Codex)
 
@@ -55,7 +60,40 @@ Revision ứng viên: `main` = `c98b4a1be2ea98e88128e09ca1b8348eb1bd3a17` (merge
 
 ## 5. Kết quả review độc lập
 
-_Chưa có._ Không được điền thay.
+Owner chạy Codex với yêu cầu ở mục 4, rồi dán kết quả vào chat ngày 14/11/2026. Claude ghi nguyên văn bên dưới, chỉ bỏ phần đường dẫn tuyệt đối trên máy.
+
+> **Reviewer:** Codex, review độc lập ngày 14/11/2026.
+> **Revision:** base `dd3b77b6f36815778e4697887d6595cda38eeb9d` → head `c98b4a1be2ea98e88128e09ca1b8348eb1bd3a17`.
+> **Verdict: REQUEST CHANGES — 1 finding MEDIUM về guard kiểm quyền.** Policy đang triển khai không thấy vượt phạm vi P3.
+>
+> **Finding**
+>
+> - **MEDIUM — Guard vẫn chấp nhận quyền object.** Tại `plan_assert.sh:154` và `p3_irsa.tftest.hcl:63`, điều kiện chấp nhận mọi action `s3:` không chứa wildcard. Trong khi đó resource `zero-drift-p3-*` cũng khớp ARN object. Probe cục bộ bằng chính biểu thức jq trả `true` khi thêm `s3:DeleteObject`, hoặc `GetObject/PutObject`. Ma trận IAM hiện có cũng chưa thử `DeleteObject`. Sửa gọn: dùng allowlist action mức bucket đã duyệt và kiểm trường hợp thêm quyền object. Đây là thiếu sót của guard; policy hiện tại không chứa các quyền object trên.
+>
+> **Kết quả đúng 5 câu hỏi**
+>
+> | Câu | Kết quả |
+> |---|---|
+> | 1. IRSA | Policy hiện tại không thấy quyền object, bucket ngoài prefix hoặc leo quyền IAM. Trust khóa đúng OIDC của cluster, một SA và audience `sts.amazonaws.com`. Guard có finding trên. |
+> | 2. Endpoint S3 | Hai bucket bổ sung chỉ có `GetObject`, không thêm quyền ghi ra ngoài. Check 7 chặn action ghi và resource ngoài allowlist, nhưng kiểm **tập con**, chưa bắt buộc đủ đúng 4 bucket. Nó chỉ kiểm kiểu chuỗi của ResourceAccount; điểm này đã có ở base. |
+> | 3. GitOps | Chart version và digest được pin; requests có prune/selfHeal/allowEmpty, platform không prune. Teardown hợp lý khi hết instance/MR/bucket trước, rồi dừng root trước app con. |
+> | 4. Evidence | DRF37 có quan sát tương ứng cả 5 kịch bản §4, trong các giới hạn audit đã nêu. Không coi đây là bằng chứng Golden Path hoàn chỉnh hoặc P3 đã đóng mọi gate. |
+> | 5. Dữ liệu nhạy cảm | Không phát hiện account ID/ARN thật, IP công khai thực tế hoặc tên bucket state thật trong snapshot ứng viên. Các match là mock, địa chỉ tài liệu/private hoặc placeholder. |
+>
+> **Lệnh đã chạy và kết quả**
+>
+> - `git status --short`, `git rev-parse HEAD`, `git diff`, `git show`, `git grep`, `rg`: đối chiếu revision, mã và dữ liệu nhạy cảm.
+> - `terraform test -no-color`: **20 passed, 0 failed**.
+> - `bash --noprofile --norc gitops/check.sh`: **PASS**.
+> - Python/jq đọc nguyên biểu thức check 7/13 và thử JSON trong bộ nhớ: tái hiện finding; không sửa source.
+>
+> **Giới hạn:** HEAD hiện tại là `84103ed`; đã xác nhận các file mã/test/runbook được kiểm không khác ứng viên. Lần chạy sandbox ban đầu lỗi khởi động Bash/provider; chạy lại ngoài sandbox thành công. Chỉ review nguồn và evidence đã ghi, không xác minh AWS/cluster/billing trực tiếp. Git cuối phiên sạch; không sửa file, không commit, không ghi Linear/PR.
+
+**Xử lý (Claude, PR #31):**
+- Finding MEDIUM: đã sửa (mục 3, #7).
+- Ý "check 7 chỉ kiểm tập con": cũng đã sửa.
+- Ý "chỉ kiểm kiểu chuỗi của ResourceAccount": giữ nguyên, vì đã có từ P2, ngoài phạm vi P3. Ghi lại để làm cùng lúc làm lại R1.
+- Codex chưa review lại bản sửa.
 
 ## 6. Teach-back của owner
 
@@ -81,15 +119,54 @@ Owner chạy `docs/runbooks/P3_TEACHBACK_LAB.md` trên kind ngày 14/11/2026 (kh
 >
 > thôi bỏ qua tốn thời gian quá nhanh qua phase 4 đi
 
-Câu 3–6: chưa trả lời.
+Câu 3–6: chưa trả lời ở lần này.
+
+**Lần 2 (14/11/2026, sau khi owner đổi ý).** Câu 1–2 được gõ trong chat; câu 3–6 là một khối dán. Nguyên văn:
+
+> 1. TEach back
+> 2. argo cd (app zdr-request) đọc commit  cff3ac9 và apply instance storageappspike/spike bằng chứng annotation argocd.argoprọ.io/tracking-id: ... kro đọc rgd sinh ra bucket mr, có nhãn kro.run và kro.run/node-id provider aws s3 của crossplane lấy credential qua irsa rồi gọi aws tạo bucket
+> 3. 2 argo xanh instance chưa ready argo synced/healthy chỉ nói clustẻ khớp với git. instance ở in progres, ready = false , chờ node bucket thoả reađwehn mr có synced= falsse ; describe cho thấy lỗi thật aws web identity token file must be set, còn log provider gần nhu ưtrống chưa có deployment vì kro chỉ tạo node phụ thuộc sau khi bucket ready
+> 4.  3. xoá instance
+>
+> 3a, kubectl delete: sau khoảng 15 giây instance và MR quay lại (AGE mới), vì selfHeal của Argo apply lại từ Git. Trên EKS, bucket thật sẽ bị xóa rồi tạo lại rỗng.
+> 3b, xóa qua Git: Argo prune instance, kro xóa MR, Crossplane xóa bucket AWS vì managementPolicies: "*" (DRF37: sau 17 giây ra Not Found).
+> Crossplane và provider vẫn chạy, vì app nền tảng có prune: false.
+>
+> 4. Credential và giới hạn
+> DRC gắn annotation eks.amazonaws.com/role-arn lên SA provider-aws-s3. Trên EKS, Pod Identity Webhook chèn AWS_ROLE_ARN và token vào pod, rồi STS đổi token lấy credential tạm. Kind không có webhook này nên jq ra false. Hai lớp chặn:
+>
+> Trust policy chỉ cho đúng một SA, aud sts.amazonaws.com.
+> Permissions policy chỉ cho action S3 mức bucket trên zero-drift-p3-*, không có IAM. Đổi thành * thì terraform test fail, còn trên EKS bucket ngoài prefix bị AccessDenied.
+>
+> 5. Thứ tự gỡ
+> Ở phần 5, xóa provider trước làm CRD buckets biến mất. Instance kẹt vì kro.run/finalizer (không list được bucket), ProviderConfig kẹt vì in-use.crossplane.io với users=1. Trên EKS, nếu bucket thật còn thì không controller nào gọi DeleteBucket nữa. MR kẹt Terminating, hoặc bị gỡ finalizer bằng tay, và bucket thành orphan, vẫn tốn tiền.
+>
+> 6. Role vs bucket
+> Role là hạ tầng của controller. Nó phải có trước khi provider chạy, và sống cùng cluster, nên Terraform quản lý (module p3_provider_irsa). Bucket là tài nguyên do người dùng yêu cầu qua Git (kind: Bucket trong RGD): sinh ra và mất đi theo từng instance, nên Crossplane quản lý. Lúc gỡ admin vẫn giữ enable_p3_provider_role=true, vì bỏ biến đó thì plan sẽ xóa role trong khi provider có thể vẫn cần nó để dọn bucket. Thực tế plan chỉ 1 to destroy, là access policy của admin.
 
 ### 6.3 Nhận xét (Claude, so với output owner đã dán)
 
 - **Câu 1:** thứ tự Git → Argo → instance → MR → provider → AWS qua IRSA là đúng. Sai vai trò: **kro** (không phải Crossplane) đọc RGD và sinh Bucket MR; Crossplane provider reconcile MR rồi gọi AWS. Bằng chứng Argo apply instance là annotation **Argo** `argocd.argoproj.io/tracking-id`, không phải annotation kro. Nhãn trên MR là `kro.run/instance-name: spike` và `kro.run/node-id: bucket`.
 - **Câu 2:** câu đầu đúng (Argo chỉ so cluster với Git). Thứ tự xem đúng. Giá trị ghi lại sai so với output: instance `IN_PROGRESS`/`Ready=False` (không phải "sync"); MR `SYNCED False` (không phải healthy). Thiếu: kro chờ `readyWhen` của node `bucket` nên chưa tạo Deployment; lỗi đọc ở status/events của MR, log provider gần như im lặng.
-- **Câu 3–6:** không có câu trả lời nên không đánh giá. Lab đã cho đủ dữ liệu (phần 3–6 ở 6.1).
+- **Câu 3–6 (lần 1):** không có câu trả lời nên không đánh giá. Lab đã cho đủ dữ liệu (phần 3–6 ở 6.1).
+
+Nhận xét lần 2:
+- **Câu 1 (bản sửa): đúng.** Argo đọc `cff3ac9`; bằng chứng là `argocd.argoproj.io/tracking-id`. kro đọc RGD và sinh MR mang nhãn `kro.run/*`. Provider của Crossplane lấy credential qua IRSA rồi gọi AWS.
+- **Câu 2 (bản sửa): đúng và đủ.** Nêu được: instance `IN_PROGRESS`/`Ready=False`; kro chờ `readyWhen` của node bucket; MR `Synced=False`; lỗi thật nằm ở describe; log provider gần như trống; chưa có Deployment vì còn phụ thuộc bucket.
+- **Câu 3: đúng.** Phân biệt được selfHeal (3a) với prune qua Git (3b), nêu `managementPolicies: "*"` và bằng chứng EKS (bucket mất sau 17 giây).
+- **Câu 4: đúng.** Đủ chuỗi DRC → SA → webhook → STS và hai lớp chặn trust/permissions. Thiếu một điểm: sau review Codex, guard chỉ nhận đúng danh sách action (mục 3, #7).
+- **Câu 5: đúng** với quan sát ở phần 5, nêu cả hai đường dẫn tới bucket orphan.
+- **Câu 6: đúng.** Có thêm một suy luận đúng: giữ role vì provider có thể còn cần nó để dọn bucket.
 
 ### 6.4 Mức đạt
 
 - Argo CD, kro, Crossplane: **`PRACTICED`** (lab có output 14/11).
-- **`EXPLAINED` chưa đạt.** Cần: sửa vai trò kro/Crossplane ở câu 1, đọc đúng trạng thái ở câu 2, trả lời câu 3–6 bằng lời của owner.
+- Lần 1: `EXPLAINED` chưa đạt.
+- Lần 2: **`EXPLAINED`**. Đủ 6 câu, khớp với output lab, trong giới hạn ở 6.5.
+
+### 6.5 Giới hạn về nguồn gốc câu trả lời
+
+- Câu 1–2 lần 2 do owner gõ trực tiếp (có lỗi gõ).
+- Câu 3–6 là một khối dán: không có lỗi gõ, và cách diễn đạt sát phần giải thích Claude viết trong phiên (ví dụ câu 3a, câu 4). Claude không xác minh được khối này do owner tự viết.
+- Câu 6 có một suy luận mà Claude không đưa ra (giữ role để provider còn dọn bucket).
+- Owner là người chấp nhận đóng P3. Nên hỏi lại miệng câu 3–5 khi diễn tập bảo vệ (P11).

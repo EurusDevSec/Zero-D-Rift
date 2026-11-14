@@ -1,9 +1,9 @@
 ---
 project: Zero D-Rift
-status: P3_GATES_CARRIED_P4_SPEC_PENDING
+status: P3_GATES_EVIDENCED_OWNER_CLOSE_PENDING
 active_phase: P4
 active_task: P4-T0 SPEC draft (DRF-16, DRF-17)
-active_feature: SPEC-P4 RAGSandbox; P3 gates carried (DRF-38)
+active_feature: P3 close (DRF-38, PR #31), then SPEC-P4 RAGSandbox
 active_spec: .agent/specs/SPEC-P3_FIRST_RESOURCE_GRAPH.md
 current_learning: .agent/learning/CURRENT_STATUS.md
 mode: Coach
@@ -22,12 +22,14 @@ Follow [context governance](../references/context-governance.md).
 - P3 Tasks 1–5 done (DRF-34, DRF-39, DRF-35, DRF-36, DRF-37). L3 window
   P3-L3-20261105-01 passed on EKS; destroy 52; inventory CLEAN 05/11 and delayed
   inventory CLEAN 06/11. Evidence `docs/evidence/p3/`.
-- P3 is **not complete** under SPEC-P3 §8. On 14/11 the owner ran the teach-back
-  lab on kind (parts 0–7), answered §7 Q1–Q2, then chose to move to P4. Audit
-  `docs/evidence/p3/DRF38_P3_ACCEPTANCE_AUDIT_20261106.md` §6.
+- P3 §8 gates evidenced 14/11 (audit
+  `docs/evidence/p3/DRF38_P3_ACCEPTANCE_AUDIT_20261106.md`): billing (month
+  pre-tax 0.00 USD, us-east-1 0.29 USD), Codex review (REQUEST CHANGES, 1 MEDIUM
+  guard finding fixed in PR #31 with negative tests), owner teach-back 6/6.
+  Closes when the owner merges PR #31 and accepts the limits.
 - PR #28 `recurse` fix verified on kind (root Synced at `ee34db4`), not on EKS.
-- Learning: Terraform `PRACTICED` + `EXPLAINED`; Argo CD, kro, Crossplane
-  `PRACTICED` (14/11), `EXPLAINED` not reached.
+- Learning: Terraform and Argo CD/kro/Crossplane `PRACTICED` + `EXPLAINED`
+  (controllers with a provenance limit, audit §6.5).
 - AWS holds only the retain allowlist: Terraform state bucket, role
   `zero-drift-bootstrap`, MFA device. No cluster, no P3 role.
 - R1 least privilege deferred; it lacks the `zero-drift-p3-*` role and
@@ -40,8 +42,8 @@ Follow [context governance](../references/context-governance.md).
 
 ## Open decisions and blockers
 
-1. P3 gates carried, not waived: billing (owner, Billing console), Codex review
-   (audit §4), teach-back Q1–Q2 corrections and Q3–Q6 (audit §6.4).
+1. P3 close: owner merges PR #31 and accepts the limits (billing month total only,
+   Codex has not re-checked the fix, teach-back provenance).
 2. Schedule: P4 gate was 08/11, P6 14/11, P8 freeze 19/11. Ver3 §12.1 requires a
    rebaseline from live state without reducing trials, acceptance, learning gate
    or teardown. Rebaseline is the owner's decision.
