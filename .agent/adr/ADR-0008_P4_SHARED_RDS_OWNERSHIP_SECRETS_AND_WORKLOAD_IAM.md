@@ -1,8 +1,9 @@
 ---
 id: ADR-0008
 title: P4 shared RDS ownership, secret integration and workload IAM boundary
-status: PROPOSED
+status: ACCEPTED
 date: 2026-11-14
+accepted_date: 2026-11-14
 decision_source: SPEC-P4 §9.1 D1, D4, D5, D6, D7 (owner approved 2026-11-14)
 authority: DOCUMENTATION_ONLY_NO_AWS
 ---
@@ -21,8 +22,9 @@ lần cuối APPROVE tại `358da73` (SPEC §9.4). Owner duyệt cả 12 quyết
 14/11/2026 (SPEC §9.1). ADR này ghi lại phần kiến trúc của các quyết định đó ở
 một chỗ. Nó không thêm quyết định mới.
 
-Trạng thái `PROPOSED` là chờ owner chấp nhận văn bản ADR. ADR không cấp quyền
-apply, tạo role, publish image hay chạy window AWS.
+Owner chấp nhận văn bản ADR ngày 14/11/2026, sau Codex APPROVE tại `8036e44`
+(nguyên văn: "Chấp nhận ADR-0008"). ADR không cấp quyền apply, tạo role,
+publish image hay chạy window AWS.
 
 # Decision
 
@@ -149,7 +151,7 @@ changed files. Checks: `git diff --check 7dcaa44 8036e44` and
 `check-context.sh` PASS; file references valid. Limit: document review only, no
 runtime proof; no file, commit, AWS call or Linear change.
 
-Owner acceptance of the text: pending.
+Owner acceptance of the text: 14/11/2026, verbatim "Chấp nhận ADR-0008".
 
 # Revisit conditions
 

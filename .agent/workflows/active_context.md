@@ -1,8 +1,8 @@
 ---
 project: Zero D-Rift
-status: P4_SPEC_APPROVED_ADR0008_PROPOSED
+status: P4_SPEC_APPROVED_ADR0008_ACCEPTED
 active_phase: P4
-active_task: P4-T1 parts B and C, pins/prices and ADR-0008 (DRF-40)
+active_task: P4-T1 part B, pins and prices (DRF-40)
 active_feature: RAGSandbox (SPEC-P4)
 active_spec: .agent/specs/SPEC-P4_RAG_SANDBOX.md
 current_learning: .agent/learning/CURRENT_STATUS.md
@@ -40,9 +40,10 @@ Follow [context governance](../references/context-governance.md).
 - SPEC-P4 `OWNER_APPROVED_20261114`: owner approved D1–D12 and the 5 USD P4
   cap ("Duyệt cả 12"), after Codex review APPROVE at `358da73` (three rounds,
   SPEC §9.4). Merged in PR #33 (`7dcaa44`). Nothing for P4 is built.
-- ADR-0008 drafted 14/11 (`PROPOSED`): Terraform owns shared RDS and every P4
-  role; direct SDK through IRSA; master/bootstrap only in `zdr-platform`.
-  SYSTEM_DESIGN, THREAT_MODEL, VERSION_MATRIX and ADR-0004 point to it.
+- ADR-0008 `ACCEPTED` 14/11 (Codex APPROVE at `8036e44`; owner "Chấp nhận
+  ADR-0008"): Terraform owns shared RDS and every P4 role; direct SDK through
+  IRSA; master/bootstrap only in `zdr-platform`. Runtime still `UNVERIFIED`.
+  On PR #34, not merged yet.
 - [Linear routing](../docs/LINEAR_DELIVERY.md): P4 = 10 issues. DRF-40 (P4-T1,
   no sub-tasks); DRF-44 (P4-T2) → DRF-45, 46; DRF-49 (P4-T3) → DRF-50, 51;
   DRF-55 (P4-T4) → DRF-56, 57. Other DRF-41..63 and DRF-16/17 cancelled.
@@ -60,8 +61,8 @@ Follow [context governance](../references/context-governance.md).
 
 ## Next safe action
 
-Owner accepts ADR-0008 text (DRF-40 part C). Then DRF-40 part B: pins and
-prices, read-only AWS CLI typed by the owner in an MFA session.
+Owner merges PR #34. Then DRF-40 part B: pins and prices, read-only AWS CLI
+typed by the owner in an MFA session.
 
 ## Context expansion
 

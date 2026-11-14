@@ -263,7 +263,7 @@ resource ARN chỉ được pin khi resource names, Region và provider APIs đ�
 
 1. Secret source of truth là AWS Secrets Manager theo canonical scope.
 2. Integration để Pod nhận secret: direct AWS SDK qua IRSA, không External
-   Secrets Operator hay Secrets Store CSI (ADR-0008, PROPOSED; runtime
+   Secrets Operator hay Secrets Store CSI (ADR-0008, ACCEPTED; runtime
    `UNVERIFIED` đến P4-T4.1). Master và bootstrap credential chỉ ở
    `zdr-platform`.
 3. IRSA/IAM chỉ cho phép đọc secret object được chỉ định.
@@ -408,7 +408,7 @@ một security product mới.
 | Exact IRSA IAM actions and resource ARNs | `UNVERIFIED` | Generate from selected resources/provider API calls; run positive and negative L3 tests. |
 | IMDS restriction and node launch-template settings | `UNVERIFIED` | Verify AL2023/Karpenter node behavior on EKS. |
 | VPC CNI version, NetworkPolicy enablement and strict mode | `UNVERIFIED` | Pin add-on/config and run EKS connectivity matrix. |
-| Secret integration from Secrets Manager | `PROPOSED` — ADR-0008 | Direct SDK through IRSA chosen over CSI and external sync (SPEC-P4 D5, owner approved 2026-11-14). Runtime proof and cross-tenant negatives in P4-T4.1. |
+| Secret integration from Secrets Manager | `ACCEPTED` — ADR-0008 | Direct SDK through IRSA chosen over CSI and external sync (SPEC-P4 D5, owner approved 2026-11-14). Runtime proof and cross-tenant negatives in P4-T4.1. |
 | Kubernetes secret encryption/KMS configuration | `UNVERIFIED` | Decide after EKS/bootstrap and cost review. |
 | Crossplane provider exact allowlist and lifecycle policy | `UNVERIFIED` | Complete L2 pairing, ownership and deletion/management-policy review. |
 | Karpenter controller/node-role IAM boundary | `UNVERIFIED` | Pin version-specific permissions and bounded `iam:PassRole` during P6. |

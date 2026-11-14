@@ -22,7 +22,7 @@ Data-recovery trial bao gồm snapshot, restore, thay đổi endpoint/secret và
 5. Bootstrap Job dùng database credential có privilege giới hạn để chuẩn bị database/schema/role. AWS IAM, nếu được dùng để đọc secret, không thay thế PostgreSQL authorization.
 6. Recovery trial dùng RDS PoC hoặc clone riêng, không phá shared RDS chính.
 7. Chỉ ghi recovery thành công khi data-integrity check và application reconnect đều pass.
-8. ADR này không chốt engine version, instance class, Region, secret-integration method, provisioning owner hoặc chi phí thực tế; các mục đó vẫn `UNVERIFIED` cho đến task tương ứng. Cập nhật 2026-11-14: provisioning owner, secret-integration method và ranh giới IAM workload được ghi ở [ADR-0008](ADR-0008_P4_SHARED_RDS_OWNERSHIP_SECRETS_AND_WORKLOAD_IAM.md) (PROPOSED; quyết định đã được owner duyệt trong SPEC-P4 §9.1, runtime còn `UNVERIFIED`). Engine/instance class theo SPEC-P4 D2; pin version ở DRF-40 phần B.
+8. ADR này không chốt engine version, instance class, Region, secret-integration method, provisioning owner hoặc chi phí thực tế; các mục đó vẫn `UNVERIFIED` cho đến task tương ứng. Cập nhật 2026-11-14: provisioning owner, secret-integration method và ranh giới IAM workload được ghi ở [ADR-0008](ADR-0008_P4_SHARED_RDS_OWNERSHIP_SECRETS_AND_WORKLOAD_IAM.md) (ACCEPTED 2026-11-14; runtime còn `UNVERIFIED`). Engine/instance class theo SPEC-P4 D2; pin version ở DRF-40 phần B.
 
 # Alternatives considered
 
