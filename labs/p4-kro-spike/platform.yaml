@@ -1,0 +1,19 @@
+# P4 kro spike (DRF-40 part B). Platform side: the zdr-platform namespace with a
+# non-secret config, and one tenant namespace. No credential anywhere.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: zdr-platform
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: tenant-a
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: platform-config
+  namespace: zdr-platform
+data:
+  dbHost: lab-db.zdr-platform.svc
