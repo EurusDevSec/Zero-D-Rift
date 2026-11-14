@@ -1,7 +1,7 @@
 ---
 id: SPEC-P4
 title: RAGSandbox — shared RDS PostgreSQL/pgvector, scoped identity, usable status
-status: DRAFT_OWNER_REVIEW_PENDING
+status: OWNER_APPROVED_20261114
 phase: P4
 start: 2026-11-14
 deadline: 2026-11-18 (PROPOSED; ver3 §12 window 06–08/11 already missed)
@@ -209,9 +209,9 @@ sub-tasks.
 
 - [x] SPEC-P4 drafted from ver3 §5.2, §6.3–6.4, §9.1, §10, ADR-0003/0004/0006,
       SYSTEM_DESIGN §5.1 and §6, THREAT_MODEL §6.5, EXPERIMENT_PLAN §5.2 and §6.
-- [ ] Codex reviews the candidate revision; findings, fixes and re-check
+- [x] Codex reviews the candidate revision; findings, fixes and re-check
       recorded in §9.4.
-- [ ] Owner decides D1–D12 and the P4 gross cap.
+- [x] Owner decides D1–D12 and the P4 gross cap (§9.1).
 
 **B. Pins, prices and source checks (1.5 h)** — after A.
 
@@ -494,6 +494,12 @@ end-to-end path is not stable, stop and fix it; do not start P6 beyond a skeleto
 
 ## 9.1. Decisions for the owner (D1–D12)
 
+Owner approval, 14/11/2026, after Codex review 3 APPROVE at `358da73`, verbatim:
+"Duyệt cả 12". All twelve proposals below are approved as written, including
+D8 (public image on GHCR) and D10 (5 USD gross cap for all P4 windows and
+retries). Approving the SPEC does not approve any AWS window; each window still
+needs its own execution approval (negative boundary 10).
+
 | ID | Decision | Proposal | Why | Alternative |
 |---|---|---|---|---|
 | D1 | Who owns the shared RDS | Terraform module, flag `enable_rag_platform`, created and destroyed with each window | Prepared before any request; one owner (ADR-0003); no new provider CRDs on a small node | `provider-aws-rds`: more CRDs, RDS/IAM rights for Crossplane |
@@ -619,8 +625,8 @@ text allows dropping that condition (the old option in §9.4 is review history);
 DRF-51 part C matches. `git diff --check 4c23916 358da73` PASS. Document and
 Linear read only; no runtime proof; no file, commit or Linear change.
 
-Independent review of the SPEC is complete. Owner approval of D1–D12 and the P4
-cap is still pending.
+Independent review of the SPEC is complete. The owner approved D1–D12 and the
+P4 cap on 14/11/2026 (§9.1).
 
 # 10. Open risks
 
