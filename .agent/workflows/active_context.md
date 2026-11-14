@@ -1,10 +1,10 @@
 ---
 project: Zero D-Rift
-status: P3_DONE_P4_SPEC_PENDING
+status: P4_SPEC_APPROVED_MERGE_PENDING
 active_phase: P4
-active_task: P4-T0 SPEC draft (DRF-16, DRF-17)
-active_feature: SPEC-P4 RAGSandbox
-active_spec: .agent/specs/SPEC-P3_FIRST_RESOURCE_GRAPH.md
+active_task: P4-T1 parts B and C, pins/prices and ADR-0008 (DRF-40)
+active_feature: RAGSandbox (SPEC-P4)
+active_spec: .agent/specs/SPEC-P4_RAG_SANDBOX.md
 current_learning: .agent/learning/CURRENT_STATUS.md
 mode: Coach
 authority: NO_INSTALL_NO_AWS_APPLY_UNTIL_TASK_GATES
@@ -37,8 +37,12 @@ Follow [context governance](../references/context-governance.md).
 - Tools: Terraform 1.16.4, kubectl v1.35.10 (`/r/_Dev_tools/kubectl`), kind
   v0.33.0 (`/r/_Dev_tools/kind`, default node v1.37.0, so always pass `--image`),
   Helm v4.2.2.
-- [Linear routing](../docs/LINEAR_DELIVERY.md): P3 = DRF-14, DRF-15; P4 = DRF-16,
-  DRF-17 (no SPEC yet).
+- SPEC-P4 `OWNER_APPROVED_20261114`: owner approved D1–D12 and the 5 USD P4
+  cap ("Duyệt cả 12"), after Codex review APPROVE at `358da73` (three rounds,
+  SPEC §9.4). PR #33 not merged yet. Nothing for P4 is built.
+- [Linear routing](../docs/LINEAR_DELIVERY.md): P4 = 10 issues. DRF-40 (P4-T1,
+  no sub-tasks); DRF-44 (P4-T2) → DRF-45, 46; DRF-49 (P4-T3) → DRF-50, 51;
+  DRF-55 (P4-T4) → DRF-56, 57. Other DRF-41..63 and DRF-16/17 cancelled.
 
 ## Open decisions and blockers
 
@@ -48,18 +52,18 @@ Follow [context governance](../references/context-governance.md).
    rebaseline from live state without reducing trials, acceptance, learning gate
    or teardown. Rebaseline is the owner's decision.
 3. ADR-0005 still PROPOSED (owner review).
-4. SPEC-P4 does not exist; P4 implementation and any AWS window wait for it.
+4. SPEC approval is not AWS approval: every P4 window still needs its own
+   execution approval, cost check and stop time (SPEC negative boundary 10).
 
 ## Next safe action
 
-Draft SPEC-P4 (RAGSandbox: shared RDS PostgreSQL/pgvector, IRSA S3 prefix,
-usable status) from ver3 §P4 and roadmap row P4; request Codex review before
-implementation. Carried P3 gates can close in parallel.
+Owner merges PR #33. Then DRF-40 part B (pins and prices; read-only AWS CLI in
+the owner's MFA session) and part C (ADR-0008).
 
 ## Context expansion
 
-Use ver3 §12 (schedule, scope gates), LEARNING_ROADMAP row P4, SPEC-P3 as the
-template, DRF38 audit for carried gates. Live Git overrides this file.
+Use SPEC-P4, ver3 §6.3–6.4 and §12, ADR-0003/0004/0006, THREAT_MODEL §6.5,
+EXPERIMENT_PLAN §6, LEARNING_ROADMAP row P4. Live Git overrides this file.
 
 ## Checkpoint rule
 
