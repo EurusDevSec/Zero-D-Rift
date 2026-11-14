@@ -135,6 +135,22 @@ apply, tạo role, publish image hay chạy window AWS.
 Đây là design evidence. Chưa có runtime evidence cho IRSA, Secrets Manager hay
 RDS; các dòng đó lên `RUNTIME_VERIFIED` chỉ sau P4-T4.1 trên EKS.
 
+# Independent review
+
+**Codex, 14/11/2026.** PR #34, revision
+`8036e44022262fa67c3946e10df89b7d1118f4fb`. Verdict: `APPROVE`; no BLOCKER,
+MAJOR, MINOR or NIT in scope. Reviewer findings: ADR-0008 records D1 and D4–D7
+as approved, adds no new decision and does not contradict ADR-0003/0004/0006;
+platform Jobs, ServiceAccounts and credentials stay in `zdr-platform` and the
+SPEC §10 L2 stop is kept; the updated rows in SYSTEM_DESIGN, THREAT_MODEL,
+VERSION_MATRIX and ADR-0004 keep design decisions apart from runtime
+`UNVERIFIED`; no account ID, real ARN, endpoint or credential in the seven
+changed files. Checks: `git diff --check 7dcaa44 8036e44` and
+`check-context.sh` PASS; file references valid. Limit: document review only, no
+runtime proof; no file, commit, AWS call or Linear change.
+
+Owner acceptance of the text: pending.
+
 # Revisit conditions
 
 - Lab kind P4-T3.2 cho thấy kro v0.9.4 không chạy được Job ngoài namespace
