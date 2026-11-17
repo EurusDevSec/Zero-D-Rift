@@ -221,10 +221,13 @@ sub-tasks.
 - [ ] Prices rechecked: RDS instance-hour, gp3 GB-month, Secrets Manager per
       secret and per call. COST_PLAN §5 updated if any differs.
 - [ ] Image digests: Python base, pgvector image for kind, RDS CA bundle checksum.
-- [ ] kro v0.9.4 CRD read for the features the graph needs: `externalRef` to a
-      ConfigMap in another namespace, a child in a namespace other than the
-      instance's, `readyWhen` on a Job, and removal of a child whose name
-      changes. Each stays `UNVERIFIED` until the P4-T3.2 kind lab.
+- [x] kro v0.9.4 features the graph needs: `externalRef` to a ConfigMap in
+      another namespace, a child in a namespace other than the instance's,
+      `readyWhen` on a Job, and removal of a child whose name changes. Moved
+      forward from a CRD read to a kind spike on 14/11: all four PASS on kind
+      (`docs/evidence/p4/P4-T1_KRO_SPIKE_20261114.md`); new finding: Pods of
+      Jobs kro deletes are left orphaned (§10). P4-T3.2 still re-proves them in
+      the real graph.
 - [ ] VERSION_MATRIX gets a "P4 pins" section.
 
 **C. ADR-0008 and ownership records (1 h)** — after A.
@@ -348,7 +351,9 @@ ready for EKS.
       `activeDeadlineSeconds` explicitly, so a failure ends in a terminal
       `Failed`. No `ttlSecondsAfterFinished`: kro would re-create a deleted Job
       and re-run bootstrap. If kro does not remove the Job with the old name,
-      `cleanup` and the runbook delete lower attempts.
+      `cleanup` and the runbook delete lower attempts. The Job's Pod template
+      carries the instance's labels, because kro deletes Jobs without their
+      Pods (spike 14/11): `cleanup` and the runbook delete those Pods by label.
 - [ ] Status: endpoint, schema, bucket, secret name, bootstrap attempt and Job
       state, available replicas.
 - [ ] kro RBAC extended for the new kinds; nothing wider than needed.
@@ -631,9 +636,13 @@ P4 cap on 14/11/2026 (§9.1).
 
 # 10. Open risks
 
-- kro v0.9.4 features are `SOURCE_VERIFIED` at best until the P4-T3.2 kind lab.
-  Each has its own response; none moves a platform Job or credential into a
-  tenant namespace (negative boundary 3):
+- kro v0.9.4 features: all four PASSED in a kind spike on 14/11/2026
+  (`docs/evidence/p4/P4-T1_KRO_SPIKE_20261114.md`), including a later failed
+  attempt turning a Ready instance back to not Ready. kro removed the old Job
+  only once the new attempt and the whole graph were Ready. P4-T3.2 re-proves
+  them in the real graph; the responses below stay in force if that lab
+  disagrees. None moves a platform Job or credential into a tenant namespace
+  (negative boundary 3):
   - `externalRef` to `platform-config` in `zdr-platform` fails: apply a copy of
     the non-secret `platform-config` into each tenant namespace in the window,
     from Terraform outputs and ignored by Argo CD, as with the P3 annotations.
@@ -649,6 +658,11 @@ P4 cap on 14/11/2026 (§9.1).
     Job must have succeeded before the instance is Ready.
   - a renamed child is not removed by kro: `cleanup` and the runbook delete old
     bootstrap Jobs (D9).
+- When kro deletes a Job (old attempt or deleted instance), the Job's Pods stay
+  in `zdr-platform` with no owner (spike 14/11). They hold no secret value,
+  since secrets are read by SDK at run time, provided bootstrap never logs one.
+  `cleanup` and the runbook delete them by the instance labels on the Pod
+  template (D9).
 - GHCR layer downloads may be redirected to a storage host the S3 gateway
   endpoint policy blocks, as quay.io and registry.k8s.io were in P3. P4-T4.1
   part B checks the pull first; the fix is an explicit, read-only endpoint entry.

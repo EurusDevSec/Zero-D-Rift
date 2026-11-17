@@ -1,0 +1,18 @@
+# P4 kro spike (DRF-40 part B). kro runs with rbac.mode=aggregation, so it only
+# gets the rights listed here (same pattern as labs/p3-kind/kro-rbac.yaml).
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: kro-zdr-p4-spike
+  labels:
+    rbac.kro.run/aggregate-to-controller: "true"
+rules:
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: ["batch"]
+    resources: ["jobs"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: ["kro.run"]
+    resources: ["krospikes", "krospikes/status"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]

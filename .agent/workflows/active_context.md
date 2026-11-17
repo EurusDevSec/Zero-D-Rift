@@ -1,6 +1,6 @@
 ---
 project: Zero D-Rift
-status: P4_SPEC_APPROVED_ADR0008_ACCEPTED
+status: P4_KRO_SPIKE_PASSED
 active_phase: P4
 active_task: P4-T1 part B, pins and prices (DRF-40)
 active_feature: RAGSandbox (SPEC-P4)
@@ -43,7 +43,12 @@ Follow [context governance](../references/context-governance.md).
 - ADR-0008 `ACCEPTED` 14/11 (Codex APPROVE at `8036e44`; owner "Chấp nhận
   ADR-0008"): Terraform owns shared RDS and every P4 role; direct SDK through
   IRSA; master/bootstrap only in `zdr-platform`. Runtime still `UNVERIFIED`.
-  On PR #34, not merged yet.
+  Merged in PR #34 (`df275e4`).
+- kro spike on kind 14/11 (DRF-40 part B): externalRef across namespaces, Job
+  in `zdr-platform`, `readyWhen` on a Job and rename pruning all PASS, including
+  fail after success → not Ready. New: kro leaves deleted Jobs' Pods orphaned;
+  SPEC §10/D9 cleanup deletes them by label. Evidence
+  `docs/evidence/p4/P4-T1_KRO_SPIKE_20261114.md`, runbook `docs/runbooks/P4_L2_KIND_LAB.md`.
 - [Linear routing](../docs/LINEAR_DELIVERY.md): P4 = 10 issues. DRF-40 (P4-T1,
   no sub-tasks); DRF-44 (P4-T2) → DRF-45, 46; DRF-49 (P4-T3) → DRF-50, 51;
   DRF-55 (P4-T4) → DRF-56, 57. Other DRF-41..63 and DRF-16/17 cancelled.
@@ -52,17 +57,19 @@ Follow [context governance](../references/context-governance.md).
 
 1. Carried from P3 (not gates): re-ask teach-back Q3–Q5 orally at P11; endpoint
    check 7 only type-checks `aws:ResourceAccount` (fix with R1).
-2. Schedule: P4 gate was 08/11, P6 14/11, P8 freeze 19/11. Ver3 §12.1 requires a
-   rebaseline from live state without reducing trials, acceptance, learning gate
-   or teardown. Rebaseline is the owner's decision.
+2. Schedule: P4 gate was 08/11, P6 14/11, P8 freeze 19/11. Owner target 14/11:
+   P4 done by end of 15/11. Ver3 §12.1 still forbids reducing trials,
+   acceptance, learning gate or teardown to meet it. Full rebaseline of P5–P11
+   is the owner's decision.
 3. ADR-0005 still PROPOSED (owner review).
 4. SPEC approval is not AWS approval: every P4 window still needs its own
    execution approval, cost check and stop time (SPEC negative boundary 10).
 
 ## Next safe action
 
-Owner merges PR #34. Then DRF-40 part B: pins and prices, read-only AWS CLI
-typed by the owner in an MFA session.
+Owner merges the kro spike PR. Then DRF-40 part B rest: pins and prices,
+read-only AWS CLI typed by the owner in an MFA session; then DRF-45 and DRF-50
+(kind only, no AWS).
 
 ## Context expansion
 

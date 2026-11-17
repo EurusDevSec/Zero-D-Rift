@@ -1,0 +1,10 @@
+# P4 kro spike (DRF-40 part B). One request in tenant-a. The runbook changes
+# attempt and exitCode with kubectl patch to play fail -> retry -> fail again.
+apiVersion: kro.run/v1alpha1
+kind: KroSpike
+metadata:
+  name: s1
+  namespace: tenant-a
+spec:
+  attempt: 0
+  exitCode: 1

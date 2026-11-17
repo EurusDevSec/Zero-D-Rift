@@ -1,0 +1,65 @@
+# P4 kro spike (DRF-40 part B). Tests the four kro v0.9.4 features SPEC-P4 §10
+# depends on, with built-in kinds only (no Crossplane, no database):
+#   F1 externalRef to a ConfigMap in another namespace (zdr-platform)
+#   F2 a child Job created in zdr-platform, not in the instance's namespace
+#   F3 readyWhen on that Job gates the instance and its dependent
+#   F4 renaming the Job (attempt in the name): is the old Job removed?
+apiVersion: kro.run/v1alpha1
+kind: ResourceGraphDefinition
+metadata:
+  name: kro-spike
+spec:
+  schema:
+    apiVersion: v1alpha1
+    kind: KroSpike
+    spec:
+      attempt: integer | default=0
+      exitCode: integer | default=0
+    status:
+      dbHost: ${platformConfig.data.dbHost}
+      jobName: ${job.metadata.name}
+  resources:
+    - id: platformConfig
+      externalRef:
+        apiVersion: v1
+        kind: ConfigMap
+        metadata:
+          name: platform-config
+          namespace: zdr-platform
+    - id: job
+      readyWhen:
+        - ${job.status.?conditions.orValue([]).exists(c, c.type == "Complete" && c.status == "True")}
+      template:
+        apiVersion: batch/v1
+        kind: Job
+        metadata:
+          name: ${schema.metadata.namespace}-${schema.metadata.name}-boot-${string(schema.spec.attempt)}
+          namespace: zdr-platform
+        spec:
+          backoffLimit: 0
+          activeDeadlineSeconds: 120
+          template:
+            spec:
+              restartPolicy: Never
+              containers:
+                - name: boot
+                  image: busybox:1.37.0@sha256:a7dbc319b1438115a207e11930dc4bb3e643dcb3ec0bdd694bb36cd8fad289ec
+                  command: ["sh", "-c", "echo host=$DB_HOST; sleep 5; exit $EXIT_CODE"]
+                  env:
+                    - name: DB_HOST
+                      value: ${platformConfig.data.dbHost}
+                    - name: EXIT_CODE
+                      value: ${string(schema.spec.exitCode)}
+                  resources:
+                    requests: {cpu: 10m, memory: 16Mi}
+                    limits: {memory: 32Mi}
+    - id: app
+      # Stand-in for the Deployment: must appear only after the Job succeeded.
+      template:
+        apiVersion: v1
+        kind: ConfigMap
+        metadata:
+          name: ${schema.metadata.name}-app
+          namespace: ${schema.metadata.namespace}
+        data:
+          bootJob: ${job.metadata.name}
