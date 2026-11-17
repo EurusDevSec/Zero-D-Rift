@@ -162,3 +162,24 @@ candidates for Argo CD, Crossplane and the AWS provider; other rows are unchange
 S3 bucket API for P3: `s3.aws.m.upbound.io/v1beta1` `Bucket` (namespaced). It has
 no `deletionPolicy`; deletion is controlled by `managementPolicies`. Runtime status
 moves to `RUNTIME_VERIFIED` only after the P3 kind lab (L2) and EKS window (L3).
+
+## 8. P4 pins (2026-11-17)
+
+Checked on 2026-11-17 for SPEC-P4 P4-T1 part B (DRF-40). Commands, raw output and
+the kind/RDS parity table: `docs/evidence/p4/P4-T1_PINS_PRICES_20261117.md`. §7
+pins carry over unchanged.
+
+| Component | Pin | Digest / checksum | Status |
+| --- | --- | --- | --- |
+| RDS engine | PostgreSQL `17.11` (latest in `us-east-1`; the unpinned default is 17.9, so pin explicitly) | — | `ACCOUNT_VERIFIED` 2026-11-17 |
+| RDS instance | `db.t4g.micro`, gp3, orderable for 17.11 in 5 AZs | — | `ACCOUNT_VERIFIED` 2026-11-17 |
+| RDS TLS | family `postgres17` default `rds.force_ssl=1`; default CA `rds-ca-rsa2048-g1` | — | `ACCOUNT_VERIFIED` 2026-11-17 |
+| pgvector on RDS | `0.8.2` for 17.11 | — | `DOC_VERIFIED`; confirm with `pg_extension` in the L3 window |
+| RDS CA bundle | `us-east-1-bundle.pem` from `truststore.pki.rds.amazonaws.com` | sha256 `b1711d12…2462dd77` | `SOURCE_VERIFIED` |
+| App base image | `python:3.13-slim` (Python 3.13.18, Debian trixie) | index `sha256:e48f59cd…6ee9ed90` | `SOURCE_VERIFIED` |
+| kind database | `pgvector/pgvector:0.8.2-pg17` (PostgreSQL 17.10, pgvector 0.8.2) | index `sha256:feb68f4f…d1a33966` | `SOURCE_VERIFIED` |
+
+Parity gap: kind runs PostgreSQL 17.10 against RDS 17.11, with no TLS by default and a
+real superuser where the RDS master is only `rds_superuser` (limit already stated in
+SPEC-P4 P4-T2.1). TLS `verify-full` is proven only in L3, unless the kind lab adds its
+own CA.

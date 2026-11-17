@@ -292,3 +292,32 @@ Status meanings:
   audit §6.2). All match the lab output. Q3–Q6 came as a pasted block close to
   Claude's wording, so authorship is not verified (audit §6.5); re-ask Q3–Q5 at P11.
 - Status: PRACTICED + EXPLAINED (Argo CD, kro, Crossplane), provenance limit noted
+
+### 2026-11-17 — P4 pins, digests and TLS mode (DRF-40 part B)
+
+- Phase/task: P4 / P4-T1 part B
+- Learning objective: Explain why the RDS engine and images are pinned, and what
+  `rds.force_ssl` does and does not enforce.
+- Source(s) consulted: `docs/runbooks/P4_PINS_AND_PRICES.md`, evidence
+  `docs/evidence/p4/P4-T1_PINS_PRICES_20261117.md`, Claude's explanation in chat.
+- Prediction before lab: none recorded; the runbook stated expected values.
+- Micro-lab/change performed: Owner typed the read-only AWS CLI in an MFA session
+  and pasted the output. Skipping `export V` once left the orderable query unfiltered;
+  owner set it and reran.
+- Expected vs actual: All values matched (17.11 offered, default 17.9; t4g.micro gp3;
+  `force_ssl=1`; prices unchanged).
+- Explain in my own words (owner, 17/11): Q1: pin 17.11, because the default can change
+  and silently create drift. Q2: a tag can move, a digest is bound to the image
+  content. Q3 first answer: `force_ssl=1` makes the app use TLS *and* verify the CA.
+  That answer mixed up two things. Claude corrected it: RDS enforces encryption, the
+  app chooses verification. Follow-up question: "require vẫn kết nối được nhưng không
+  đạt yêu cầu bảo mật của p4 bởi vì nó chỉ có mã hoá nhưng không kiểm CA … nếu ai làm
+  giả server vẫn lừa được app cho nên phải dùng verify-full".
+- Failure I can now diagnose: An app that connects with `sslmode=require` works but
+  is open to a fake server; an app with no TLS is refused by RDS.
+- Remaining gap: Q1–Q2 and part of the follow-up mirror Claude's wording, so they
+  show recall more than independent explanation. The follow-up applies the idea to a
+  new case correctly. `auto_minor_version_upgrade` (a second drift source) was
+  introduced by Claude and has not been explained back.
+- Status: EXPLAINED (version/digest pinning, TLS encryption vs CA verification),
+  provenance limit noted; PRACTICED only for read-only CLI, not for a TLS connection

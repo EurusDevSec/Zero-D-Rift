@@ -128,9 +128,10 @@ Network cost
 | Linux `m6i.large` | 0.096 USD/instance-hour tại `us-east-1` | `PRICE_API_VERIFIED` |
 | Linux `t3.medium` | 0.0416 USD/instance-hour tại `us-east-1` | `PRICE_API_VERIFIED` |
 | Linux `g4dn.xlarge` | 0.526 USD/instance-hour tại `us-east-1` | `PRICE_API_VERIFIED`; launch `BLOCKED_BY_QUOTA` |
-| RDS PostgreSQL Single-AZ `db.t4g.micro` | 0.016 USD/instance-hour | `PRICE_API_VERIFIED` |
-| EBS gp3 / RDS PostgreSQL gp3 | 0.08 / 0.115 USD mỗi GB-month | `PRICE_API_VERIFIED` |
+| RDS PostgreSQL Single-AZ `db.t4g.micro` | 0.016 USD/instance-hour | `PRICE_API_VERIFIED`; kiểm lại 2026-11-17, không đổi |
+| EBS gp3 / RDS PostgreSQL gp3 | 0.08 / 0.115 USD mỗi GB-month | `PRICE_API_VERIFIED`; RDS gp3 kiểm lại 2026-11-17, không đổi |
 | Additional RDS PostgreSQL backup | 0.095 USD mỗi GB-month vượt free allocation | `PRICE_API_VERIFIED` |
+| Secrets Manager | 0.40 USD/secret-tháng + 0.05 USD mỗi 10 000 API request tại `us-east-1` | `PRICE_API_VERIFIED` 2026-11-17 (DRF-40) |
 | NAT Gateway | 0.045 USD/gateway-hour + 0.045 USD/GB processed tại `us-east-1`; standard data transfer tính riêng | `PRICE_API_VERIFIED` |
 | S3 gateway endpoint | Không có additional endpoint charge | `DOC_VERIFIED` |
 | PrivateLink interface endpoint | 0.01 USD/endpoint-hour + 0.01 USD/GB tới 1 PB/tháng tại `us-east-1` | `PRICE_API_VERIFIED` |
