@@ -253,6 +253,24 @@ Kết luận quota hiện tại: P2 EKS bootstrap không bị chặn bởi EKS/V
 nhưng P6 GPU bị chặn cho đến khi G/VT quota được tăng hoặc GPU path được điều chỉnh
 theo roadmap. Task 5 không tự gửi quota-increase request.
 
+#### 7.3.1. GPU quota request outcome (owner, 31/10–11/11/2026)
+
+Owner tự gửi request tăng hai quota G/VT lên 4 vCPU (một `g4dn.xlarge`) ngày
+31/10, bị từ chối, rồi appeal kèm use case chi tiết. Kết quả theo thư AWS Support
+(owner chuyển cho agent ngày 17/11; số case không ghi vào Git):
+
+| Quota | Request | Appeal | AWS nêu điều kiện |
+| --- | --- | --- | --- |
+| Running On-Demand G and VT (`L-DB2E81BA`) | DENIED 31/10 | DENIED 01/11 | Dùng 90% quota hiện có, xin lại sau kỳ billing tiếp theo |
+| All G and VT Spot (`L-3819A6DF`) | DENIED 31/10 | DENIED 03/11 | Xem lại khi account có thêm dữ liệu sử dụng; không hẹn ngày |
+
+Cả hai case tự đóng vì không có phản hồi (nhắc 04/11 và 11/11). Applied value vẫn
+**0**; agent chưa đọc lại bằng CLI sau ngày này (`UNVERIFIED` cho tới khi owner
+chạy `list-service-quotas`). Hệ quả: không có đường GPU trước kỳ billing tháng
+12/2026. Phương án thay thế và phạm vi bị mất nằm ở
+[ADR-0009](../../.agent/adr/ADR-0009_P6_CPU_BATCH_UNDER_GPU_QUOTA_DENIAL.md)
+(`PROPOSED`). Không chi tiền để "dùng 90% quota" chỉ nhằm mở khoá quota.
+
 Read-only command family sau khi có temporary session và approved Region:
 
 ```powershell
