@@ -215,12 +215,16 @@ sub-tasks.
 
 **B. Pins, prices and source checks (1.5 h)** — after A.
 
-- [ ] RDS: latest PostgreSQL 17 minor offered in `us-east-1`, its pgvector
+- [x] RDS: latest PostgreSQL 17 minor offered in `us-east-1`, its pgvector
       version, `db.t4g.micro` orderable for it, `rds.force_ssl` default
-      (read-only AWS CLI; needs the owner's session).
-- [ ] Prices rechecked: RDS instance-hour, gp3 GB-month, Secrets Manager per
-      secret and per call. COST_PLAN §5 updated if any differs.
-- [ ] Image digests: Python base, pgvector image for kind, RDS CA bundle checksum.
+      (read-only AWS CLI; needs the owner's session). Done 17/11: 17.11
+      (default is 17.9, so pin explicitly), pgvector 0.8.2 (doc), gp3
+      orderable, `rds.force_ssl=1`.
+- [x] Prices rechecked: RDS instance-hour, gp3 GB-month, Secrets Manager per
+      secret and per call. COST_PLAN §5 updated if any differs. Done 17/11: no
+      price changed; Secrets Manager row added to §5.2.
+- [x] Image digests: Python base, pgvector image for kind, RDS CA bundle checksum
+      (`docs/evidence/p4/P4-T1_PINS_PRICES_20261117.md`, VERSION_MATRIX §8).
 - [x] kro v0.9.4 features the graph needs: `externalRef` to a ConfigMap in
       another namespace, a child in a namespace other than the instance's,
       `readyWhen` on a Job, and removal of a child whose name changes. Moved
@@ -228,7 +232,7 @@ sub-tasks.
       (`docs/evidence/p4/P4-T1_KRO_SPIKE_20261114.md`); new finding: Pods of
       Jobs kro deletes are left orphaned (§10). P4-T3.2 still re-proves them in
       the real graph.
-- [ ] VERSION_MATRIX gets a "P4 pins" section.
+- [x] VERSION_MATRIX gets a "P4 pins" section (§8).
 
 **C. ADR-0008 and ownership records (1 h)** — after A.
 
