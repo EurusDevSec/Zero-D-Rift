@@ -269,7 +269,7 @@ Cả hai case tự đóng vì không có phản hồi (nhắc 04/11 và 11/11). 
 chạy `list-service-quotas`). Hệ quả: không có đường GPU trước kỳ billing tháng
 12/2026. Phương án thay thế và phạm vi bị mất nằm ở
 [ADR-0009](../../.agent/adr/ADR-0009_P6_CPU_BATCH_UNDER_GPU_QUOTA_DENIAL.md)
-(`PROPOSED`). Không chi tiền để "dùng 90% quota" chỉ nhằm mở khoá quota.
+(`ACCEPTED` 17/11, batch trên CPU). Không chi tiền để "dùng 90% quota" chỉ nhằm mở khoá quota.
 
 Read-only command family sau khi có temporary session và approved Region:
 

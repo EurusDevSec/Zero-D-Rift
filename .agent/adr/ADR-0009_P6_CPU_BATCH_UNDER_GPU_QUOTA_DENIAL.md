@@ -1,11 +1,11 @@
 ---
 id: ADR-0009
 title: P6 BatchTrainingJob trên CPU khi quota GPU bị từ chối
-status: PROPOSED
+status: ACCEPTED
 date: 2026-11-17
-decision_source: AWS Support từ chối hai quota G/VT (COST_PLAN §7.3.1)
+accepted_date: 2026-11-17
+decision_source: AWS Support từ chối hai quota G/VT (COST_PLAN §7.3.1); owner chọn phương án A
 authority: DOCUMENTATION_ONLY_NO_AWS
-needs: owner quyết định + giảng viên đồng ý (ver3 §15.2: đổi phạm vi và metric)
 ---
 
 # Context and authority
@@ -24,20 +24,21 @@ Ver3 §15.2 yêu cầu mọi thay đổi phạm vi, metric hay kiến trúc ph�
 do. Campaign chính thức chưa bắt đầu, nên thay đổi này không phải là sửa metric
 sau khi đã xem kết quả.
 
-ADR này chỉ là đề xuất. Nó không cấp quyền apply, gửi quota request hay chạy
-window AWS nào, và không đổi SSOT cho tới khi owner và giảng viên đồng ý.
+Owner chấp nhận phương án A ngày 17/11/2026, không cần hỏi thêm giảng viên
+(nguyên văn: "khong cần hỏi đâu cứ bám đúng kể hoạch và hạn chế chỉ ra là
+được"). ADR không cấp quyền apply, gửi quota request hay chạy window AWS nào.
 
 # Options considered
 
 | # | Phương án | Đánh giá |
 |---|---|---|
-| A | **Batch chạy trên node CPU do Karpenter tạo (Spot và On-Demand)**, giữ nguyên số trial, ngưỡng và quy trình đo | **Đề xuất.** Chứng minh được cùng cơ chế (KEDA → Job pending → Karpenter tạo node → checkpoint S3 → thu hồi node), nằm trong quota Standard hiện có |
+| A | **Batch chạy trên node CPU do Karpenter tạo (Spot và On-Demand)**, giữ nguyên số trial, ngưỡng và quy trình đo | **Chọn.** Chứng minh được cùng cơ chế (KEDA → Job pending → Karpenter tạo node → checkpoint S3 → thu hồi node), nằm trong quota Standard hiện có |
 | B | Chờ quota GPU sau kỳ billing tháng 12 | Không khả thi với lịch: P9 phải xong trước đó, và AWS không hứa sẽ duyệt |
 | C | Chủ động tiêu 90% quota hiện có để "mở khoá" | Loại: tốn tiền không phục vụ đo lường, trái COST_PLAN, vẫn phải chờ tháng 12 |
 | D | Dùng account khác có lịch sử thanh toán | Chỉ khi trường hoặc giảng viên cấp account. Đổi identity, state và IAM (ADR-0007), nên cần ADR riêng. Không đề xuất ở đây |
 | E | Bỏ hẳn P6 | Đây là phương án cắt đã chốt khi trễ (thứ tự cắt: P6 → P8 → P5). Mất H2, H5 và scale-down. Giữ làm dự phòng nếu rebaseline không còn thời gian cho A |
 
-# Decision (đề xuất)
+# Decision
 
 ## 1. Thay GPU bằng CPU, giữ cơ chế
 
@@ -91,7 +92,7 @@ Mọi dataset, bảng và slide ghi rõ nhãn `CPU_SUBSTITUTE_FOR_GPU` cho các 
 
 # Consequences
 
-- Cần sửa khi ADR được chấp nhận: ver3 (§4.2, §4.3 H2, §6.5, §8.2, §9.2, §10,
+- Cần sửa ở P6-T1, cùng lúc chỉnh SPEC-P6 cho khớp thực tế: ver3 (§4.2, §4.3 H2, §6.5, §8.2, §9.2, §10,
   §11, §12 P6, §14), EXPERIMENT_PLAN (§3, §7), COST_PLAN (§5.3 dòng GPU, §9), SYSTEM_DESIGN, SPEC-P6 nháp
   (`DRAFT_FABLE_20261116`, nấc "Both denied" ở §10.1) và DRF-19.
 - Rủi ro còn lại: Spot CPU thiếu capacity trong window (dùng fallback On-Demand
@@ -100,5 +101,7 @@ Mọi dataset, bảng và slide ghi rõ nhãn `CPU_SUBSTITUTE_FOR_GPU` cho các 
 
 # Status and next action
 
-`PROPOSED`. Owner đọc, mang mục 2 và 4 hỏi giảng viên, rồi chọn A hoặc E. Agent
-không sửa SSOT cho tới khi có câu trả lời nguyên văn của owner.
+`ACCEPTED` 17/11/2026, phương án A. Phương án E (bỏ P6) chỉ dùng lại nếu
+rebaseline không còn thời gian. Các file ở mục Consequences được sửa ở P6-T1;
+tới lúc đó, ADR này là nguồn quyết định cho mọi chỗ ver3 còn ghi GPU. Báo cáo và
+slide phải nêu giới hạn ở mục 4.
