@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "ragsandbox"
 version = "0.1.0"
-description = "Zero D-Rift RAGSandbox reference workload: db-init, bootstrap, cleanup (serve in DRF-50)"
+description = "Zero D-Rift RAGSandbox reference workload: db-init, bootstrap, cleanup, serve"
 requires-python = ">=3.13"
 
 [tool.setuptools.packages.find]

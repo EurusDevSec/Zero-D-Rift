@@ -17,6 +17,8 @@ import re
 from pathlib import Path
 from typing import Callable, Mapping, Protocol
 
+from .errors import aws_error_code as _error_code
+
 _SECRET_NAME_RE = re.compile(r"^[A-Za-z0-9/_+=.@!-]{1,512}$")
 
 
@@ -93,11 +95,6 @@ class FileSecretStore:
             return True
         except FileNotFoundError:
             return False
-
-
-def _error_code(exc: BaseException) -> str | None:
-    response = getattr(exc, "response", None) or {}
-    return (response.get("Error") or {}).get("Code")
 
 
 class AwsSecretStore:

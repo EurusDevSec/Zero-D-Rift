@@ -1,11 +1,11 @@
 """``python -m ragsandbox <command>``.
 
-Commands (one image, SPEC-P4 §1): ``db-init``, ``bootstrap``, ``cleanup``.
-``serve`` is added in P4-T3.1 (DRF-50).
+Commands (one image, SPEC-P4 §1): ``db-init``, ``bootstrap``, ``cleanup`` and
+``serve`` (the reference app, ``serve.py``).
 
 Exit codes: 0 success, 2 invalid input (name, tenant, configuration), 1 any
-other failure. Output is one JSON summary line on stdout; errors go to stderr
-without secret values.
+other failure. The platform commands print one JSON summary line on stdout;
+errors go to stderr without secret values. ``serve`` runs until SIGTERM.
 """
 
 from __future__ import annotations
@@ -16,6 +16,7 @@ import os
 import sys
 
 from . import commands
+from .errors import safe_reason
 from .names import InvalidName
 from .secretstore import store_from_env
 
@@ -28,8 +29,20 @@ def main(argv: list[str] | None = None) -> int:
         p = sub.add_parser(cmd, help=f"{cmd} one sandbox, bootstrap credential")
         p.add_argument("--tenant", help="default: $SANDBOX_TENANT")
         p.add_argument("--name", help="default: $SANDBOX_NAME")
+    sub.add_parser("serve", help="reference app: /healthz, /readyz, /query")
     args = parser.parse_args(argv)
     env = os.environ
+
+    if args.command == "serve":
+        from . import serve
+
+        try:
+            app = serve.app_from_env(env)
+            port = int(env.get("PORT", "8080"))
+        except (ValueError, RuntimeError) as exc:  # ConfigError is a ValueError
+            print(f"ragsandbox serve: invalid configuration: {exc}", file=sys.stderr)
+            return 2
+        return serve.run(app, port)
 
     try:
         store = store_from_env(env)
@@ -42,8 +55,8 @@ def main(argv: list[str] | None = None) -> int:
     except InvalidName as exc:
         print(f"ragsandbox {args.command}: invalid input: {exc}", file=sys.stderr)
         return 2
-    except Exception as exc:  # report the type and message, never a traceback with locals
-        print(f"ragsandbox {args.command}: {type(exc).__name__}: {exc}", file=sys.stderr)
+    except Exception as exc:  # class and code only for SDK/libpq errors, never a traceback
+        print(f"ragsandbox {args.command}: {safe_reason(exc)}", file=sys.stderr)
         return 1
 
     print(json.dumps(summary, sort_keys=True))

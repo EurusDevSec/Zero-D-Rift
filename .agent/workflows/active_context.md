@@ -1,8 +1,8 @@
 ---
 project: Zero D-Rift
-status: P4_T2_1_LAB_PASSED
+status: P4_T3_1_LOCAL_PASSED
 active_phase: P4
-active_task: P4-T2.1 (DRF-45) commit/PR on owner request, then DRF-50
+active_task: P4-T3.1 (DRF-50) PR, then publish and record digest
 active_feature: RAGSandbox (SPEC-P4)
 active_spec: .agent/specs/SPEC-P4_RAG_SANDBOX.md
 current_learning: .agent/learning/CURRENT_STATUS.md
@@ -44,14 +44,14 @@ Follow [context governance](../references/context-governance.md).
   orphans deleted Jobs' Pods so D9 cleanup deletes them by label (PR #35);
   pins RDS 17.11, pgvector 0.8.2, prices unchanged, VERSION_MATRIX §8 (PR #37,
   `ef04ca3`). Evidence `docs/evidence/p4/P4-T1_*`.
-- DRF-45 part A 17/11 (branch `hoang/drf-45-db-entry-points`, not committed):
-  `workloads/rag-sandbox/` db-init, bootstrap, cleanup; 73 tests PASS incl.
-  PostgreSQL 17.10 + pgvector in Docker. Found: a non-superuser cannot restate
-  NOSUPERUSER/NOCREATEDB in ALTER ROLE (would break re-run on RDS), fixed.
-  pgvector is not trusted, so kind db-init needs a real superuser.
-- DRF-45 part B 17–19/11: owner ran lab §D on kind, D1–D6 PASS, D7 torn down
-  (`docs/evidence/p4/P4-T2.1_L2_KIND_DB_20261119.md`). Learning gaps recorded:
-  D2 explanation contradicted values, D4 prediction wrong, no D5/D6 predictions.
+- DRF-45 done (PR #38, `39856e9`): db-init/bootstrap/cleanup; owner lab D1–D7
+  PASS. Found: non-superuser cannot restate NOSUPERUSER/NOCREATEDB in ALTER
+  ROLE (fixed). Learning gaps in `P4-T2.1_L2_KIND_DB_20261119.md` (D2, D4, D5/D6).
+- DRF-50 19/11 (branch `hoang/drf-50-serve-image`, not committed): `serve`,
+  hashed requirements, hardened image, GHCR workflow; 103 tests + smoke PASS
+  (Claude). Found: readyz hung on a dead peer (fast-fail added; DRF-51 probe
+  `timeoutSeconds` >= 8); `ADD --chmod` blocked the CA dir (fixed). Digest
+  PENDING until merge + first publish; owner sets the package Public.
 - ADR-0009 `ACCEPTED` 17/11 (PR #36, `1277f7c`): AWS refused the G/VT quota
   twice, so P6 BatchTrainingJob runs on CPU nodes; limits recorded in the ADR
   and COST_PLAN §7.3.1. No AWS action authorised by it.
@@ -75,8 +75,8 @@ Follow [context governance](../references/context-governance.md).
 
 ## Next safe action
 
-Commit and PR DRF-45 (code, lab, runbook, evidence) on owner request; then
-DRF-50 (serve and image), kind only, no AWS.
+Commit and PR DRF-50 on owner request; after merge, owner follows
+`docs/runbooks/P4_RAG_IMAGE.md` §C (Public, pull, digest PR). Then DRF-51.
 
 ## Context expansion
 
