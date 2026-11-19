@@ -43,3 +43,25 @@ module "p3_provider_irsa" {
   oidc_issuer_url   = module.cluster.oidc_issuer_url
   bucket_prefix     = "zero-drift-p3-"
 }
+
+# DRF-46 (SPEC-P4 P4-T2.2, D1, ADR-0008): the shared RDS instance and the five
+# P4 IRSA roles, created only for an approved P4 window
+# (enable_rag_platform = true in the window tfvars) and destroyed with it.
+module "shared_rds" {
+  source = "./modules/shared-rds"
+  count  = var.enable_rag_platform ? 1 : 0
+
+  vpc_id                 = module.network.vpc_id
+  db_subnet_group_name   = module.network.db_subnet_group_name
+  node_security_group_id = module.cluster.node_security_group_id
+}
+
+module "rag_identity" {
+  source = "./modules/rag-identity"
+  count  = var.enable_rag_platform ? 1 : 0
+
+  oidc_provider_arn = module.cluster.oidc_provider_arn
+  oidc_issuer_url   = module.cluster.oidc_issuer_url
+  region            = var.region
+  master_secret_arn = module.shared_rds[0].master_secret_arn
+}
