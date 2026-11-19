@@ -1,8 +1,8 @@
 ---
 project: Zero D-Rift
-status: P4_T3_1_LOCAL_PASSED
+status: P4_T3_1_PUBLISHED
 active_phase: P4
-active_task: P4-T3.1 (DRF-50) PR, then publish and record digest
+active_task: P4-T3.1 (DRF-50) digest PR; next P4-T3.2 (DRF-51)
 active_feature: RAGSandbox (SPEC-P4)
 active_spec: .agent/specs/SPEC-P4_RAG_SANDBOX.md
 current_learning: .agent/learning/CURRENT_STATUS.md
@@ -47,11 +47,11 @@ Follow [context governance](../references/context-governance.md).
 - DRF-45 done (PR #38, `39856e9`): db-init/bootstrap/cleanup; owner lab D1–D7
   PASS. Found: non-superuser cannot restate NOSUPERUSER/NOCREATEDB in ALTER
   ROLE (fixed). Learning gaps in `P4-T2.1_L2_KIND_DB_20261119.md` (D2, D4, D5/D6).
-- DRF-50 19/11 (branch `hoang/drf-50-serve-image`, not committed): `serve`,
-  hashed requirements, hardened image, GHCR workflow; 103 tests + smoke PASS
-  (Claude). Found: readyz hung on a dead peer (fast-fail added; DRF-51 probe
-  `timeoutSeconds` >= 8); `ADD --chmod` blocked the CA dir (fixed). Digest
-  PENDING until merge + first publish; owner sets the package Public.
+- DRF-50 19/11 (PR #39, merge `a1217ba`): `serve`, hashed requirements,
+  hardened image, GHCR workflow; 117 tests + smoke PASS. Codex review fixed
+  (no ARN/host in errors; smoke asserts). DRF-51 probe `timeoutSeconds` >= 8.
+  Published `rag-sandbox@sha256:bf199502…` (VERSION_MATRIX §8); anonymous
+  pull + smoke PASS on the digest.
 - ADR-0009 `ACCEPTED` 17/11 (PR #36, `1277f7c`): AWS refused the G/VT quota
   twice, so P6 BatchTrainingJob runs on CPU nodes; limits recorded in the ADR
   and COST_PLAN §7.3.1. No AWS action authorised by it.
@@ -75,8 +75,8 @@ Follow [context governance](../references/context-governance.md).
 
 ## Next safe action
 
-Commit and PR DRF-50 on owner request; after merge, owner follows
-`docs/runbooks/P4_RAG_IMAGE.md` §C (Public, pull, digest PR). Then DRF-51.
+Commit and PR the DRF-50 digest record on owner request. Then DRF-51 (RGD,
+requests, CI, kind graph lab) using the image digest.
 
 ## Context expansion
 

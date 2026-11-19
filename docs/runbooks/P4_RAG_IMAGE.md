@@ -55,16 +55,20 @@ Các bước:
 1. Merge PR. Đây là lần publish đầu tiên, nên merge chính là bước owner đồng ý push.
 2. Vào tab Actions, mở run `rag-sandbox-image` của commit merge. Ở Summary có dòng
    `Image: ghcr.io/…@sha256:…`.
-3. Package mới trên GHCR mặc định là **private**. Vào
-   `github.com/EurusDevSec?tab=packages` → `zero-d-rift/rag-sandbox` → Package
-   settings → Change visibility → Public. Bước này công khai image, nên owner tự làm.
-4. Kiểm tra không cần đăng nhập:
+3. Kiểm tra pull không cần đăng nhập. Dùng một config Docker trống, nên không phải
+   `docker logout`:
 
    ```bash
-   docker logout ghcr.io
-   docker pull ghcr.io/eurusdevsec/zero-d-rift/rag-sandbox@sha256:<digest>
-   bash workloads/rag-sandbox/smoke.sh ghcr.io/eurusdevsec/zero-d-rift/rag-sandbox@sha256:<digest>
+   IMG=ghcr.io/eurusdevsec/zero-d-rift/rag-sandbox@sha256:<digest>
+   anon="$(mktemp -d)"; echo '{}' > "$anon/config.json"
+   DOCKER_CONFIG="$anon" docker pull "$IMG"; rm -rf "$anon"
+   bash workloads/rag-sandbox/smoke.sh "$IMG"
    ```
+
+4. Nếu pull báo `denied` hoặc `unauthorized` thì package đang private. Vào
+   `github.com/EurusDevSec?tab=packages` → `zero-d-rift/rag-sandbox` → Package
+   settings → Change visibility → Public. Bước này công khai image, nên owner tự
+   làm. Lần đầu (19/11) pull ẩn danh đã thành công ngay sau publish.
 
 5. Ghi digest vào `docs/VERSION_MATRIX.md` §8, dòng "RAGSandbox image", bằng một PR
    nhỏ. Từ đó mọi manifest dùng `@sha256:<digest>`, không dùng tag.
