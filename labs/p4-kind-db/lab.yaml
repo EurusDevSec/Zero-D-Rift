@@ -1,0 +1,118 @@
+# LAB ONLY (DRF-45 part B): PostgreSQL + pgvector in kind stands in for RDS.
+# Runbook: docs/runbooks/P4_L2_KIND_LAB.md section D.
+#
+# Differences from RDS, kept on purpose and recorded in the evidence:
+# - master is the real superuser `postgres` (RDS: rds_superuser), because
+#   pgvector 0.8.2 is not a trusted extension;
+# - no TLS (DB_SSLMODE=disable); RDS forces TLS (rds.force_ssl=1);
+# - secrets are JSON files on a PVC (SECRET_BACKEND=file); RDS path uses
+#   Secrets Manager through IRSA. No Kubernetes Secret holds a password here either.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: zdr-platform
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: lab-secrets
+  namespace: zdr-platform
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 64Mi
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: lab-db
+  namespace: zdr-platform
+  labels: {app: lab-db}
+spec:
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 999
+    runAsGroup: 999
+    fsGroup: 999
+    seccompProfile: {type: RuntimeDefault}
+  initContainers:
+    - name: seed-master
+      image: zdr-ragsandbox:lab
+      imagePullPolicy: Never
+      command: ["seed_master.py"]
+      env:
+        - {name: SECRET_DIR, value: /secrets}
+      securityContext: &restricted
+        allowPrivilegeEscalation: false
+        capabilities: {drop: ["ALL"]}
+      volumeMounts:
+        - {name: secrets, mountPath: /secrets}
+  containers:
+    - name: postgres
+      image: pgvector/pgvector:0.8.2-pg17@sha256:feb68f4f15446397d8cac7f4fe48fe4586de83160d1fc48b46283312d1a33966
+      env:
+        - {name: POSTGRES_PASSWORD_FILE, value: /secrets/lab/master.pw}
+        - {name: PGDATA, value: /var/lib/postgresql/data/pgdata}
+      ports:
+        - {containerPort: 5432, name: postgres}
+      readinessProbe:
+        exec: {command: ["pg_isready", "-U", "postgres", "-h", "127.0.0.1"]}
+        periodSeconds: 3
+      securityContext: *restricted
+      volumeMounts:
+        - {name: secrets, mountPath: /secrets, readOnly: true}
+        - {name: data, mountPath: /var/lib/postgresql/data}
+        - {name: run, mountPath: /var/run/postgresql}
+  volumes:
+    - name: secrets
+      persistentVolumeClaim: {claimName: lab-secrets}
+    - name: data
+      emptyDir: {}
+    - name: run
+      emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: lab-db
+  namespace: zdr-platform
+spec:
+  selector: {app: lab-db}
+  ports:
+    - {port: 5432, targetPort: postgres}
+---
+# Runs the entry points the way the db-init / bootstrap / cleanup Jobs will,
+# with the same environment contract, and gives the owner psql for checks.
+apiVersion: v1
+kind: Pod
+metadata:
+  name: toolbox
+  namespace: zdr-platform
+spec:
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 999
+    runAsGroup: 999
+    fsGroup: 999
+    seccompProfile: {type: RuntimeDefault}
+  containers:
+    - name: rag
+      image: zdr-ragsandbox:lab
+      imagePullPolicy: Never
+      command: ["sleep", "infinity"]
+      env:
+        - {name: SECRET_BACKEND, value: file}
+        - {name: SECRET_DIR, value: /secrets}
+        - {name: MASTER_SECRET_ID, value: lab/master}
+        - {name: DB_HOST, value: lab-db}
+        - {name: DB_SSLMODE, value: disable}
+        - {name: HOME, value: /tmp}
+      securityContext:
+        allowPrivilegeEscalation: false
+        capabilities: {drop: ["ALL"]}
+      volumeMounts:
+        - {name: secrets, mountPath: /secrets}
+  volumes:
+    - name: secrets
+      persistentVolumeClaim: {claimName: lab-secrets}

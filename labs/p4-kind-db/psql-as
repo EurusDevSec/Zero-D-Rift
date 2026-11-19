@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+# LAB ONLY: psql-as <secret-name> [psql args...]
+# Connects to database rag as the role stored in that lab secret. The password
+# goes through PGPASSWORD for this one process and is never printed.
+set -euo pipefail
+secret="${1:?usage: psql-as <secret-name> [psql args...]}"; shift
+file="${SECRET_DIR:-/secrets}/${secret}.json"
+[[ -r "$file" ]] || { echo "psql-as: no secret $secret" >&2; exit 2; }
+read -r user pass < <(python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); print(d["username"], d["password"])' "$file")
+PGPASSWORD="$pass" exec psql -X -v ON_ERROR_STOP=1 -h "${DB_HOST:-lab-db}" -U "$user" -d "${PGDATABASE:-rag}" "$@"

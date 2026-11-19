@@ -1,0 +1,4 @@
+# Runtime pins (17/11/2026). Hash pinning of the full tree is done in P4-T3.1 (DRF-50).
+psycopg==3.3.9
+psycopg-binary==3.3.9
+boto3==1.44.4
