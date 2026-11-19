@@ -1,0 +1,5 @@
+# Direct runtime dependencies. requirements.txt is generated from this file by
+# lock.sh (pip-compile --generate-hashes); edit here, then run lock.sh.
+psycopg==3.3.9
+psycopg-binary==3.3.9
+boto3==1.44.4

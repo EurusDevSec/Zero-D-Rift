@@ -276,7 +276,20 @@ rm -rf "$LAB"
 docker image rm zdr-ragsandbox:lab
 ```
 
-**Undo:** ba lệnh trên là undo đầy đủ. Không có gì trên AWS.
+Nếu builder của bạn dùng driver `docker-container` (log D1 có `creating container
+buildx_buildkit_…`), lần build D1 còn để lại một container BuildKit, volume cache của nó
+và image `moby/buildkit`. Kiểm tra bằng `docker ps -a | grep buildkit`; nếu có thì dọn:
+
+```bash
+docker rm -f buildx_buildkit_desktop-linux
+docker volume rm buildx_buildkit_desktop-linux_state
+docker image rm moby/buildkit:buildx-stable-1
+```
+
+Đổi `desktop-linux` thành tên builder của bạn (`docker buildx ls`). Chỉ xoá volume
+`_state` của builder mà lab vừa dùng.
+
+**Undo:** các lệnh trên là undo đầy đủ. Không có gì trên AWS.
 
 ### Giới hạn của mục D
 

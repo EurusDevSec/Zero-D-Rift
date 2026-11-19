@@ -1,0 +1,11 @@
+tests
+.pytest_cache
+**/__pycache__
+*.pyc
+.gitignore
+README.md
+test.sh
+lock.sh
+smoke.sh
+requirements-dev.in
+requirements-dev.txt

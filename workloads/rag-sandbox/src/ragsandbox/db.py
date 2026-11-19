@@ -45,7 +45,23 @@ def new_password() -> str:
     return secrets.token_urlsafe(32)
 
 
-def connect(endpoint: Endpoint, credential: Mapping, dbname: str, *, autocommit: bool = False):
+# For the long-running app: fail fast instead of hanging on a dead peer (an RDS
+# reboot or failover drops packets without a reset). tcp_user_timeout bounds a
+# query whose packets are never acknowledged; keepalives catch an idle socket.
+FAST_FAIL = {
+    "connect_timeout": 2,
+    "tcp_user_timeout": 3000,
+    "keepalives": 1,
+    "keepalives_idle": 5,
+    "keepalives_interval": 2,
+    "keepalives_count": 2,
+}
+
+
+def connect(
+    endpoint: Endpoint, credential: Mapping, dbname: str, *, autocommit: bool = False, **options
+):
+    """Open a psycopg connection. ``options`` are extra libpq parameters."""
     import psycopg
 
     kwargs = {
@@ -58,6 +74,7 @@ def connect(endpoint: Endpoint, credential: Mapping, dbname: str, *, autocommit:
         "connect_timeout": 10,
         "application_name": "ragsandbox",
         "autocommit": autocommit,
+        **options,
     }
     if endpoint.sslrootcert:
         kwargs["sslrootcert"] = endpoint.sslrootcert

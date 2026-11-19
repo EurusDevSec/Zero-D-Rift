@@ -13,6 +13,7 @@ import pytest
 from psycopg import errors
 
 from ragsandbox import commands
+from ragsandbox import serve as sv
 from ragsandbox.db import Endpoint, connect
 from ragsandbox.secretstore import FileSecretStore
 
@@ -79,6 +80,38 @@ def test_3_vector_table_and_similarity(endpoint, store, secret):
         assert [r[0] for r in rows] == [1, 3]
         schema = c.execute("SELECT schemaname FROM pg_tables WHERE tablename = 'items' AND tableowner = current_user").fetchone()[0]
         assert schema == store.get(secret)["schema"]
+
+
+def _app(endpoint, store, secret):
+    db = sv.Database(endpoint, store, secret, reload_seconds=0)
+    return sv.App(db, sv.Bucket(None)), db
+
+
+@pytest.mark.parametrize("secret", ["zero-drift/rag/tenant-a/s1", "zero-drift/rag/tenant-b/s2"])
+def test_3c_serve_ready_and_query(endpoint, store, secret):
+    for _ in range(2):  # a restarted Pod seeds again without duplicating rows
+        app, db = _app(endpoint, store, secret)
+        status, body = app.readyz()
+        assert status == 200, body
+        status, body = app.query({"v": ["1,0,0,0"], "k": ["2"]})
+        assert status == 200 and [r["id"] for r in body["results"]] == [1, 5]
+        db.close()
+    with as_role(endpoint, store, secret) as c:
+        assert c.execute("SELECT count(*) FROM documents").fetchone()[0] == len(sv.SEED)
+
+
+def test_3d_serve_wrong_password_not_ready_then_recovers(endpoint, store):
+    good = store.get("zero-drift/rag/tenant-a/s1")
+    store.create("lab/wrong", {**good, "password": "not-the-password"})
+    app, db = _app(endpoint, store, "lab/wrong")
+    status, body = app.readyz()
+    assert status == 503 and "password authentication failed" in body["db"]
+    # The secret is corrected (as after a rotation): the app re-reads and recovers.
+    store.delete("lab/wrong")
+    store.create("lab/wrong", good)
+    assert app.readyz()[0] == 200
+    db.close()
+    store.delete("lab/wrong")
 
 
 def test_4_role_a_cannot_read_schema_b(endpoint, store):
