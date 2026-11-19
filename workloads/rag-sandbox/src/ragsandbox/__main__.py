@@ -16,6 +16,7 @@ import os
 import sys
 
 from . import commands
+from .errors import safe_reason
 from .names import InvalidName
 from .secretstore import store_from_env
 
@@ -54,8 +55,8 @@ def main(argv: list[str] | None = None) -> int:
     except InvalidName as exc:
         print(f"ragsandbox {args.command}: invalid input: {exc}", file=sys.stderr)
         return 2
-    except Exception as exc:  # report the type and message, never a traceback with locals
-        print(f"ragsandbox {args.command}: {type(exc).__name__}: {exc}", file=sys.stderr)
+    except Exception as exc:  # class and code only for SDK/libpq errors, never a traceback
+        print(f"ragsandbox {args.command}: {safe_reason(exc)}", file=sys.stderr)
         return 1
 
     print(json.dumps(summary, sort_keys=True))

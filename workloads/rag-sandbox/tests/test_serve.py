@@ -202,8 +202,79 @@ def test_wrong_password_stays_not_ready_and_says_why():
     server = Server(password="other")
     status, body = sv.App(make_db(Store(GOOD), server, reload_seconds=0), sv.Bucket(None)).readyz()
     assert status == 503
-    assert body["db"].startswith("error: OperationalError: password authentication failed")
+    assert body["db"] == "error: OperationalError: authentication failed"
     assert "p1" not in json.dumps(body)
+
+
+# --- no identifiers in errors (Codex review of PR #39) -----------------------
+
+ARN = "arn:aws:sts::123456789012:assumed-role/zdr-rag-tenant-a/botocore-session-1"
+
+
+def access_denied(operation):
+    from botocore.exceptions import ClientError
+
+    message = f"User: {ARN} is not authorized to perform: {operation} with an explicit deny"
+    return ClientError({"Error": {"Code": "AccessDeniedException", "Message": message}}, operation)
+
+
+class DeniedStore:
+    def get(self, name):
+        raise access_denied("secretsmanager:GetSecretValue")
+
+
+def test_secret_access_denied_shows_code_not_arn():
+    status, body = sv.App(make_db(DeniedStore(), Server()), sv.Bucket(None)).readyz()
+    assert status == 503
+    assert body["db"] == f"error: secret {SECRET}: ClientError: AccessDeniedException"
+    assert "123456789012" not in json.dumps(body) and "arn:" not in json.dumps(body)
+
+
+def test_connection_error_hides_host_and_address():
+    server = Server()
+    server.connect = lambda *a, **k: (_ for _ in ()).throw(psycopg.OperationalError(
+        'connection to server at "zdr-p4.abc123.us-east-1.rds.amazonaws.com" (10.20.1.7), '
+        "port 5432 failed: Connection refused"))
+    status, body = sv.App(make_db(Store(GOOD), server), sv.Bucket(None)).readyz()
+    text = json.dumps(body)
+    assert status == 503 and body["db"] == "error: OperationalError: connection refused"
+    assert "rds.amazonaws.com" not in text and "10.20.1.7" not in text
+
+
+def test_bucket_error_without_code_hides_message():
+    from botocore.exceptions import EndpointConnectionError
+
+    class Unreachable:
+        def head_bucket(self, Bucket):
+            raise EndpointConnectionError(endpoint_url="https://vpce-0abc.s3.us-east-1.vpce.amazonaws.com")
+
+    status, body = sv.App(make_db(Store(GOOD), Server()), sv.Bucket("b", Unreachable())).readyz()
+    assert status == 503 and body["bucket"] == "error: bucket b: EndpointConnectionError"
+
+
+def test_bucket_access_denied_shows_code():
+    class Denied:
+        def head_bucket(self, Bucket):
+            raise access_denied("s3:ListBucket")
+
+    body = sv.App(make_db(Store(GOOD), Server()), sv.Bucket("b", Denied())).readyz()[1]
+    assert body["bucket"] == "error: bucket b: AccessDeniedException" and ARN not in json.dumps(body)
+
+
+def test_error_log_line_has_no_arn(capsys):
+    app = sv.App(make_db(DeniedStore(), Server()), sv.Bucket(None))
+    httpd = ThreadingHTTPServer(("127.0.0.1", 0), sv.make_handler(app))
+    thread = threading.Thread(target=httpd.serve_forever, daemon=True)
+    thread.start()
+    try:
+        with pytest.raises(urllib.error.HTTPError) as err:
+            urllib.request.urlopen(f"http://127.0.0.1:{httpd.server_address[1]}/readyz", timeout=5)
+        assert err.value.code == 503 and ARN not in err.value.read().decode()
+    finally:
+        httpd.shutdown()
+        httpd.server_close()
+    log = capsys.readouterr().err
+    assert "GET /readyz 503" in log and "AccessDeniedException" in log and "123456789012" not in log
 
 
 def test_incomplete_secret_is_not_ready():

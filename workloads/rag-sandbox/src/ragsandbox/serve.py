@@ -17,6 +17,10 @@ connection error, the app reads the secret again and reconnects. Reads are
 spaced by ``SECRET_RELOAD_SECONDS`` so a failing probe does not hammer Secrets
 Manager.
 
+Errors in ``/readyz``, ``/query`` and the log carry the exception class and a
+code only (``errors.safe_reason``): an AWS message would name the role ARN, a
+libpq message the database host.
+
 Seed: on each new connection the app creates ``documents`` in its schema if it
 is missing and inserts the seed rows it lacks. The sandbox role owns the table;
 nothing else writes it.
@@ -38,6 +42,7 @@ from urllib.parse import parse_qs, urlsplit
 from psycopg import sql
 
 from .db import FAST_FAIL, Endpoint, connect, endpoint_from_env
+from .errors import aws_error_code, safe_reason
 from .names import DATABASE
 from .secretstore import SecretStore, store_from_env
 
@@ -92,11 +97,6 @@ def parse_vector(raw: str) -> tuple[float, ...]:
     return values
 
 
-def _reason(exc: BaseException) -> str:
-    first = (str(exc).strip().splitlines() or [""])[0]
-    return f"{type(exc).__name__}: {first[:200]}"
-
-
 def _retryable(exc: BaseException) -> bool:
     import psycopg
 
@@ -138,7 +138,10 @@ class Database:
         if (fresh or self._credential is None) and due:
             self._read_at = self.clock()
             self.secret_reads += 1
-            value = self.store.get(self.secret_id)
+            try:
+                value = self.store.get(self.secret_id)
+            except Exception as exc:  # e.g. AccessDeniedException: code only, no ARN
+                raise NotReady(f"secret {self.secret_id}: {safe_reason(exc)}") from None
             if value is not None and not (value.get("username") and value.get("password")):
                 value = None
             self._credential = value
@@ -186,7 +189,7 @@ class Database:
                 except Exception as exc:
                     self._drop()
                     if attempt == 1 or not _retryable(exc):
-                        raise NotReady(_reason(exc)) from None
+                        raise NotReady(safe_reason(exc)) from None
             raise AssertionError("unreachable")
 
     def close(self) -> None:
@@ -242,8 +245,8 @@ class Bucket:
         try:
             self._s3().head_bucket(Bucket=self.name)
         except Exception as exc:
-            code = ((getattr(exc, "response", None) or {}).get("Error") or {}).get("Code")
-            raise NotReady(f"bucket {self.name}: {code or _reason(exc)}") from None
+            code = aws_error_code(exc)
+            raise NotReady(f"bucket {self.name}: {code or safe_reason(exc)}") from None
         return "ok"
 
 

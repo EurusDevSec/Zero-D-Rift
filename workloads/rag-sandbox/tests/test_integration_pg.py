@@ -105,7 +105,9 @@ def test_3d_serve_wrong_password_not_ready_then_recovers(endpoint, store):
     store.create("lab/wrong", {**good, "password": "not-the-password"})
     app, db = _app(endpoint, store, "lab/wrong")
     status, body = app.readyz()
-    assert status == 503 and "password authentication failed" in body["db"]
+    # Real libpq text names the host and role; only a fixed label may come out.
+    assert status == 503 and body["db"] == "error: OperationalError: authentication failed"
+    assert endpoint.host not in str(body)
     # The secret is corrected (as after a rotation): the app re-reads and recovers.
     store.delete("lab/wrong")
     store.create("lab/wrong", good)

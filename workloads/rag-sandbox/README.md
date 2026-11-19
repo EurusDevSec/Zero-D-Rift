@@ -18,7 +18,7 @@ invalid input or configuration, 1 = other error.
 | Path | 200 means | Otherwise |
 |---|---|---|
 | `/healthz` | the process answers; nothing else is checked | — |
-| `/readyz` | the app queried the `vector` column of `documents` in its own schema **and** `HeadBucket` on its bucket passed | 503 with the failing layer, for example `"db": "error: OperationalError: password authentication failed …"` |
+| `/readyz` | the app queried the `vector` column of `documents` in its own schema **and** `HeadBucket` on its bucket passed | 503 with the failing layer, for example `"db": "error: OperationalError: authentication failed"` |
 | `/query?v=1,0,0,0&k=3` | nearest seeded rows by L2 distance (`<->`); `v` has 4 numbers, `k` 1–10 | 400 bad input, 503 database not usable |
 
 - On each new connection the app creates `documents (id, title, embedding vector(4))`
@@ -33,6 +33,11 @@ invalid input or configuration, 1 = other error.
   Use a readiness `timeoutSeconds` of at least 8.
 - `/healthz`, `/readyz` with 200 are not logged; other responses and every
   `/query` are logged as one line to stderr. No secret value is logged.
+- Errors from the AWS SDK and libpq are reduced to the exception class plus a
+  code: the AWS error code, the SQLSTATE, or a fixed label such as
+  `authentication failed` (`src/ragsandbox/errors.py`). This applies to the HTTP
+  body, the log and the platform commands' stderr. The raw text would name the
+  role ARN (with the account ID) or the database host.
 
 ## Environment
 

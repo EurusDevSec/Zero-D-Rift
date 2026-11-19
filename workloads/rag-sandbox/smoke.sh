@@ -54,7 +54,14 @@ except OSError as e:
     print("down", type(e).__name__)' "$1"
 }
 for _ in $(seq 1 20); do [[ "$(get /healthz)" == 200* ]] && break; sleep 1; done
-for path in /healthz /readyz "/query?v=1,0,0,0&k=2" "/query?v=1"; do echo "GET $path -> $(get "$path")"; done
+expect() {  # expect <status> <path>: print the answer, stop unless the status matches
+  local out; out="$(get "$2")"; echo "GET $2 -> $out"
+  [[ "$out" == "$1 "* ]] || { echo "FAIL: expected $1 from $2"; exit 1; }
+}
+expect 200 /healthz
+expect 200 /readyz
+expect 200 "/query?v=1,0,0,0&k=2"
+expect 400 "/query?v=1"
 step "serve log"
 docker logs "$app" 2>&1 | sed 's/^/  /'
 step "secret values in log?"
@@ -62,8 +69,10 @@ if docker logs "$app" 2>&1 | grep -qF "$pw"; then echo "  FAIL: master password 
 
 step "database stopped: readyz must fail, healthz must not"
 docker stop -t 5 "$db" >/dev/null
-echo "GET /healthz -> $(get /healthz)"
-echo "GET /readyz -> $(get /readyz)"
+expect 200 /healthz
+expect 503 /readyz
+r="$(get /readyz)"
+[[ "$r" != *"$db"* ]] || { echo "FAIL: readyz names the database host"; exit 1; }
 step "database back: app reconnects by itself"
 docker start "$db" >/dev/null
 for _ in $(seq 1 30); do docker exec "$db" pg_isready -U postgres -q && break; sleep 1; done

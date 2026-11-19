@@ -22,8 +22,11 @@ bash workloads/rag-sandbox/smoke.sh
 ```
 
 **Phải thấy:**
-- `test.sh`: `103 passed`.
-- `smoke.sh`: kết thúc bằng `SMOKE PASS`.
+- `test.sh`: `117 passed`.
+- `smoke.sh`: kết thúc bằng `SMOKE PASS`. Smoke tự dừng với `FAIL: …` (exit khác 0)
+  nếu có một mã trả về sai: 200/200/200/400 lúc DB chạy, `/healthz` 200 và `/readyz`
+  503 lúc DB tắt, `/readyz` 200 sau khi bật lại. Nó cũng dừng nếu `/readyz` nhắc tên
+  host database.
 
 `smoke.sh` tự dọn mọi container, volume và network nó tạo. Image `ragsandbox:smoke`
 vẫn còn; xoá bằng `docker image rm ragsandbox:smoke`.
@@ -36,7 +39,7 @@ vẫn còn; xoá bằng `docker image rm ragsandbox:smoke`.
 | CA bundle | sha256 có khớp VERSION_MATRIX §8 không? có mấy cert? | `b1711d12…2462dd77`; `3` |
 | `/readyz` | `bucket` là gì khi `BUCKET_CHECK=off`? | `"bucket": "skipped"`, `"ready": true` |
 | `/query?v=1,0,0,0&k=2` | hai id nào gần nhất? | `1` (dist 0), `5` (≈0.141) |
-| tắt database | `/healthz` và `/readyz` trả gì? | `/healthz` 200; `/readyz` 503 kèm lớp lỗi |
+| tắt database | `/healthz` và `/readyz` trả gì? lý do lỗi có tên host không? | `/healthz` 200; `/readyz` 503, `"db": "error: OperationalError: host not resolved"`, không có tên host |
 | bật lại database | có cần restart app không? | không; `/readyz` tự về 200 |
 
 `/healthz` không kiểm database. Lý do: nếu nó kiểm, một lần database chết sẽ làm
