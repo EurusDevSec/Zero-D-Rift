@@ -1,14 +1,14 @@
 ---
 project: Zero D-Rift
-status: P4_T1_PINS_RECORDED
+status: P4_T2_1_LAB_PASSED
 active_phase: P4
-active_task: P4-T1 closing (DRF-40), then P4-T2.1 (DRF-45)
+active_task: P4-T2.1 (DRF-45) commit/PR on owner request, then DRF-50
 active_feature: RAGSandbox (SPEC-P4)
 active_spec: .agent/specs/SPEC-P4_RAG_SANDBOX.md
 current_learning: .agent/learning/CURRENT_STATUS.md
 mode: Coach
 authority: NO_INSTALL_NO_AWS_APPLY_UNTIL_TASK_GATES
-last_reviewed: 2026-11-17
+last_reviewed: 2026-11-19
 ---
 
 # Active Context
@@ -40,15 +40,18 @@ Follow [context governance](../references/context-governance.md).
   ADR-0008"): Terraform owns shared RDS and every P4 role; direct SDK through
   IRSA; master/bootstrap only in `zdr-platform`. Runtime still `UNVERIFIED`.
   Merged in PR #34 (`df275e4`).
-- kro spike on kind 14/11 (DRF-40 part B): externalRef across namespaces, Job
-  in `zdr-platform`, `readyWhen` on a Job and rename pruning all PASS, including
-  fail after success → not Ready. New: kro leaves deleted Jobs' Pods orphaned;
-  SPEC §10/D9 cleanup deletes them by label. Evidence
-  `docs/evidence/p4/P4-T1_KRO_SPIKE_20261114.md`, runbook `docs/runbooks/P4_L2_KIND_LAB.md`.
-  Merged in PR #35 (main `1d68e54`).
-- P4 pins 17/11 (DRF-40 B, owner's read-only CLI): RDS PostgreSQL 17.11,
-  pgvector 0.8.2, `t4g.micro` gp3, `force_ssl=1`; prices unchanged. VERSION_MATRIX
-  §8, evidence `docs/evidence/p4/P4-T1_PINS_PRICES_20261117.md`. Not merged.
+- DRF-40 parts A–C done (owner to mark Done): kro spike 4/4 PASS on kind, kro
+  orphans deleted Jobs' Pods so D9 cleanup deletes them by label (PR #35);
+  pins RDS 17.11, pgvector 0.8.2, prices unchanged, VERSION_MATRIX §8 (PR #37,
+  `ef04ca3`). Evidence `docs/evidence/p4/P4-T1_*`.
+- DRF-45 part A 17/11 (branch `hoang/drf-45-db-entry-points`, not committed):
+  `workloads/rag-sandbox/` db-init, bootstrap, cleanup; 73 tests PASS incl.
+  PostgreSQL 17.10 + pgvector in Docker. Found: a non-superuser cannot restate
+  NOSUPERUSER/NOCREATEDB in ALTER ROLE (would break re-run on RDS), fixed.
+  pgvector is not trusted, so kind db-init needs a real superuser.
+- DRF-45 part B 17–19/11: owner ran lab §D on kind, D1–D6 PASS, D7 torn down
+  (`docs/evidence/p4/P4-T2.1_L2_KIND_DB_20261119.md`). Learning gaps recorded:
+  D2 explanation contradicted values, D4 prediction wrong, no D5/D6 predictions.
 - ADR-0009 `ACCEPTED` 17/11 (PR #36, `1277f7c`): AWS refused the G/VT quota
   twice, so P6 BatchTrainingJob runs on CPU nodes; limits recorded in the ADR
   and COST_PLAN §7.3.1. No AWS action authorised by it.
@@ -62,7 +65,7 @@ Follow [context governance](../references/context-governance.md).
    check 7 only type-checks `aws:ResourceAccount` (fix with R1).
 2. Schedule: P4 gate was 08/11, P6 14/11, P8 freeze 19/11. The 15/11 P4
    target was missed; owner's new P4 target is 17/11/2026 (set 17/11). Still
-   open on 17/11: DRF-40 merge, DRF-44/45/46, DRF-49/50/51 and the L3 window plus
+   open on 17/11: DRF-44/45/46, DRF-49/50/51 and the L3 window plus
    acceptance (DRF-55/56/57). Ver3 §12.1 still forbids reducing trials,
    acceptance, learning gate or teardown to meet it. Full rebaseline of P5–P11
    is the owner's decision.
@@ -72,10 +75,8 @@ Follow [context governance](../references/context-governance.md).
 
 ## Next safe action
 
-Owner reviews and merges branch `hoang/drf-40-pins-prices` (DRF-40 parts A–C
-all ticked; Done needs owner acceptance). Then DRF-45 (SQL entry points and
-kind DB lab with the pinned pgvector image) and DRF-50 (reference app on the
-pinned Python base), kind only, no AWS.
+Commit and PR DRF-45 (code, lab, runbook, evidence) on owner request; then
+DRF-50 (serve and image), kind only, no AWS.
 
 ## Context expansion
 
