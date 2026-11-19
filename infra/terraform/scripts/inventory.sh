@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Read-only AWS inventory for a P2 window (COST_PLAN §11.1, SPEC-P2 Task 6).
+# Read-only AWS inventory for a P2-P4 window (COST_PLAN §11.1, SPEC-P2 Task 6, DRF-46).
 # Prints counts only, never IDs, ARNs or names, so the output can go into evidence.
 # Run it before create, after verify, and after destroy.
 # Usage: AWS_PROFILE=zdr-tf AWS_REGION=us-east-1 infra/terraform/scripts/inventory.sh
@@ -53,6 +53,17 @@ check rds_cluster_snapshots_manual 0 aws rds describe-db-cluster-snapshots --sna
 check rds_subnet_groups     0 aws rds describe-db-subnet-groups --query 'length(DBSubnetGroups)' --output text
 check sqs_queues            0 aws sqs list-queues --query 'length(QueueUrls || `[]`)' --output text
 check secrets               0 aws secretsmanager list-secrets --query 'length(SecretList)' --output text
+
+# P4 (DRF-46): the shared RDS and what the window creates around it. Secrets
+# scheduled for deletion still exist (recoverable), so they are counted too:
+# sandbox secrets are deleted without a recovery window, and the RDS-managed
+# master secret must be gone after the instance is destroyed.
+check rds_snapshots_automated 0 aws rds describe-db-snapshots --snapshot-type automated --query 'length(DBSnapshots)' --output text
+check rds_automated_backups 0 aws rds describe-db-instance-automated-backups --query 'length(DBInstanceAutomatedBackups)' --output text
+check p4_secrets_incl_pending 0 aws secretsmanager list-secrets --include-planned-deletion --filters Key=name,Values=zero-drift/rag/ --query 'length(SecretList)' --output text
+check rds_managed_secrets_incl_pending 0 aws secretsmanager list-secrets --include-planned-deletion --filters Key=name,Values=rds! --query 'length(SecretList)' --output text
+check p4_buckets            0 aws s3api list-buckets --query "length(Buckets[?starts_with(Name, 'zero-drift-rag-')])" --output text
+check p4_iam_roles          0 aws iam list-roles --query "length(Roles[?starts_with(RoleName, 'zero-drift-rag-')])" --output text
 check kms_customer_aliases  0 aws kms list-aliases --query "length(Aliases[?!starts_with(AliasName, 'alias/aws/')])" --output text
 
 # Logs and identity in the project boundary

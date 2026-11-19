@@ -61,3 +61,24 @@ mock_resource "aws_launch_template" {
     arn = "arn:aws:ec2:us-east-1:000000000000:launch-template/lt-0000000000000000"
   }
 }
+
+# P4 (DRF-46): the RDS-managed master secret and the endpoint are computed.
+mock_resource "aws_db_instance" {
+  defaults = {
+    arn      = "arn:aws:rds:us-east-1:000000000000:db:zero-drift-rag"
+    address  = "zero-drift-rag.test.us-east-1.rds.amazonaws.com"
+    endpoint = "zero-drift-rag.test.us-east-1.rds.amazonaws.com:5432"
+    master_user_secret = [{
+      secret_arn    = "arn:aws:secretsmanager:us-east-1:000000000000:secret:rds!db-TEST-AbCdEf"
+      kms_key_id    = "arn:aws:kms:us-east-1:000000000000:key/test"
+      secret_status = "active"
+    }]
+  }
+}
+
+mock_resource "aws_security_group" {
+  defaults = {
+    id  = "sg-00000000000000000"
+    arn = "arn:aws:ec2:us-east-1:000000000000:security-group/sg-00000000000000000"
+  }
+}

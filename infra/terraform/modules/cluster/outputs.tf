@@ -28,6 +28,11 @@ output "oidc_provider_arn" {
   value       = module.eks.oidc_provider_arn
 }
 
+output "node_security_group_id" {
+  description = "EKS node security group, the only source allowed into the P4 RDS (DRF-46)."
+  value       = module.eks.node_security_group_id
+}
+
 output "oidc_issuer_url" {
   description = "Cluster OIDC issuer URL, used only as an input to the P3 IRSA role."
   value       = module.eks.cluster_oidc_issuer_url

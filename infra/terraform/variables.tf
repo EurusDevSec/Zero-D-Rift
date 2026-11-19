@@ -164,6 +164,12 @@ variable "enable_p3_provider_role" {
   default     = false
 }
 
+variable "enable_rag_platform" {
+  description = "Create the P4 shared RDS and the P4 IRSA roles (DRF-46). true only for an approved P4 window."
+  type        = bool
+  default     = false
+}
+
 # Run metadata for the tag contract (docs/finops/COST_PLAN.md §10). No defaults:
 # every plan must name its run and expiry (see run.tfvars.example).
 variable "run_id" {

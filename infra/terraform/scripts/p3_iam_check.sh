@@ -19,7 +19,7 @@ fail() { echo "FAIL  $1"; failed=1; }
 
 acct="$(aws sts get-caller-identity --query Account --output text)"
 if [[ "$src" != "--principal" ]]; then
-    policy_json="$(terraform show -json "$src" | jq -r '.resource_changes[] | select(.type == "aws_iam_role_policy") | .change.after.policy' | jq -c .)"
+    policy_json="$(terraform show -json "$src" | jq -r '.resource_changes[] | select(.type == "aws_iam_role_policy" and .change.after.name == "p3-buckets") | .change.after.policy' | jq -c .)"
     [[ -n "$policy_json" ]] || { echo "no aws_iam_role_policy in the plan: was it made with enable_p3_provider_role=true?" >&2; exit 2; }
     findings="$(aws accessanalyzer validate-policy --policy-type IDENTITY_POLICY \
         --policy-document "$policy_json" --query 'findings[].findingType' --output json)"

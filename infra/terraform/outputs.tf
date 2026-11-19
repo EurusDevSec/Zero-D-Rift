@@ -66,3 +66,24 @@ output "p3_provider_role" {
     subject = module.p3_provider_irsa[0].trust_subject
   } : null
 }
+
+output "rag_platform" {
+  description = "P4 names and trusted subjects, or null when disabled. No ARN or endpoint: those are in rag_platform_config."
+  value = var.enable_rag_platform ? {
+    db_identifier = module.shared_rds[0].identifier
+    db_port       = module.shared_rds[0].port
+    roles         = module.rag_identity[0].role_names
+    subjects      = module.rag_identity[0].subjects
+  } : null
+}
+
+output "rag_platform_config" {
+  description = "Window-only values for platform-config and the ServiceAccount annotations (DB host, master secret ARN, role ARNs). Sensitive: pipe it, never print it."
+  sensitive   = true
+  value = var.enable_rag_platform ? {
+    db_host           = module.shared_rds[0].address
+    db_port           = module.shared_rds[0].port
+    master_secret_arn = module.shared_rds[0].master_secret_arn
+    role_arns         = module.rag_identity[0].role_arns
+  } : null
+}
