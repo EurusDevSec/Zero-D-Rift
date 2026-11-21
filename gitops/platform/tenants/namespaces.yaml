@@ -1,0 +1,30 @@
+# P4 (DRF-51, SPEC-P4 P4-T3.2 A, D11). The namespace of a RAGSandbox request is
+# its tenant. Only tenant-a and tenant-b have an IAM role (Terraform DRF-46);
+# zdr-platform holds the platform Jobs and their ServiceAccounts, never a tenant.
+# All three enforce the Pod Security "restricted" profile: the bootstrap Job and
+# the app are built to it, and a tenant cannot start a privileged Pod.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: zdr-platform
+  labels:
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/enforce-version: v1.35
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: tenant-a
+  labels:
+    rag.zero-drift.io/tenant: "true"
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/enforce-version: v1.35
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: tenant-b
+  labels:
+    rag.zero-drift.io/tenant: "true"
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/enforce-version: v1.35

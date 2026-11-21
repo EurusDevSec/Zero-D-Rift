@@ -1,0 +1,33 @@
+# P4 (DRF-51). Extra rights aggregated into kro (rbac.mode=aggregation) for the
+# RAGSandbox graph: its child kinds and the kind the RGD generates. Self-contained,
+# so it does not depend on the P3 role (kro-zdr-p3-children) staying.
+# - configmaps: read only; the graph only reads platform-config (externalRef).
+# - jobs: the bootstrap Job in zdr-platform. kro deletes Jobs but not their Pods
+#   (spike 14/11), so it gets no Pod rights; the runbook removes those Pods.
+# - serviceaccounts, services, deployments: the tenant side of the graph.
+# - buckets: the Crossplane S3 bucket (namespaced, provider-aws-s3 v2).
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: kro-zdr-p4-children
+  labels:
+    rbac.kro.run/aggregate-to-controller: "true"
+rules:
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["serviceaccounts", "services"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: ["batch"]
+    resources: ["jobs"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: ["s3.aws.m.upbound.io"]
+    resources: ["buckets"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: ["kro.run"]
+    resources: ["ragsandboxes", "ragsandboxes/status"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]

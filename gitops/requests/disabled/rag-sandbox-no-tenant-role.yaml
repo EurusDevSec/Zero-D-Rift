@@ -1,0 +1,12 @@
+# P4 (DRF-51) NEGATIVE request, disabled (the requests Application does not
+# recurse). Namespace zdr-requests has no tenant role (D6, D11): gitops/check.sh
+# rejects it here, and if it is moved up anyway (P4 window, negative suite) the
+# bootstrap Job fails on the tenant check, nothing is created in AWS or in the
+# namespace, and the instance is never Ready while Argo CD shows Synced.
+apiVersion: kro.run/v1alpha1
+kind: RAGSandbox
+metadata:
+  name: docs-qa
+  namespace: zdr-requests
+spec:
+  bootstrapAttempt: 0

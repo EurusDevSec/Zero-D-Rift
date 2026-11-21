@@ -1,0 +1,16 @@
+# LAB ONLY (DRF-51). Lab values of the window-only ConfigMap the RGD reads by
+# externalRef. On EKS it is applied with kubectl from Terraform outputs, only
+# after db-init succeeded, and never committed (RDS endpoint, account ID).
+# The role ARN below uses the documentation account 000000000000: kind has no IRSA.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: platform-config
+  namespace: zdr-platform
+data:
+  dbHost: lab-db.zdr-platform.svc
+  dbPort: "5432"
+  region: us-east-1
+  tenantRoleArnPrefix: arn:aws:iam::000000000000:role/zero-drift-rag-
+  runId: P4-L2-KIND
+  expiresAt: "2026-11-30T00:00:00Z"

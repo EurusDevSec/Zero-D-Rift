@@ -1,0 +1,50 @@
+# Wave 2 (P4, DRF-51): tenant namespaces, zdr-platform and the two platform
+# ServiceAccounts. Before the RGD (wave 4) and the requests (wave 9).
+# Window-only values are never in Git:
+# - the IRSA role ARN annotations on rag-db-admin and rag-bootstrap (account ID),
+#   added with kubectl; ignoreDifferences + RespectIgnoreDifferences keep selfHeal
+#   from removing them;
+# - the platform-config ConfigMap in zdr-platform (RDS endpoint, role ARN prefix,
+#   run ID), applied with kubectl only after db-init succeeded. Argo does not
+#   track it. The RGD reads it by externalRef, so no bootstrap Job starts before it.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: zdr-tenants
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/EurusDevSec/Zero-D-Rift.git
+    targetRevision: main
+    path: gitops/platform/tenants
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: zdr-platform
+  ignoreDifferences:
+    - group: ""
+      kind: ServiceAccount
+      namespace: zdr-platform
+      name: rag-db-admin
+      jsonPointers:
+        - /metadata/annotations/eks.amazonaws.com~1role-arn
+    - group: ""
+      kind: ServiceAccount
+      namespace: zdr-platform
+      name: rag-bootstrap
+      jsonPointers:
+        - /metadata/annotations/eks.amazonaws.com~1role-arn
+  syncPolicy:
+    automated:
+      prune: false
+      selfHeal: true
+    syncOptions:
+      - RespectIgnoreDifferences=true
+    retry:
+      limit: 10
+      backoff:
+        duration: 15s
+        factor: 2
+        maxDuration: 3m

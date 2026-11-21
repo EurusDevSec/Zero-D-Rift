@@ -1,0 +1,41 @@
+# LAB ONLY (DRF-51, D9). Operator-run cleanup of tenant-b/docs-qa after its
+# request was deleted: drops schema (with its tables) and login role, deletes
+# the secret. Same ServiceAccount (rag-bootstrap) and namespace as the bootstrap
+# Jobs. Afterwards the runbook deletes the bootstrap Pods kro left without owner:
+#   kubectl -n zdr-platform delete pods -l rag.zero-drift.io/tenant=tenant-b,rag.zero-drift.io/sandbox=docs-qa
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: cleanup-tenant-b-docs-qa
+  namespace: zdr-platform
+spec:
+  backoffLimit: 0
+  activeDeadlineSeconds: 120
+  template:
+    spec:
+      restartPolicy: Never
+      serviceAccountName: rag-bootstrap
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile: {type: RuntimeDefault}
+      containers:
+        - name: cleanup
+          image: ghcr.io/eurusdevsec/zero-d-rift/rag-sandbox@sha256:bf199502e5a0dd94b858de4cc8a516ad5683bfa1533c1879361a4a9b509bf0fa
+          args: ["cleanup"]
+          env:
+            - {name: SANDBOX_TENANT, value: tenant-b}
+            - {name: SANDBOX_NAME, value: docs-qa}
+            - {name: SECRET_BACKEND, value: file}
+            - {name: SECRET_DIR, value: /secrets}
+            - {name: DB_HOST, value: lab-db}
+            - {name: DB_SSLMODE, value: disable}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: ["ALL"]}
+          volumeMounts:
+            - {name: secrets, mountPath: /secrets}
+      volumes:
+        - name: secrets
+          persistentVolumeClaim: {claimName: lab-secrets}

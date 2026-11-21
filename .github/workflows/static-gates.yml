@@ -1,0 +1,74 @@
+# Static gates on pull requests (SPEC-P4 P4-T3.2 B, D12; ver3 §9.1 step 2).
+# gitops/check.sh with its guard tests, and the Terraform static gate
+# (fmt, validate, mocked contract tests, plan_assert guards, pins, leak scan).
+# No cloud or cluster credential: no secret is referenced, the token is read-only,
+# Terraform runs with -backend=false and mock providers only.
+name: static-gates
+
+on:
+  pull_request:
+    paths:
+      - "gitops/**"
+      - "infra/**"
+      - ".github/workflows/static-gates.yml"
+  push:
+    branches: [main]
+    paths:
+      - "gitops/**"
+      - "infra/**"
+      - ".github/workflows/static-gates.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: static-gates-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Belt and braces: no SDK may look for instance credentials.
+  AWS_EC2_METADATA_DISABLED: "true"
+
+jobs:
+  gitops:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    # Same pinned base as the RAGSandbox image (VERSION_MATRIX §8).
+    container: python:3.13-slim@sha256:e48f59cdba69a3cbd9ed2cf0f348d90d45a8d350d98134cf1070bc106ee9ed90
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: PyYAML (hash-pinned)
+        run: pip install --no-cache-dir --root-user-action=ignore --require-hashes --only-binary=":all:" -r gitops/tests/requirements.txt
+      - name: gitops/check.sh
+        run: bash gitops/check.sh
+      - name: Guard tests (each rule must be able to fail)
+        run: bash gitops/tests/check_guards.sh
+
+  terraform:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      TF_VERSION: 1.16.4
+      # SHA256SUMS of the HashiCorp release, read 19/11/2026.
+      TF_SHA256: dc94af0eef1147718ad7c8daea792ed199e3e0492eec180d0adafa2a65a879df
+      TF_IN_AUTOMATION: "1"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Terraform CLI (checksum-verified)
+        run: |
+          set -euo pipefail
+          zip="terraform_${TF_VERSION}_linux_amd64.zip"
+          curl -fsSLo "$RUNNER_TEMP/$zip" "https://releases.hashicorp.com/terraform/${TF_VERSION}/$zip"
+          echo "$TF_SHA256  $RUNNER_TEMP/$zip" | sha256sum -c -
+          mkdir -p "$RUNNER_TEMP/bin"
+          unzip -q -o "$RUNNER_TEMP/$zip" terraform -d "$RUNNER_TEMP/bin"
+          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+      - name: init (no backend, lockfile read-only)
+        run: terraform -chdir=infra/terraform init -backend=false -lockfile=readonly -input=false
+      - name: infra/terraform/scripts/check.sh
+        run: bash infra/terraform/scripts/check.sh
