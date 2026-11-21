@@ -44,16 +44,15 @@ Follow [context governance](../references/context-governance.md).
   `ef04ca3`). Evidence `docs/evidence/p4/P4-T1_*`.
 - DRF-45 done (PR #38, `39856e9`): db-init/bootstrap/cleanup; owner lab D1–D7
   PASS. Learning gaps in `P4-T2.1_L2_KIND_DB_20261119.md` (D2, D4, D5/D6).
-- DRF-50 (PR #39, #40): image `rag-sandbox@sha256:bf199502…` (VERSION_MATRIX §8).
+- DRF-50 (PR #39, #40; time-bound fix PR #43): image
+  `rag-sandbox@sha256:512e982a…` from `3d38719` (VERSION_MATRIX §8).
   DRF-46 (PR #41, `27058f9`): `shared-rds`, `rag-identity`; static only.
-- DRF-51 19/11 (branch `hoang/drf-51-rgd-requests-kind`, uncommitted): RGD
-  `rag-sandbox` (bucket/SA/app/service wait for the bootstrap Job), tenants app,
-  kro RBAC, requests + 2 negatives, check.sh rules 8-12 + 29 guards, CI
-  `static-gates.yml` (not yet run on GitHub). Kind graph: Claude dry run PASS;
-  owner run 21/11 G3-G11 with predictions (G11 missed what kro leaves behind).
-  Owner skipped the explanation questions (open gap, re-ask before DRF-57).
-  Found: `/readyz` hangs on a hung DB; fix on `hoang/drf-50-readyz-time-bound`
-  (needs a new image digest before DRF-56).
+- DRF-51 done (PR #42, `2db156a`, CI `static-gates` PASS): RGD `rag-sandbox`
+  (bucket/SA/app/service wait for the bootstrap Job), tenants app, kro RBAC,
+  requests + 2 negatives, check.sh rules 8-12 + 29 guards. Kind graph: Claude
+  dry run PASS; owner run 21/11 G3-G11 with predictions (G11 missed what kro
+  leaves behind). Owner skipped the explanation questions (open gap, re-ask
+  before DRF-57). DRF-44/46/50/51 Done in Linear; DRF-49 open until DRF-56 bucket.
 - ADR-0009 `ACCEPTED` 17/11 (PR #36, `1277f7c`): AWS refused the G/VT quota
   twice, so P6 BatchTrainingJob runs on CPU nodes; limits recorded in the ADR
   and COST_PLAN §7.3.1. No AWS action authorised by it.
@@ -77,9 +76,9 @@ Follow [context governance](../references/context-governance.md).
 
 ## Next safe action
 
-Merge the DRF-51 PR once CI `static-gates` passes. Re-ask the 4 open explanation
-questions (DRF-51 and DRF-45) before DRF-57. L3 (DRF-56)
-needs DRF-51 merged and the window approval (platform-config after db-init).
+DRF-56 part A: draft the window packet (no AWS). AWS reads and the window run
+need the owner's approval sentence (platform-config only after db-init).
+Re-ask the 4 open explanation questions (DRF-51, DRF-45) before DRF-57.
 
 ## Context expansion
 
