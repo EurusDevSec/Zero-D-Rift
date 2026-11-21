@@ -134,7 +134,7 @@ Owner chạy Codex ("codex gpt 6.2 astra") theo mục 4, rồi dán kết quả 
 
 | # | Mức | Finding | Sửa | Test âm |
 |---|---|---|---|---|
-| C1 | HIGH | `cleanup` coi mọi lỗi đọc là `NotFound` | `window.sh cleanup` chỉ đi tiếp khi lệnh đọc báo `(NotFound)`. Còn object, hoặc mọi lỗi đọc khác (Forbidden, timeout, thiếu CRD), đều dừng | `infra/p4-window/tests/cleanup_guard.sh`: kubectl giả, 5 ca, chỉ `notfound` được tới `apply`. Code cũ FAIL 3 ca |
+| C1 | HIGH | `cleanup` coi mọi lỗi đọc là `NotFound` | `window.sh cleanup` chỉ đi tiếp khi lệnh đọc báo `(NotFound)`. Còn object, hoặc mọi lỗi đọc khác (Forbidden, timeout, thiếu CRD), đều dừng. Review PR #55: lệnh đọc và Job không nguyên tử, và Job không có token Kubernetes để tự kiểm. Nên sau Job, script đọc lại: nếu request đã xuất hiện lại thì báo lỗi, kèm cách khôi phục (tăng `bootstrapAttempt`). Đây là phát hiện, không phải chặn | `infra/p4-window/tests/cleanup_guard.sh`: kubectl giả, 6 ca; chỉ `notfound` và `reappear` được tới `apply`; `reappear` phải thoát khác 0. Code cũ FAIL 3 ca; bản trước review PR #55 FAIL ca `reappear` |
 | C2 | MEDIUM | probe PASS với secret `{}`; IMDS nhận mọi exception | `probe.py`: credential phải có `username` và `password` không rỗng mới tính PASS. IMDS chỉ nhận timeout (`TimeoutError`, `socket.timeout`, `URLError` vì timeout) | `infra/p4-window/tests/run_probe_tests.sh`: 16 PASS. Code cũ FAIL 15, gồm secret `{}` và IMDS `ConnectionRefused` |
 | C3 | MEDIUM | ID master secret lọt vào thông báo lỗi | `require(..., label="master secret")`: thông báo lỗi chỉ in nhãn, không in ID | `test_require_label_hides_the_name`, `test_db_init_error_does_not_print_master_secret_id` |
 | C4 | MEDIUM | `/readyz` không kiểm `current_user`/`current_schema()` so với request | App so `current_user`, `current_schema()` với `sandbox_<tenant>_<name>` trước khi seed. Định danh dự kiến lấy từ `SECRET_ID` và phải khớp `SANDBOX_TENANT`/`SANDBOX_NAME` mà RGD truyền vào | Test đơn vị trong `test_serve.py`; `test_4c_serve_refuses_another_sandboxs_credential` trên pgvector thật. Code cũ: 12 test FAIL |
@@ -147,7 +147,7 @@ Owner chạy Codex ("codex gpt 6.2 astra") theo mục 4, rồi dán kết quả 
 
 Ngoài phạm vi C6: role P3 `zero-drift-p3-crossplane-s3` vẫn dùng `s3:GetBucket*` (`modules/p3-provider-irsa`). P3 đã nghiệm thu và flag P3 đang tắt. Nếu bật lại P3, sửa theo cùng cách.
 
-Chưa kiểm trên AWS: C4 (biến môi trường mới của RGD), C6 (danh sách action mới của Crossplane) và C9 (grant mới). Cả ba cần một window sau xác nhận. C1, C2, C3, C5, C8 chỉ đổi script, test hoặc tài liệu.
+Chưa kiểm trên AWS: C4 (biến môi trường mới của RGD), C6 (danh sách action mới của Crossplane) và C9 (grant mới). Cả ba cần một window sau xác nhận. C3, C4 và C9 nằm trong code app: chúng chỉ có hiệu lực khi RGD pin image build từ commit có bản sửa. Cho tới PR pin digest, image `512e982a…` bỏ qua `SANDBOX_TENANT`/`SANDBOX_NAME`. C1, C2, C5, C8 chỉ đổi script, test hoặc tài liệu.
 
 ## 6. Inventory trễ và billing (22/11)
 

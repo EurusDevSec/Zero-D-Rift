@@ -252,6 +252,12 @@ cmd_cleanup() {
   job_manifest "$job" rag-bootstrap "$env" '["cleanup"]' "$labels" | kubectl apply -f - >/dev/null
   echo "OK    job/$job created $(date -u +%T)Z"
   wait_job "$job" || die "cleanup failed"
+  # The read above and the Job are not atomic, and the Job has no Kubernetes token
+  # to re-check by design. So detect a request recreated meanwhile (Git merge +
+  # Argo sync) and say how to recover; only an approved window runs cleanup.
+  if kubectl -n "$t" get ragsandbox "$n" -o name >/dev/null 2>&1; then
+    die "request $t/$n reappeared during cleanup: its schema, role and secret may be gone; bump bootstrapAttempt in Git to rebuild them"
+  fi
   # kro deletes bootstrap Jobs but leaves their Pods without owner (spike 14/11, D9).
   kubectl -n "$PLATFORM_NS" delete pods -l "rag.zero-drift.io/tenant=$t,rag.zero-drift.io/sandbox=$n" --ignore-not-found
 }
