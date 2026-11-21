@@ -52,7 +52,8 @@ Follow [context governance](../references/context-governance.md).
   `static-gates.yml` (not yet run on GitHub). Kind graph: Claude dry run PASS;
   owner run 21/11 G3-G11 with predictions (G11 missed what kro leaves behind).
   Owner skipped the explanation questions (open gap, re-ask before DRF-57).
-  Found: `/readyz` hangs on a hung DB.
+  Found: `/readyz` hangs on a hung DB; fix on `hoang/drf-50-readyz-time-bound`
+  (needs a new image digest before DRF-56).
 - ADR-0009 `ACCEPTED` 17/11 (PR #36, `1277f7c`): AWS refused the G/VT quota
   twice, so P6 BatchTrainingJob runs on CPU nodes; limits recorded in the ADR
   and COST_PLAN §7.3.1. No AWS action authorised by it.

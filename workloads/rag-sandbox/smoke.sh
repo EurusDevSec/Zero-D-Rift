@@ -79,4 +79,35 @@ for _ in $(seq 1 30); do docker exec "$db" pg_isready -U postgres -q && break; s
 for _ in $(seq 1 10); do r="$(get /readyz)"; [[ "$r" == 200* ]] && break; sleep 2; done
 echo "GET /readyz -> $r"
 [[ "$r" == 200* ]] || { echo "FAIL: app did not recover"; exit 1; }
+
+# DRF-51 finding 2: docker pause freezes the postgres processes (like SIGSTOP) but
+# the container's kernel still ACKs TCP, so tcp_user_timeout never fires. Three
+# probes at once, as kubelet may overlap them: each must answer 503 in under 5 s.
+step "database hung (docker pause): readyz must answer 503 within 5 s, not hang"
+probe() {
+  docker run --rm --network "$net" --entrypoint python "$img" -c '
+import json, time, urllib.request, urllib.error
+from concurrent.futures import ThreadPoolExecutor
+def one(_):
+    t = time.monotonic()
+    try:
+        r = urllib.request.urlopen("http://'"$app"':8080/readyz", timeout=10); code, body = r.status, r.read().decode()
+    except urllib.error.HTTPError as e:
+        code, body = e.code, e.read().decode()
+    except OSError as e:
+        code, body = "down", type(e).__name__
+    return code, round(time.monotonic() - t, 2), json.loads(body).get("db") if code == 503 else body
+for code, secs, db in ThreadPoolExecutor(3).map(one, range(3)):
+    print(code, secs, db)'
+}
+docker pause "$db" >/dev/null
+out="$(probe)"; docker unpause "$db" >/dev/null
+echo "$out" | sed 's/^/  /'
+while read -r code secs _; do
+  [[ "$code" == 503 ]] && awk -v s="$secs" 'BEGIN{exit !(s < 5)}' || { echo "FAIL: readyz $code after ${secs}s"; exit 1; }
+done <<<"$out"
+step "database unpaused: app recovers"
+for _ in $(seq 1 10); do r="$(get /readyz)"; [[ "$r" == 200* ]] && break; sleep 2; done
+echo "GET /readyz -> $r"
+[[ "$r" == 200* ]] || { echo "FAIL: app did not recover after unpause"; exit 1; }
 echo "SMOKE PASS"

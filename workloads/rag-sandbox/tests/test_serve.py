@@ -2,7 +2,9 @@
 
 import contextlib
 import json
+import socket
 import threading
+import time
 import urllib.error
 import urllib.request
 from http.server import ThreadingHTTPServer
@@ -43,6 +45,7 @@ class Conn:
     def __init__(self, server):
         self.server = server
         self.closed = False
+        self.aborted = threading.Event()
 
     @contextlib.contextmanager
     def transaction(self):
@@ -51,6 +54,13 @@ class Conn:
     def execute(self, query, params=None):
         text = query.as_string(None)
         self.server.statements.append(text)
+        if self.server.hung:  # process stopped, kernel still ACKs: only an abort wakes us
+            self.server.entered.set()
+            if not self.aborted.wait(10):
+                raise AssertionError("never aborted: the call would hang")
+            raise psycopg.OperationalError("server closed the connection unexpectedly")
+        if self.server.error is not None:
+            raise self.server.error
         if self.server.broken:
             raise psycopg.OperationalError("server closed the connection unexpectedly")
         if "information_schema.columns" in text:
@@ -69,6 +79,11 @@ class Server:
     def __init__(self, password="p1"):
         self.password = password
         self.broken = False
+        self.hung = False
+        self.entered = threading.Event()
+        self.error = None
+        self.connect_error = None
+        self.options = None
         self.vector_columns = 1
         self.rows = [(1, "kro builds the sandbox graph", 0.0), (5, "kro waits", 0.1414)]
         self.statements = []
@@ -78,6 +93,9 @@ class Server:
         assert autocommit and dbname == "rag"
         assert options["tcp_user_timeout"] and options["connect_timeout"] <= 3
         self.logins.append(credential["password"])
+        self.options = options
+        if self.connect_error is not None:
+            raise self.connect_error
         if self.broken:
             raise psycopg.OperationalError("connection refused")
         if credential["password"] != self.password:
@@ -93,9 +111,13 @@ class Clock:
         return self.now
 
 
-def make_db(store, server, clock=None, reload_seconds=5.0):
+def make_db(store, server, clock=None, reload_seconds=5.0, **bounds):
     return sv.Database(EP, store, SECRET, connect_fn=server.connect,
-                       reload_seconds=reload_seconds, clock=clock or Clock())
+                       reload_seconds=reload_seconds, clock=clock or Clock(), **bounds)
+
+
+def fake_abort(conn):
+    conn.aborted.set()
 
 
 class S3:
@@ -281,6 +303,115 @@ def test_incomplete_secret_is_not_ready():
     db = make_db(Store({"username": "x"}), Server())
     with pytest.raises(sv.NotReady, match="incomplete"):
         db.run(sv.check_schema)
+
+
+# --- hung database: bounded time (DRF-51 finding 2) --------------------------
+
+
+def hung_db(server, **bounds):
+    bounds = {"call_timeout": 0.2, "lock_wait": 0.05, "abort_fn": fake_abort, **bounds}
+    return make_db(Store(GOOD), server, **bounds)
+
+
+def timed(fn):
+    start = time.monotonic()
+    result = fn()
+    return result, time.monotonic() - start
+
+
+def test_serve_connections_carry_a_statement_timeout():
+    server = Server()
+    make_db(Store(GOOD), server).run(sv.check_schema)
+    assert server.options["options"] == f"-c statement_timeout={sv.STATEMENT_TIMEOUT_MS}"
+    assert sv.LOCK_WAIT + sv.CALL_TIMEOUT < 8 / 2  # well under the probe's timeoutSeconds
+
+
+def test_hung_server_times_out_without_retry_then_recovers():
+    server = Server()
+    db = hung_db(server)
+    db.run(sv.check_schema)  # connected and seeded
+    server.hung = True
+    with pytest.raises(sv.NotReady, match="timeout: no answer from the database within 0.2 s"):
+        timed(lambda: db.run(sv.check_schema))
+    assert len(server.logins) == 1  # no second wait on a hung server
+    assert db._conn is None
+    server.hung = False
+    assert db.run(sv.check_schema)["schema"] == "rag_tenant_a__s1"
+
+
+def test_hung_server_during_seed_of_a_new_connection():
+    server = Server()
+    server.hung = True
+    status, body = sv.App(hung_db(server), sv.Bucket(None)).readyz()
+    assert status == 503 and body["db"].startswith("error: timeout")
+
+
+def test_waiting_request_gets_busy_instead_of_queueing():
+    server = Server()
+    db = hung_db(server, call_timeout=1.0, lock_wait=0.1)
+    db.run(sv.check_schema)
+    server.hung = True
+    app = sv.App(db, sv.Bucket(None))
+    first = {}
+    stuck = threading.Thread(target=lambda: first.update(body=app.readyz()[1]))
+    stuck.start()
+    assert server.entered.wait(5)
+    (status, body), elapsed = timed(app.readyz)
+    assert status == 503 and body["db"].startswith("error: busy") and elapsed < 0.5
+    status, body = app.query({"v": ["1,0,0,0"]})
+    assert status == 503 and body["error"].startswith("busy")
+    stuck.join(5)
+    assert first["body"]["db"].startswith("error: timeout")
+
+
+def test_statement_timeout_is_not_retried():
+    server = Server()
+    db = make_db(Store(GOOD), server)
+    db.run(sv.check_schema)
+    server.error = psycopg.errors.QueryCanceled("canceling statement due to statement timeout")
+    with pytest.raises(sv.NotReady, match="QueryCanceled: SQLSTATE 57014"):
+        db.run(sv.check_schema)
+    assert len(server.logins) == 1
+
+
+def test_connect_timeout_is_not_retried():
+    server = Server()
+    server.connect_error = psycopg.errors.ConnectionTimeout("connection timeout expired")
+    with pytest.raises(sv.NotReady, match="ConnectionTimeout: timeout"):
+        make_db(Store(GOOD), server, reload_seconds=0).run(sv.check_schema)
+    assert len(server.logins) == 1
+
+
+def test_readyz_checks_db_and_bucket_in_parallel():
+    class SlowS3(S3):
+        def head_bucket(self, Bucket):
+            time.sleep(0.5)
+            raise EndpointTimeout()
+
+    class EndpointTimeout(Exception):
+        pass
+
+    server = Server()
+    server.hung = True
+    app = sv.App(hung_db(server, call_timeout=0.5), sv.Bucket("b", SlowS3()))
+    (status, body), elapsed = timed(app.readyz)
+    assert status == 503 and body["db"].startswith("error: timeout")
+    assert body["bucket"] == "error: bucket b: EndpointTimeout"
+    assert elapsed < 0.9  # the slower check, not the sum
+
+
+def test_shutdown_socket_wakes_a_blocked_reader():
+    a, b = socket.socketpair()
+    got = []
+    reader = threading.Thread(target=lambda: got.append(a.recv(1)))
+    reader.start()
+    time.sleep(0.1)
+    conn = type("C", (), {"pgconn": type("P", (), {"socket": a.fileno()})()})()
+    sv.shutdown_socket(conn)
+    reader.join(2)
+    assert got == [b""] and not reader.is_alive()
+    a.close()
+    b.close()
 
 
 # --- query ------------------------------------------------------------------

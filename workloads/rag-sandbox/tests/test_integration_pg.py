@@ -7,6 +7,7 @@ not prove RDS, IRSA or Secrets Manager behaviour.
 """
 
 import os
+import time
 
 import psycopg
 import pytest
@@ -114,6 +115,37 @@ def test_3d_serve_wrong_password_not_ready_then_recovers(endpoint, store):
     assert app.readyz()[0] == 200
     db.close()
     store.delete("lab/wrong")
+
+
+def _sleep(seconds):
+    return lambda c: c.execute("SELECT pg_sleep(%s)", (seconds,)).fetchone()
+
+
+def test_3e_serve_statement_timeout_is_server_side(endpoint, store):
+    # The server cancels the statement (SQLSTATE 57014); no retry doubles the wait.
+    db = sv.Database(endpoint, store, "zero-drift/rag/tenant-a/s1", reload_seconds=0, call_timeout=10)
+    db.run(sv.check_schema)
+    start = time.monotonic()
+    with pytest.raises(sv.NotReady, match="QueryCanceled: SQLSTATE 57014"):
+        db.run(_sleep(5))
+    assert time.monotonic() - start < sv.STATEMENT_TIMEOUT_MS / 1000 + 1
+    assert db.run(sv.check_schema)["schema"] == ROLE_A
+    db.close()
+
+
+def test_3f_serve_watchdog_wakes_a_call_the_server_never_answers(endpoint, store):
+    # Stands in for a stopped server: the statement_timeout is set above the
+    # watchdog, so only the client-side socket shutdown can end the call.
+    options = {**sv.SERVE_CONNECT, "options": "-c statement_timeout=30000"}
+    db = sv.Database(endpoint, store, "zero-drift/rag/tenant-a/s1", reload_seconds=0,
+                     connect_options=options, call_timeout=0.5)
+    db.run(sv.check_schema)
+    start = time.monotonic()
+    with pytest.raises(sv.NotReady, match="timeout: no answer from the database within 0.5 s"):
+        db.run(_sleep(10))
+    assert time.monotonic() - start < 2
+    assert db.run(sv.check_schema)["schema"] == ROLE_A  # reconnects by itself
+    db.close()
 
 
 def test_4_role_a_cannot_read_schema_b(endpoint, store):

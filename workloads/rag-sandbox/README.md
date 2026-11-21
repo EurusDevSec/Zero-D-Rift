@@ -28,9 +28,24 @@ invalid input or configuration, 1 = other error.
   missing, or after an authentication or connection error, the app reads it again
   (at most every `SECRET_RELOAD_SECONDS`) and reconnects, so a rotated password or
   a late bootstrap Job heals without a restart (also needed in P8).
-- Connections fail fast on a dead peer (`connect_timeout` 2 s, `tcp_user_timeout`
-  3 s, TCP keepalives), so `/readyz` answers within a few seconds during an outage.
-  Use a readiness `timeoutSeconds` of at least 8.
+- Each database call is bounded in time, whatever the failure:
+  - dead network (an RDS reboot or failover drops packets): `connect_timeout` 2 s,
+    `tcp_user_timeout` 3 s, TCP keepalives;
+  - live but slow server, or a lock wait: the server cancels the statement after
+    `statement_timeout` 2 s (set by `serve` only, not by `db-init` or `bootstrap`);
+    the answer is `QueryCanceled: SQLSTATE 57014`;
+  - hung server (process stopped, its kernel still ACKs TCP, so the two bounds
+    above never fire): a client watchdog shuts the socket down after 2.5 s; the
+    answer is `timeout: no answer from the database within 2.5 s`;
+  - one connection per Pod: a request waits at most 0.5 s for it, then gets 503
+    `busy: an earlier database call has not finished` instead of queueing.
+
+  A timeout is not retried (a second wait would double the probe's wait); the
+  next call reconnects. `/readyz` checks the database and the bucket in parallel,
+  so it answers in about 3 s at worst for the database and about 6 s for the
+  bucket (`HeadBucket` connect and read timeouts 3 s each). Use a readiness
+  `timeoutSeconds` of at least 8. `smoke.sh` checks the hung case with
+  `docker pause` on the database.
 - `/healthz`, `/readyz` with 200 are not logged; other responses and every
   `/query` are logged as one line to stderr. No secret value is logged.
 - Errors from the AWS SDK and libpq are reduced to the exception class plus a
