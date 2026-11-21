@@ -87,6 +87,7 @@ expect4 FAIL "P4 RDS ingress"           ingress-two-rules         "$(p4 '.resour
 expect4 FAIL "P4 policies no-star" tenant-a-resource-star    "$(pol rag-tenant-a '.Statement[0].Resource = ["*"]')"
 expect4 FAIL "P4 policies no-iam"      bootstrap-plus-PassRole   "$(pol rag-bootstrap '.Statement[0].Action += ["iam:PassRole"]')"
 expect4 FAIL "P4 policies no-iam"      crossplane-s3-star        "$(pol rag-crossplane-s3 '.Statement[0].Action += ["s3:*"]')"
+expect4 FAIL "P4 policies no-iam"      crossplane-GetBucket-star "$(pol rag-crossplane-s3 '(.Statement[] | select(.Sid == "RagBuckets") | .Action) |= (map(select(startswith("s3:GetBucket") | not)) + ["s3:GetBucket*"])')"
 expect4 FAIL "P4 policies approved" crossplane-plus-PutObject "$(pol rag-crossplane-s3 '.Statement[0].Action += ["s3:PutObject"]')"
 expect4 FAIL "P4 policies approved" bootstrap-secret-star     "$(pol rag-db-admin '.Statement[0].Resource |= map(sub("-[?]+$"; "-*"))')"
 expect4 FAIL "P4 policies approved" tenant-a-any-rag-bucket   "$(pol rag-tenant-a '(.Statement[] | select(.Sid == "ReadOwnObjects") | .Resource) = ["arn:aws:s3:::zero-drift-rag-*/*"]')"

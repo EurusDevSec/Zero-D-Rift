@@ -12,7 +12,8 @@ pass() { echo "PASS  $1"; }
 fail() { echo "FAIL  $1"; failed=1; }
 
 # Every manifest Argo CD can sync, plus the bootstrap app and the disabled request.
-files="$(find bootstrap platform requests -name '*.yaml' | sort)"
+# Argo's directory source reads .yaml, .yml and .json, so CI reads the same set (Codex C5).
+files="$(find bootstrap platform requests \( -name '*.yaml' -o -name '*.yml' -o -name '*.json' \) | sort)"
 
 # 1. Every file is valid YAML.
 bad="$(for f in $files; do python -I -c 'import sys,yaml; list(yaml.safe_load_all(open(sys.argv[1])))' "$f" 2>/dev/null || echo "$f"; done)"
@@ -150,6 +151,16 @@ for f, d in docs:
         key = (m.get("namespace"), m.get("name"))
         res(key not in seen, f"{who}: unique")
         seen.add(key)
+
+# 8b. The requests app syncs only RAGSandbox objects. Anything else there (a
+#     ConfigMap, a Job...) would bypass the request rules; platform-config is
+#     window-only (window.sh, after db-init) and must not exist in any source.
+others = [f"{f}: {d.get('kind')} {d.get('metadata', {}).get('name')}" for f, d in docs
+          if f.replace("\\", "/").startswith("requests/") and "/disabled/" not in f.replace("\\", "/")
+          and d.get("kind") != "RAGSandbox"]
+res(not others, "requests/ holds only RAGSandbox objects" + (f": {others}" if others else ""))
+pc = [f for f, d in docs if d.get("kind") == "ConfigMap" and d.get("metadata", {}).get("name") == "platform-config"]
+res(not pc, "no platform-config ConfigMap in Git (window-only)" + (f": {pc}" if pc else ""))
 
 # 9. No secret value anywhere: no password/token-like key, and no env var whose
 #    name says password/token/key with a literal value.

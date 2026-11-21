@@ -1,0 +1,154 @@
+# DRF-57 (P4-T4.2): bản audit nghiệm thu P4 (bản nháp 21/11/2026)
+
+- SPEC: `.agent/specs/SPEC-P4_RAG_SANDBOX.md` §4, §7, §8.
+- Window: `P4-L3-20261121-01`.
+- Revision ứng viên: `main` = `5e5067f` (merge PR #54).
+- Đã che: account ID, ARN, IP, endpoint RDS, tên bucket state.
+- Codex đã review bản nháp theo mục 4: REQUEST CHANGES (mục 5). Các sửa ở mục 5.1 nằm trên nhánh
+  `hoang/drf-57-review-fixes` và chờ Codex kiểm lại. Mục 6 (inventory trễ, Bills) điền ngày 22/11.
+
+## 1. Quy tắc hoàn thành P4 (SPEC §8)
+
+| Điều kiện | Trạng thái |
+|---|---|
+| Mọi kịch bản §4 có evidence L3 trên EKS | **Gần đủ**: 7/7 kịch bản có evidence L3. Còn mở: (a) dòng `sts get-caller-identity` do owner tự gõ trong micro-lab (DRF-56 C) không được giữ (mục 3, L1); (b) kịch bản 6 chỉ đạt một phần: nguyên nhân lỗi retry được gỡ bằng `kubectl`, không qua Git (C7) |
+| Teardown sạch | **Đạt** 21/11: `65 destroyed`, state 0, `inventory.sh` `RESULT: CLEAN` (window evidence, phần Teardown) |
+| Inventory trễ sạch | **Chưa**: ngày 22/11, owner chạy với MFA (mục 6) |
+| Đã đọc billing | **Chưa**: ngày 22/11, owner đọc Bills (mục 6). Ước tính của window khoảng 0,50 USD |
+| Review độc lập ghi findings và giới hạn | **Đang làm**: Codex đã review (REQUEST CHANGES: 1 HIGH, 6 MEDIUM, 3 LOW, mục 5). Đã sửa cả 10, kèm test âm (mục 5.1). Còn chờ Codex kiểm lại |
+| Owner `PRACTICED` + `EXPLAINED`: IRSA workload, luồng secret, tầng credential PostgreSQL | **Đạt có giới hạn**: IRSA đạt đầy đủ; hai mục kia có giới hạn nguồn gốc (`P4-T4.2_TEACHBACK_20261121.md`) |
+
+## 2. Kịch bản §4 → evidence
+
+Viết tắt: **W** = `P4-T4.1_L3_WINDOW_20261121.md` (L3 trên EKS), **K-DB** = `P4-T2.1_L2_KIND_DB_20261119.md`, **K-G** = `P4-T3.2_L2_KIND_GRAPH_20261119.md`, **TF** = `P4-T2.2_TERRAFORM_RAG_20261119.md`.
+
+| Kịch bản | Mệnh đề | Evidence | Tầng |
+|---|---|---|---|
+| 1. Shared service chuẩn bị một lần, riêng tư | không public; 5432 chỉ từ SG node | W: RDS describe `public false`; `plan_assert` khoá SG một rule (TF, cổng trước apply W) | L3 cấu hình + plan |
+| | pgvector cài một lần bởi Job init | W: `db-init` `vector_version 0.8.2`; `probe platform` `pgvector 0.8.2` | L3 |
+| | không request nào tạo, sửa hay xoá RDS | RGD không có resource RDS; ClusterRole `kro-zdr-p4-children` chỉ cho configmaps (đọc), SA, Service, Job, Deployment, `s3.aws.m.upbound.io/buckets`, không có API group RDS; chỉ cài provider S3; plan chỉ có 1 `aws_db_instance` do Terraform sở hữu | tĩnh + plan |
+| 2. Một request cho một sandbox dùng được | kro tạo bucket, Job, SA, Deployment, Service | W: thứ tự Job 08:48:16 → Bucket, SA, Service 08:48:22 → Deployment 08:48:24 | L3 |
+| | Job tạo một schema và một login role | W: log bootstrap `role_created, schema_created` (retry); `probe sandbox` đọc schema | L3 |
+| | Ready chỉ sau khi app truy vấn schema và tới bucket | W: `/readyz` `{'bucket': 'ok', 'db': 'ok', 'ready': True}`; readinessProbe `/readyz` | L3 |
+| | status có endpoint, schema, bucket, secretName, không có giá trị secret | W: JSON status của cả hai instance | L3 |
+| | kiểm độc lập ngoài Pod app PASS readiness và truy vấn vector | W: `probe sandbox` ×2 (và `retry`), 6/6 mỗi lần | L3 |
+| 3. Readiness không giả | request sai bị chặn trước merge | W: G3 (`docs--qa`) và G2 lớp 1, CI `static-gates` đỏ | CI |
+| | các request khác không bao giờ Ready trong khi Argo Synced | W: G2 lớp 2 (`IN_PROGRESS Failed`, Argo `Synced/Healthy`); H lần 0 (`IN_PROGRESS Failed`) | L3 |
+| | tầng hỏng hiện ở instance, Job, Pod hoặc managed-resource status | W: conditions `ResourcesReady`; log Job (`invalid input…`, `NoCredentialsError`) | L3 |
+| 4. Credential bị giới hạn | Pod app chỉ đọc secret tenant mình, chỉ dùng role sandbox | Secret: W `probe sandbox` đọc được secret của mình; G1 secret tenant kia và secret bootstrap `AccessDeniedException`. Bucket: micro-lab `OWN_OK` / `OTHER_DENIED` | L3 |
+| | role sandbox không `CREATE ROLE`, không đọc schema khác, không làm bootstrap | W: G1 `42501` ×3 mỗi chiều | L3 |
+| | bootstrap không phải superuser, không đọc được master | W: `probe platform` `super=False`, master `AccessDeniedException`; `rag_iam_check --principal` PASS | L3 |
+| | Pod tenant không lấy được credential node từ IMDS | W: G1 `IMDS timed out` ×2; H lần 0 `NoCredentialsError` | L3 |
+| 5. Tenant tách nhau trên data plane | tenant-a không đọc được schema, secret, bucket của tenant-b, và ngược lại | W: G1 cả hai chiều 7/7 | L3 |
+| | mỗi đường được phép vẫn chạy | W: `probe sandbox` cả hai tenant PASS trước G1 (08:49); sau cleanup chỉ ghi `tenant-b/docs-qa` PASS (09:22) | L3 |
+| 6. Xoá, retry, cleanup dự đoán được | Job mới chạy, thành công, request Ready sau khi sửa trong Git và tăng `bootstrapAttempt` | W: H (PR #50, #51); `boot-1` Complete; `ACTIVE`; probe PASS. Phần qua Git là tăng attempt. Nguyên nhân (identity bootstrap) được gỡ bằng `kubectl` ở phía nền tảng, nên chưa chứng minh "sửa nguyên nhân trong Git" | L3, một phần |
+| | không đổi mật khẩu đang có | K-DB dòng 51: chạy lại khi secret còn thì `password_changed false`. Trên EKS ca này **không xảy ra**: lần 0 chưa tạo gì, nên lần 1 tạo role mới (`password_changed true` là đúng) | L2 kind |
+| | không sửa hay xoá tay object nào trong cluster | W: không object nào của request bị sửa tay. Có một thay đổi tay: `bootstrap-identity on` sửa annotation của ServiceAccount `rag-bootstrap` bằng `kubectl` | L3, một phần |
+| | xoá request + cleanup: object, bucket, schema, role, secret đều hết | W: I (`HeadBucket` 404, `role_dropped, schema_dropped, secret_deleted`, `ResourceNotFoundException`) | L3 |
+| | sandbox còn lại vẫn chạy | W: `probe sandbox tenant-b docs-qa` PASS sau cleanup | L3 |
+| 7. Teardown đủ | xoá theo thứ tự sandbox → controller → RDS + EKS | W: phần Teardown, 09:22:51–09:39:49 | L3 |
+| | inventory không còn gì ngoài allowlist; không còn RDS, snapshot, secret, bucket, role P4 | W: inventory 2 lần `CLEAN`, mọi bộ đếm P4/RDS = 0. Chỉ mục tag cập nhật chậm, kiểm lại ở mục 6 | L3 |
+
+## 3. Phát hiện và giới hạn
+
+Từ window (chi tiết ở W, mục "Phát hiện"):
+- **F1:** `NoRegionError`. Lần sửa duy nhất được phép là PR #46 (`AWS_DEFAULT_REGION`). Lab kind không bắt được lỗi này vì dùng file backend.
+- **F3:** G2 bị CI chặn trước, và `main` không có branch protection. Merge vẫn được dù CI đỏ, nên lớp CI chỉ là cảnh báo.
+- **F4:** IRSA khi `automountServiceAccountToken: false` chạy được.
+- **F5:** lệnh micro-lab trong runbook làm lộ account ID ở câu lỗi, và `-i` làm mất các dòng đầu.
+
+Giới hạn:
+- **L1.** Dòng `sts get-caller-identity` do owner tự gõ chưa được giữ. Role chỉ thấy gián tiếp trong câu lỗi S3. Owner quyết định: chạy lại ở một window ngắn, hoặc hoãn kèm lý do.
+- **L2.** H1 chỉ là **smoke** (một lần, ranh giới âm 12); trial chính thức ở P9.
+- **L3.** "Không tới được từ ngoài" chỉ kiểm bằng cấu hình (ranh giới âm 6).
+- **L4.** Ca "retry không đổi mật khẩu đang có" chỉ có ở L2 kind.
+- **L5.** Câu duyệt window là nút "Duyệt window" trả lời câu hỏi có RunId, không phải nguyên văn câu mẫu.
+- **L6.** Teach-back: câu 3, 4, 6 có giới hạn nguồn gốc. Câu 6c và `boot-0` lần đầu là khối dán. Nguyên nhân `propagationPolicy` chưa xác minh.
+- **L7.** Runbook `P4_RAG_SANDBOX.md` chưa ghi F3 (lớp CI ở G2) và F5 (lệnh micro-lab). Sửa cùng các finding của review.
+
+Phiên bản dùng trong window:
+- EKS 1.35 (node `v1.35.9-eks`);
+- RDS PostgreSQL 17.11, `db.t4g.micro`; pgvector 0.8.2;
+- kro 0.9.4; Argo CD v3.5.7; Crossplane và provider pin như VERSION_MATRIX §7;
+- image `rag-sandbox@sha256:512e982a…` (VERSION_MATRIX §8);
+- aws-cli `2.42.1` (`public.ecr.aws/aws-cli/aws-cli@sha256:b0102d22…`).
+
+## 4. Yêu cầu review độc lập (cho Codex)
+
+- **Ứng viên:** base `7dcaa44` (merge PR #33, SPEC-P4 đã được Codex review ở `358da73`), head `5e5067f`. Gồm 101 file, PR #34–#54 (PR #48 đóng không merge).
+- **Đọc trước:**
+  - SPEC-P4 §1 (ranh giới âm), §4, §5 P4-T4, §8;
+  - ADR-0008;
+  - `docs/runbooks/P4_RAG_SANDBOX.md`;
+  - evidence W, K-DB, K-G, TF, `P4-T3.1_APP_IMAGE_20261119.md`, `P4-T4.2_TEACHBACK_20261121.md`, và file này.
+- **Câu hỏi cần trả lời:**
+  1. **IAM** (`infra/terraform/modules/rag-identity/`): policy của role tenant có đường tới secret, bucket hay prefix của tenant khác, tới secret bootstrap hoặc master không? Trust có chỉ đúng SA và audience không? `rag_iam_check.sh` có đủ chặt không?
+  2. **PostgreSQL** (`workloads/rag-sandbox/src/ragsandbox/`): `db-init`, `bootstrap`, `cleanup` có cấp thừa quyền không (`CREATEROLE` của bootstrap, `GRANT` cho role sandbox, `search_path`, `PUBLIC`)? `cleanup` có xoá nhầm sandbox khác được không?
+  3. **RGD và GitOps** (`gitops/platform/rgd/rag-sandbox.yaml`, `gitops/requests/`, `gitops/check.sh`): readiness có thể báo Ready giả không? Cổng `platformConfig` có bị vượt được không? Rule của CI có chặn đủ tên sai và namespace không có role không?
+  4. **Script window** (`infra/p4-window/window.sh`, `probe.py`): có in hoặc ghi secret, endpoint, ARN ra output không? Probe có thể PASS khi đường lẽ ra bị chặn lại đi được không (ví dụ lỗi mạng bị đếm là "denied")?
+  5. **Evidence:** W và file này có kết luận vượt quá dữ liệu không, nhất là bảng mục 2?
+  6. **Lộ thông tin:** có account ID, ARN, IP, endpoint hay tên bucket state trong Git không?
+- **Giới hạn đã biết** (không cần báo lại): L1–L7 ở mục 3; R1 least-privilege của role Terraform vẫn hoãn từ P3; `main` không có branch protection.
+- **Ghi kết quả:** reviewer, revision, verdict, findings kèm mức độ, lệnh đã chạy, giới hạn. Owner dán vào chat; Claude ghi nguyên văn vào mục 5 qua PR.
+
+## 5. Kết quả review độc lập
+
+Owner chạy Codex ("codex gpt 6.2 astra") theo mục 4, rồi dán kết quả vào chat ngày 21/11/2026.
+- Claude ghi nguyên văn bên dưới. Chỉ đổi các link tuyệt đối trên máy thành đường dẫn trong repo `path:dòng`.
+- Bản audit được review có blob `19e9fdda`; `VERSION_MATRIX.md` có blob `4b1e0996`. Cả hai khớp working tree lúc dán.
+
+> Verdict — REQUEST CHANGES. Reviewer: Codex. Tôi đã review `7dcaa44dbaf8078d5fd98a86e377d6e7bc404a0b..5e5067f2ba255a94b9d65df385e663cae6978bf9` cùng hai bản chưa commit của audit (`19e9fdda`) và `VERSION_MATRIX.md` (`4b1e0996`).
+>
+> 1. IAM. Trong policy Terraform, hai role tenant chỉ đọc secret, bucket và object theo prefix của chính tenant. Tôi không thấy đường tới tenant kia, bootstrap hoặc master. Trust khóa đúng OIDC, audience `sts.amazonaws.com` và subject theo D6.
+>
+> * MEDIUM — Role Crossplane dùng `s3:GetBucket*` trong khi ADR-0008 yêu cầu liệt kê action cụ thể. Test hiện cũng chấp nhận wildcard này. Thay bằng các action provider cần và cập nhật kỳ vọng của test. Finding này thuộc role Crossplane, không phải bằng chứng tenant đọc chéo. `infra/terraform/modules/rag-identity/main.tf:121` · `.agent/adr/ADR-0008_P4_SHARED_RDS_OWNERSHIP_SECRETS_AND_WORKLOAD_IAM.md:81`
+> * LOW — Ma trận của `rag_iam_check.sh` kiểm tenant-a bị từ chối đọc bootstrap và master nhưng thiếu hai dòng tương ứng cho tenant-b. Thêm hai dòng `implicitDeny` là đủ để script cũng kiểm được trường hợp quyền thực tế của riêng tenant-b bị nới. `infra/terraform/tests/rag_iam_matrix.json:35`
+>
+> 2. PostgreSQL. `CREATEROLE` của bootstrap đúng D4. Role sandbox chỉ được `CONNECT` vào `rag`, `USAGE, CREATE` trên schema riêng. Tên schema, role và secret dẫn xuất từ cặp tenant/name đã kiểm tra. Tôi không thấy va chạm tên khiến `cleanup` của sandbox này nhắm sang sandbox khác.
+>
+> * LOW — Bootstrap được `CREATE ... WITH GRANT OPTION` trên database, trong khi chỉ cần `CREATE` để tạo schema. Quyền cần cấp tiếp cho sandbox là `CONNECT`. Tách hai quyền và chỉ giữ `WITH GRANT OPTION` cho `CONNECT`. `workloads/rag-sandbox/src/ragsandbox/statements.py:105`
+>
+> 3. RGD và GitOps. RGD hiện tại đợi `platformConfig`, Job của đúng attempt `Complete=True`, bucket `Ready=True` và replica qua `/readyz`. Có hai chỗ ảnh hưởng trực tiếp đến nghiệm thu.
+>
+> * MEDIUM — Nếu secret của request chứa credential hợp lệ nhưng của sandbox khác, app seed và kiểm `current_schema()` của kết nối đó. Khi bucket đúng vẫn truy cập được, `/readyz` có thể trả 200 dù app đang phục vụ sai schema. So `current_user` và `current_schema()` với định danh dự kiến của request trước khi seed. `workloads/rag-sandbox/src/ragsandbox/serve.py:251` · `workloads/rag-sandbox/src/ragsandbox/serve.py:303`
+> * MEDIUM — CI chỉ đọc `*.yaml`, còn Argo cũng đồng bộ `.yml` và `.json`. Request sai tên hoặc namespace ở hai dạng đó sẽ lọt qua kiểm tra trước merge. Ngoài ra, trong thư mục request, rule kiểm `RAGSandbox` bỏ qua kind khác, kể cả `platform-config` vốn chỉ được tạo trong window sau `db-init`. Đồng bộ tập file CI kiểm với Argo và chặn ConfigMap dành riêng cho window trong nguồn GitOps. `gitops/check.sh:15` · `gitops/check.sh:140` · [Argo CD 3.5 Directory](https://argo-cd.readthedocs.io/en/release-3.5/user-guide/directory/)
+>
+> 4. Script window và probe. Các ca âm Secrets Manager/S3 yêu cầu mã từ chối, còn SQL yêu cầu `42501`. Lỗi kết nối thông thường không được tính là PASS ở các ca này.
+>
+> * HIGH — `cleanup` coi mọi lỗi của `kubectl get ragsandbox` như request đã biến mất. Nếu lần đọc bị `Forbidden` hoặc timeout nhưng bước tạo Job vẫn chạy được, cleanup có thể xóa schema, role và secret của sandbox còn hoạt động. Chỉ tiếp tục khi lệnh đọc thành công và xác nhận `NotFound`; mọi lỗi đọc khác phải dừng. `infra/p4-window/window.sh:242`
+> * MEDIUM — Với secret `{}`, cả `probe platform` và `probe sandbox` ghi nhận đã đọc được credential rồi thoát trước các kiểm tra còn lại. Tôi đã kiểm cục bộ bằng store giả: cả hai trả exit 0, `RESULT: PASS (0 failed)`. Yêu cầu đủ `username` và `password` trước khi ghi PASS. Nhánh IMDS cũng nên chỉ chấp nhận timeout dự kiến, vì hiện mọi exception ngoài `HTTPError` đều được tính PASS. `infra/p4-window/probe.py:110` · `infra/p4-window/probe.py:147` · `infra/p4-window/probe.py:209`
+> * MEDIUM — `window.sh db-init` truyền ARN thật làm `MASTER_SECRET_ID`. Khi secret thiếu hoặc thiếu trường, `require()` đưa nguyên ID vào `RuntimeError`, rồi CLI và `wait_job` in ra log. Kiểm bằng ID giả xác nhận ID còn nguyên sau `safe_reason`. Dùng nhãn `master secret` trong thông báo lỗi này. `workloads/rag-sandbox/src/ragsandbox/secretstore.py:55` · `infra/p4-window/window.sh:181`
+>
+> 5. Evidence. Giá trị pgvector `0.8.2` trong `VERSION_MATRIX` có kết quả truy vấn L3 ở W hỗ trợ. Hai kết luận trong bảng nghiệm thu cần thu hẹp theo dữ liệu đã ghi.
+>
+> * MEDIUM — Scenario 6 được ghi là không sửa tay object nào trong cluster. W ghi rõ trước attempt 1, `bootstrap-identity on` đã sửa annotation của ServiceAccount bằng `kubectl`. Đủ bằng chứng rằng tăng attempt qua Git tạo Job mới và request về `ACTIVE` sau khi khôi phục identity. Chưa đủ để ghi rằng cả nguyên nhân lỗi được sửa qua Git theo SPEC. Sửa cách ghi ở W và bảng §2. `docs/evidence/p4/P4_ACCEPTANCE_AUDIT_20261121.md:45` · `docs/evidence/p4/P4-T4.1_L3_WINDOW_20261121.md:157` · `infra/p4-window/window.sh:212`
+> * LOW — Audit ghi cả hai tenant PASS trước và sau G1. W ghi cả hai trước G1, nhưng sau cleanup chỉ ghi `tenant-b/docs-qa` PASS. Sửa câu theo hai mốc đã giữ. Ở dòng 37, `OWN_OK/OTHER_DENIED` kiểm bucket; bằng chứng cho secret là `probe sandbox` và G1. `docs/evidence/p4/P4_ACCEPTANCE_AUDIT_20261121.md:42` · `docs/evidence/p4/P4_ACCEPTANCE_AUDIT_20261121.md:37` · `docs/evidence/p4/P4-T4.1_L3_WINDOW_20261121.md:78`
+>
+> 6. Lộ thông tin trong Git. Không phát hiện account ID, ARN, IP hạ tầng, endpoint RDS, tên bucket state hoặc credential thật trong 102 đường dẫn thuộc phạm vi. Các kết quả khớp đã đối chiếu là fixture, placeholder hoặc địa chỉ công khai/hệ thống. Finding về ARN ở mục 4 là đường in lỗi khi chạy.
+>
+> Lệnh đã chạy. `git status --short`, `git rev-parse`, `git diff --stat`, `git diff --check` cho range và `VERSION_MATRIX.md`, `git hash-object --no-filters`, `rg -n`, `Get-Content`, `bash gitops/check.sh` (PASS), cùng Python cục bộ để quét định danh và kiểm hai trường hợp lỗi bằng dữ liệu giả.
+>
+> Giới hạn review. Đây là review chỉ đọc trên mã, manifest và evidence đã lưu. Tôi không chạy lệnh AWS, không chạy lại EKS/RDS, không sửa file và không commit.
+
+### 5.1. Xử lý từng finding
+
+| # | Mức | Finding | Sửa | Test âm |
+|---|---|---|---|---|
+| C1 | HIGH | `cleanup` coi mọi lỗi đọc là `NotFound` | `window.sh cleanup` chỉ đi tiếp khi lệnh đọc báo `(NotFound)`. Còn object, hoặc mọi lỗi đọc khác (Forbidden, timeout, thiếu CRD), đều dừng. Review PR #55: lệnh đọc và Job không nguyên tử, và Job không có token Kubernetes để tự kiểm. Nên sau Job, script đọc lại: nếu request đã xuất hiện lại thì báo lỗi, kèm cách khôi phục (tăng `bootstrapAttempt`). Đây là phát hiện, không phải chặn | `infra/p4-window/tests/cleanup_guard.sh`: kubectl giả, 6 ca; chỉ `notfound` và `reappear` được tới `apply`; `reappear` phải thoát khác 0. Code cũ FAIL 3 ca; bản trước review PR #55 FAIL ca `reappear` |
+| C2 | MEDIUM | probe PASS với secret `{}`; IMDS nhận mọi exception | `probe.py`: credential phải có `username` và `password` không rỗng mới tính PASS. IMDS chỉ nhận timeout (`TimeoutError`, `socket.timeout`, `URLError` vì timeout) | `infra/p4-window/tests/run_probe_tests.sh`: 16 PASS. Code cũ FAIL 15, gồm secret `{}` và IMDS `ConnectionRefused` |
+| C3 | MEDIUM | ID master secret lọt vào thông báo lỗi | `require(..., label="master secret")`: thông báo lỗi chỉ in nhãn, không in ID | `test_require_label_hides_the_name`, `test_db_init_error_does_not_print_master_secret_id` |
+| C4 | MEDIUM | `/readyz` không kiểm `current_user`/`current_schema()` so với request | App so `current_user`, `current_schema()` với `sandbox_<tenant>_<name>` trước khi seed. Định danh dự kiến lấy từ `SECRET_ID` và phải khớp `SANDBOX_TENANT`/`SANDBOX_NAME` mà RGD truyền vào | Test đơn vị trong `test_serve.py`; `test_4c_serve_refuses_another_sandboxs_credential` trên pgvector thật. Code cũ: 12 test FAIL |
+| C5 | MEDIUM | CI chỉ đọc `*.yaml`; không chặn kind khác trong requests | `gitops/check.sh` đọc `.yaml`, `.yml`, `.json`. Rule 8b: `requests/` (trừ `disabled/`) chỉ chứa `RAGSandbox`; không có ConfigMap `platform-config` ở đâu trong Git | `gitops/tests/check_guards.sh`: 4 ca mới (tên sai `.yml`, thiếu tenant `.json`, ConfigMap trong requests, `platform-config` trong Git). `check.sh` cũ cho qua cả 4 |
+| C6 | MEDIUM | role Crossplane dùng `s3:GetBucket*` | Bỏ `s3:GetBucket*`, thay bằng 10 action `GetBucket…` mà hàm `Read` của `aws_s3_bucket` gọi (fork upbound `d7cd6f2fe022`, dùng trong provider-aws-s3 v2.8.1). `plan_assert` check 16 giờ chặn mọi action có `*`. **Chưa chạy trên AWS**: window sau phải xem bucket `Ready`/`Synced` và xoá được | Guard `crossplane-GetBucket-star` FAIL (code cũ PASS); `terraform test` có assert "không wildcard"; ma trận: `GetBucketPublicAccessBlock` `implicitDeny`, `GetBucketObjectLockConfiguration` `allowed` |
+| C7 | MEDIUM | kịch bản 6 ghi quá: "không sửa tay" | W phần H, runbook mục H và §2 kịch bản 6: phần qua Git là tăng attempt; nguyên nhân được gỡ bằng `kubectl` (`bootstrap-identity on`). Kịch bản 6 ghi "một phần" | — |
+| C8 | LOW | ma trận IAM thiếu 2 dòng tenant-b | Thêm 2 dòng `implicitDeny` cho tenant-b: secret bootstrap và master | Ma trận chạy trong `terraform test` (offline) và `rag_iam_check.sh` (sau apply) |
+| C9 | LOW | `CREATE … WITH GRANT OPTION` thừa | Bootstrap có `CONNECT … WITH GRANT OPTION` và `CREATE` không kèm grant option. Có thêm `REVOKE GRANT OPTION FOR CREATE` cho DB đã cấp theo cách cũ | `test_6b_bootstrap_cannot_pass_on_create_database` trên pgvector thật; `test_statements.py` |
+| C10 | LOW | audit ghi PASS sau G1 cho cả hai tenant; dòng 37 trộn bucket với secret | §2 kịch bản 5 ghi đúng hai mốc: cả hai tenant trước G1; sau cleanup chỉ `tenant-b/docs-qa`. Kịch bản 4 tách bằng chứng secret (probe sandbox, G1) với bucket (micro-lab) | — |
+
+Ngoài phạm vi C6: role P3 `zero-drift-p3-crossplane-s3` vẫn dùng `s3:GetBucket*` (`modules/p3-provider-irsa`). P3 đã nghiệm thu và flag P3 đang tắt. Nếu bật lại P3, sửa theo cùng cách.
+
+Chưa kiểm trên AWS: C4 (biến môi trường mới của RGD), C6 (danh sách action mới của Crossplane) và C9 (grant mới). Cả ba cần một window sau xác nhận. C3, C4 và C9 nằm trong code app: chúng chỉ có hiệu lực khi RGD pin image build từ commit có bản sửa. Cho tới PR pin digest, image `512e982a…` bỏ qua `SANDBOX_TENANT`/`SANDBOX_NAME`. C1, C2, C5, C8 chỉ đổi script, test hoặc tài liệu.
+
+## 6. Inventory trễ và billing (22/11)
+
+Chưa có.

@@ -41,7 +41,7 @@ def _connection_secret(endpoint: Endpoint, username: str, **extra) -> dict:
 def db_init(env: Mapping[str, str], store: SecretStore, connect_fn: Connect = connect) -> dict:
     """Once per window, master credential: database, bootstrap role, pgvector."""
     endpoint = endpoint_from_env(env)
-    master = require(store, env.get("MASTER_SECRET_ID") or _missing("MASTER_SECRET_ID"))
+    master = require(store, env.get("MASTER_SECRET_ID") or _missing("MASTER_SECRET_ID"), label="master secret")
     master_db = env.get("MASTER_DBNAME", "postgres")
     boot_name = env.get("BOOTSTRAP_SECRET_ID", BOOTSTRAP_SECRET_DEFAULT)
 

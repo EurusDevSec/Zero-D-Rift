@@ -13,6 +13,7 @@
 # ID, host or secret value is printed. Exit 1 when any case fails.
 import json
 import os
+import socket
 import sys
 import urllib.error
 import urllib.request
@@ -45,6 +46,26 @@ def store():
 
 def endpoint():
     return db.endpoint_from_env(ENV)
+
+
+def usable(cred):
+    """A credential counts as read only with a non-empty username and password
+    (Codex C2: a secret holding {} must not pass and skip the later checks)."""
+    return isinstance(cred, dict) and bool(cred.get("username")) and bool(cred.get("password"))
+
+
+def seen_cred(cred):
+    if cred is None:
+        return "not found"
+    return "read" if usable(cred) else "no username/password in the secret"
+
+
+def imds_timed_out(exc):
+    """Only the expected outcome counts: the hop limit drops the reply, so the
+    request times out. Refused, DNS or other errors are not proof (Codex C2)."""
+    if isinstance(exc, (TimeoutError, socket.timeout)):
+        return True
+    return isinstance(exc, urllib.error.URLError) and isinstance(exc.reason, (TimeoutError, socket.timeout))
 
 
 def denied_aws(exc):
@@ -107,8 +128,8 @@ def platform():
     except Exception as exc:  # noqa: BLE001
         report(False, "bootstrap secret readable", "a credential", safe_reason(exc))
         return
-    report(cred is not None, "bootstrap secret readable", "a credential", "read" if cred else "not found")
-    if not cred:
+    report(usable(cred), "bootstrap secret readable", "a credential", seen_cred(cred))
+    if not usable(cred):
         return
     with db.connect(endpoint(), cred, DATABASE) as conn, conn.cursor() as cur:
         cur.execute("select ssl, version from pg_stat_ssl where pid = pg_backend_pid()")
@@ -144,8 +165,8 @@ def sandbox(tenant, name):
     except Exception as exc:  # noqa: BLE001
         report(False, "own secret readable", "a credential", safe_reason(exc))
         return
-    report(cred is not None, "own secret readable", "a credential", "read" if cred else "not found")
-    if not cred:
+    report(usable(cred), "own secret readable", "a credential", seen_cred(cred))
+    if not usable(cred):
         return
     with db.connect(endpoint(), cred, DATABASE) as conn, conn.cursor() as cur:
         cur.execute(f'select count(*) from "{sb.schema}".documents')
@@ -188,8 +209,8 @@ def cross(tenant, name, other):
     else:
         skip(f"{tenant} reaches {other}'s bucket", "no bucket on kind")
     cred = store().get(own.secret_name)
-    if not cred:
-        report(False, "own secret for the SQL cases", "a credential", "not found")
+    if not usable(cred):
+        report(False, "own secret for the SQL cases", "a credential", seen_cred(cred))
     else:
         with db.connect(endpoint(), cred, DATABASE) as conn:
             expect_sql_denied(f"{tenant} reads {other}'s schema", conn, f'select 1 from "{theirs.schema}".documents limit 1')
@@ -207,7 +228,7 @@ def cross(tenant, name, other):
     except urllib.error.HTTPError as exc:  # IMDS answered: the hop limit did not hold
         report(False, f"{tenant} Pod gets an IMDS token", "no answer", f"HTTP {exc.code}")
     except Exception as exc:  # noqa: BLE001
-        report(True, f"{tenant} Pod gets an IMDS token", "no token", safe_reason(exc))
+        report(imds_timed_out(exc), f"{tenant} Pod gets an IMDS token", "no token (timeout)", safe_reason(exc))
 
 
 def main(argv):

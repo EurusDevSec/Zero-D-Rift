@@ -49,13 +49,16 @@ def get_or_create(
     return current, False
 
 
-def require(store: SecretStore, name: str) -> dict:
+def require(store: SecretStore, name: str, label: str | None = None) -> dict:
+    """``label`` replaces ``name`` in error messages when the name itself must not
+    be printed (the master secret is passed as its ARN; Codex C3)."""
+    shown = label or name
     value = store.get(name)
     if value is None:
-        raise RuntimeError(f"secret {name} not found")
+        raise RuntimeError(f"secret {shown} not found")
     for key in ("username", "password"):
         if not value.get(key):
-            raise RuntimeError(f"secret {name} has no {key}")
+            raise RuntimeError(f"secret {shown} has no {key}")
     return value
 
 
