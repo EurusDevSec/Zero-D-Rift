@@ -1,0 +1,233 @@
+# P4 (DRF-51, SPEC-P4 P4-T3.2 A; ADR-0008; D3-D11). One RAGSandbox = one schema
+# and login role in the shared RDS, one secret, one S3 bucket, one app.
+#
+# Tenant = the request's namespace (D11). Name = metadata.name. Both are checked
+# again by the bootstrap command (ragsandbox/names.py): a request outside
+# tenant-a/tenant-b, or with a name outside the contract, fails its Job and
+# nothing else is created. kro v0.9.4 has no instance-name validation in the
+# schema; gitops/check.sh is the static layer.
+#
+# Order (kro waits for readyWhen before creating dependents, spike 14/11 F3):
+#   platformConfig (externalRef, zdr-platform)
+#     -> bootstrap Job (zdr-platform; schema, role, secret)
+#       -> bucket, serviceAccount, service (tenant) -> app
+# The bucket and the tenant objects wait for the Job on purpose: the Crossplane
+# role may create any zero-drift-rag-* bucket, so an invalid request must stop
+# before it costs anything or touches a tenant namespace.
+#
+# Ready only when: bootstrap Job Complete, bucket Ready, Deployment available
+# (readiness probe /readyz: own schema + HeadBucket). No ttlSecondsAfterFinished:
+# kro would re-create a deleted Job and run bootstrap again.
+#
+# Retry (D9): raise spec.bootstrapAttempt in Git. The Job name ends in it, so a
+# new Job is created instead of patching an immutable one; bootstrap keeps an
+# existing password. kro removed the old Job only once the new attempt and the
+# whole graph were Ready (spike 14/11); its Pods stay without owner and are
+# removed by label (runbook, cleanup). Labels on the Pod template make that possible.
+#
+# Window-only values come from platform-config (never in Git): dbHost, dbPort,
+# region, tenantRoleArnPrefix (arn:aws:iam::<account>:role/zero-drift-rag-),
+# runId, expiresAt.
+apiVersion: kro.run/v1alpha1
+kind: ResourceGraphDefinition
+metadata:
+  name: rag-sandbox
+spec:
+  schema:
+    apiVersion: v1alpha1
+    kind: RAGSandbox
+    spec:
+      bootstrapAttempt: integer | default=0 minimum=0
+    status:
+      endpoint: ${"http://" + service.metadata.name + "." + service.metadata.namespace + ".svc:8080"}
+      schema: ${bootstrap.metadata.annotations["rag.zero-drift.io/schema"]}
+      secretName: ${bootstrap.metadata.annotations["rag.zero-drift.io/secret"]}
+      bucket: ${bucket.metadata.name}
+      bootstrapJob: ${bootstrap.metadata.name}
+      bootstrapState: '${bootstrap.status.?conditions.orValue([]).exists(c, c.type == "Complete" && c.status == "True") ? "Succeeded" : (bootstrap.status.?conditions.orValue([]).exists(c, c.type == "Failed" && c.status == "True") ? "Failed" : "Running")}'
+      availableReplicas: ${app.status.?availableReplicas.orValue(0)}
+  resources:
+    - id: platformConfig
+      externalRef:
+        apiVersion: v1
+        kind: ConfigMap
+        metadata:
+          name: platform-config
+          namespace: zdr-platform
+
+    - id: bootstrap
+      readyWhen:
+        - ${bootstrap.status.?conditions.orValue([]).exists(c, c.type == "Complete" && c.status == "True")}
+      template:
+        apiVersion: batch/v1
+        kind: Job
+        metadata:
+          name: ${schema.metadata.namespace + "-" + schema.metadata.name + "-boot-" + string(schema.spec.bootstrapAttempt)}
+          namespace: zdr-platform
+          labels:
+            app.kubernetes.io/name: ragsandbox
+            app.kubernetes.io/component: bootstrap
+            rag.zero-drift.io/tenant: ${schema.metadata.namespace}
+            rag.zero-drift.io/sandbox: ${schema.metadata.name}
+          annotations:
+            # Same derivation as ragsandbox/names.py; shown in the instance status.
+            rag.zero-drift.io/schema: ${"rag_" + schema.metadata.namespace.replace("-", "_") + "__" + schema.metadata.name.replace("-", "_")}
+            rag.zero-drift.io/secret: ${"zero-drift/rag/" + schema.metadata.namespace + "/" + schema.metadata.name}
+        spec:
+          backoffLimit: 0
+          activeDeadlineSeconds: 300
+          template:
+            metadata:
+              labels:
+                app.kubernetes.io/name: ragsandbox
+                app.kubernetes.io/component: bootstrap
+                rag.zero-drift.io/tenant: ${schema.metadata.namespace}
+                rag.zero-drift.io/sandbox: ${schema.metadata.name}
+            spec:
+              restartPolicy: Never
+              serviceAccountName: rag-bootstrap
+              automountServiceAccountToken: false
+              securityContext:
+                runAsNonRoot: true
+                seccompProfile: {type: RuntimeDefault}
+              containers:
+                - name: bootstrap
+                  image: ghcr.io/eurusdevsec/zero-d-rift/rag-sandbox@sha256:bf199502e5a0dd94b858de4cc8a516ad5683bfa1533c1879361a4a9b509bf0fa
+                  args: ["bootstrap"]
+                  env:
+                    - {name: SANDBOX_TENANT, value: "${schema.metadata.namespace}"}
+                    - {name: SANDBOX_NAME, value: "${schema.metadata.name}"}
+                    - {name: SECRET_BACKEND, value: aws}
+                    - {name: AWS_REGION, value: "${platformConfig.data.region}"}
+                    - {name: DB_HOST, value: "${platformConfig.data.dbHost}"}
+                    - {name: DB_PORT, value: "${platformConfig.data.dbPort}"}
+                    - {name: DB_SSLMODE, value: verify-full}
+                    - name: SECRET_TAGS
+                      value: ${"Project=Zero-D-Rift,Owner=HoangLV,Environment=PoC,ManagedBy=RAGSandbox,RunId=" + platformConfig.data.runId + ",ExpiresAt=" + platformConfig.data.expiresAt}
+                  securityContext: &hardened
+                    allowPrivilegeEscalation: false
+                    readOnlyRootFilesystem: true
+                    capabilities: {drop: ["ALL"]}
+                  resources:
+                    requests: {cpu: 50m, memory: 96Mi}
+                    limits: {memory: 192Mi}
+
+    - id: bucket
+      readyWhen:
+        - ${bucket.status.?conditions.orValue([]).exists(c, c.type == "Ready" && c.status == "True")}
+      template:
+        apiVersion: s3.aws.m.upbound.io/v1beta1
+        kind: Bucket
+        metadata:
+          # D7: zero-drift-rag-<tenant>-<name>, at most 56 characters.
+          name: ${"zero-drift-rag-" + schema.metadata.namespace + "-" + schema.metadata.name}
+          namespace: ${schema.metadata.namespace}
+          labels:
+            # Graph edge: the bucket waits for a successful bootstrap. The value
+            # does not change between attempts, so a retry does not touch it.
+            rag.zero-drift.io/schema: ${bootstrap.metadata.annotations["rag.zero-drift.io/schema"]}
+        spec:
+          forProvider:
+            region: ${platformConfig.data.region}
+            # D7: deleting the request deletes the bucket with its objects.
+            forceDestroy: true
+            tags:
+              Project: Zero-D-Rift
+              Owner: HoangLV
+              Environment: PoC
+              ManagedBy: Crossplane
+              RunId: ${platformConfig.data.runId}
+              ExpiresAt: ${platformConfig.data.expiresAt}
+
+    - id: serviceAccount
+      template:
+        apiVersion: v1
+        kind: ServiceAccount
+        metadata:
+          # D6: the tenant role trusts system:serviceaccount:<tenant>:rag-*.
+          name: ${"rag-" + schema.metadata.name}
+          namespace: ${schema.metadata.namespace}
+          labels:
+            rag.zero-drift.io/schema: ${bootstrap.metadata.annotations["rag.zero-drift.io/schema"]}
+          annotations:
+            eks.amazonaws.com/role-arn: ${platformConfig.data.tenantRoleArnPrefix + schema.metadata.namespace}
+        automountServiceAccountToken: false
+
+    - id: app
+      readyWhen:
+        - ${app.status.?availableReplicas.orValue(0) == app.spec.replicas}
+      template:
+        apiVersion: apps/v1
+        kind: Deployment
+        metadata:
+          name: ${"rag-" + schema.metadata.name}
+          namespace: ${schema.metadata.namespace}
+          labels:
+            app.kubernetes.io/name: ragsandbox
+            app.kubernetes.io/component: app
+            rag.zero-drift.io/sandbox: ${schema.metadata.name}
+        spec:
+          replicas: 1
+          selector:
+            matchLabels:
+              app.kubernetes.io/name: ragsandbox
+              rag.zero-drift.io/sandbox: ${schema.metadata.name}
+          template:
+            metadata:
+              labels:
+                app.kubernetes.io/name: ragsandbox
+                app.kubernetes.io/component: app
+                rag.zero-drift.io/sandbox: ${schema.metadata.name}
+            spec:
+              serviceAccountName: ${serviceAccount.metadata.name}
+              automountServiceAccountToken: false
+              securityContext:
+                runAsNonRoot: true
+                seccompProfile: {type: RuntimeDefault}
+              containers:
+                - name: app
+                  image: ghcr.io/eurusdevsec/zero-d-rift/rag-sandbox@sha256:bf199502e5a0dd94b858de4cc8a516ad5683bfa1533c1879361a4a9b509bf0fa
+                  args: ["serve"]
+                  ports:
+                    - {name: http, containerPort: 8080}
+                  env:
+                    - name: DB_SECRET_ID
+                      value: ${bootstrap.metadata.annotations["rag.zero-drift.io/secret"]}
+                    - {name: S3_BUCKET, value: "${bucket.metadata.name}"}
+                    - {name: SECRET_BACKEND, value: aws}
+                    - {name: AWS_REGION, value: "${platformConfig.data.region}"}
+                    - {name: DB_HOST, value: "${platformConfig.data.dbHost}"}
+                    - {name: DB_PORT, value: "${platformConfig.data.dbPort}"}
+                    - {name: DB_SSLMODE, value: verify-full}
+                  readinessProbe:
+                    httpGet: {path: /readyz, port: http}
+                    periodSeconds: 10
+                    # The app fails fast on a dead peer within a few seconds (README).
+                    timeoutSeconds: 8
+                    failureThreshold: 3
+                  livenessProbe:
+                    httpGet: {path: /healthz, port: http}
+                    periodSeconds: 20
+                    timeoutSeconds: 3
+                  securityContext: *hardened
+                  resources:
+                    requests: {cpu: 50m, memory: 96Mi}
+                    limits: {memory: 192Mi}
+
+    - id: service
+      template:
+        apiVersion: v1
+        kind: Service
+        metadata:
+          name: ${"rag-" + schema.metadata.name}
+          namespace: ${schema.metadata.namespace}
+          labels:
+            app.kubernetes.io/name: ragsandbox
+            # Created once bootstrap succeeded, like the other tenant objects.
+            rag.zero-drift.io/schema: ${bootstrap.metadata.annotations["rag.zero-drift.io/schema"]}
+        spec:
+          selector:
+            app.kubernetes.io/name: ragsandbox
+            rag.zero-drift.io/sandbox: ${schema.metadata.name}
+          ports:
+            - {name: http, port: 8080, targetPort: http}

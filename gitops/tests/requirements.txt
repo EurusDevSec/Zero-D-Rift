@@ -1,0 +1,4 @@
+# check.sh needs PyYAML only (YAML parsing). Hash from PyPI, read 19/11/2026:
+# the cp313 manylinux x86_64 wheel used by the CI container python:3.13-slim.
+pyyaml==6.0.3 \
+    --hash=sha256:0f29edc409a6392443abf94b9cf89ce99889a1dd5376d94316ae5145dfedd5d6

@@ -1,0 +1,139 @@
+# LAB ONLY (DRF-51, SPEC-P4 P4-T3.2 C). Stand-ins for what AWS gives the real
+# graph. Runbook: docs/runbooks/P4_L2_KIND_LAB.md section G.
+#
+# Apply AFTER gitops/platform/tenants/ (namespaces, platform ServiceAccounts).
+#
+# Lab-only secret source: the file backend of the app (SECRET_BACKEND=file) on
+# one directory of the kind node, /var/lib/zdr-lab/secrets, owned by uid 10001
+# (the image user). Pod Security "restricted" forbids hostPath volumes in Pods,
+# so the directory reaches the Pods through static PersistentVolumes:
+#   zdr-platform/lab-secrets -> the whole store (master, bootstrap, all tenants)
+#   tenant-a/lab-secrets     -> zero-drift/rag/tenant-a only
+#   tenant-b/lab-secrets     -> zero-drift/rag/tenant-b only
+# so a tenant app sees only its tenant's secrets, as the tenant IAM role does on EKS.
+# No Kubernetes Secret holds a password here either.
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: zdr-lab-platform
+spec:
+  capacity: {storage: 64Mi}
+  accessModes: ["ReadWriteOnce"]
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: ""
+  claimRef: {namespace: zdr-platform, name: lab-secrets}
+  hostPath: {path: /var/lib/zdr-lab/secrets, type: Directory}
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: zdr-lab-tenant-a
+spec:
+  capacity: {storage: 64Mi}
+  accessModes: ["ReadWriteOnce"]
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: ""
+  claimRef: {namespace: tenant-a, name: lab-secrets}
+  hostPath: {path: /var/lib/zdr-lab/secrets/zero-drift/rag/tenant-a, type: Directory}
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: zdr-lab-tenant-b
+spec:
+  capacity: {storage: 64Mi}
+  accessModes: ["ReadWriteOnce"]
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: ""
+  claimRef: {namespace: tenant-b, name: lab-secrets}
+  hostPath: {path: /var/lib/zdr-lab/secrets/zero-drift/rag/tenant-b, type: Directory}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata: {name: lab-secrets, namespace: zdr-platform}
+spec:
+  accessModes: ["ReadWriteOnce"]
+  storageClassName: ""
+  resources: {requests: {storage: 64Mi}}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata: {name: lab-secrets, namespace: tenant-a}
+spec:
+  accessModes: ["ReadWriteOnce"]
+  storageClassName: ""
+  resources: {requests: {storage: 64Mi}}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata: {name: lab-secrets, namespace: tenant-b}
+spec:
+  accessModes: ["ReadWriteOnce"]
+  storageClassName: ""
+  resources: {requests: {storage: 64Mi}}
+---
+# PostgreSQL 17 + pgvector stands in for RDS (as in DRF-45). Differences, kept on
+# purpose: superuser master (pgvector is not trusted), no TLS, file secrets.
+# Runs as uid 10001 like the app, so all lab secrets (mode 0600) stay readable.
+apiVersion: v1
+kind: Pod
+metadata:
+  name: lab-db
+  namespace: zdr-platform
+  labels: {app: lab-db}
+spec:
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 10001
+    runAsGroup: 10001
+    fsGroup: 10001
+    seccompProfile: {type: RuntimeDefault}
+  initContainers:
+    # Writes the stand-in for the RDS-managed master secret (labs/p4-kind-db/seed_master.py,
+    # mounted from a ConfigMap) with the published image: no lab image to build.
+    - name: seed-master
+      image: ghcr.io/eurusdevsec/zero-d-rift/rag-sandbox@sha256:bf199502e5a0dd94b858de4cc8a516ad5683bfa1533c1879361a4a9b509bf0fa
+      command: ["python", "/seed/seed_master.py"]
+      env:
+        - {name: SECRET_DIR, value: /secrets}
+      securityContext: &restricted
+        allowPrivilegeEscalation: false
+        capabilities: {drop: ["ALL"]}
+      volumeMounts:
+        - {name: secrets, mountPath: /secrets}
+        - {name: seed, mountPath: /seed, readOnly: true}
+  containers:
+    - name: postgres
+      image: pgvector/pgvector:0.8.2-pg17@sha256:feb68f4f15446397d8cac7f4fe48fe4586de83160d1fc48b46283312d1a33966
+      env:
+        - {name: POSTGRES_PASSWORD_FILE, value: /secrets/lab/master.pw}
+        - {name: PGDATA, value: /var/lib/postgresql/data/pgdata}
+      ports:
+        - {containerPort: 5432, name: postgres}
+      readinessProbe:
+        exec: {command: ["pg_isready", "-U", "postgres", "-h", "127.0.0.1"]}
+        periodSeconds: 3
+      securityContext: *restricted
+      volumeMounts:
+        - {name: secrets, mountPath: /secrets, readOnly: true}
+        - {name: data, mountPath: /var/lib/postgresql/data}
+        - {name: run, mountPath: /var/run/postgresql}
+  volumes:
+    - name: secrets
+      persistentVolumeClaim: {claimName: lab-secrets}
+    - name: seed
+      configMap: {name: lab-seed}
+    - name: data
+      emptyDir: {}
+    - name: run
+      emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: lab-db
+  namespace: zdr-platform
+spec:
+  selector: {app: lab-db}
+  ports:
+    - {port: 5432, targetPort: postgres}

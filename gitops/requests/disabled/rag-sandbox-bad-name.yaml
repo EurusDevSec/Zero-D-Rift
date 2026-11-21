@@ -1,0 +1,12 @@
+# P4 (DRF-51) NEGATIVE request, disabled. "docs--qa" is a valid Kubernetes name
+# but breaks the sandbox name contract (no "--", ragsandbox/names.py), which
+# keeps rag_<tenant>__<name> unambiguous. kro v0.9.4 cannot validate instance
+# names in the schema, so the layers are gitops/check.sh (static) and the
+# bootstrap Job (exit 2, Failed): nothing else is created, never Ready.
+apiVersion: kro.run/v1alpha1
+kind: RAGSandbox
+metadata:
+  name: docs--qa
+  namespace: tenant-a
+spec:
+  bootstrapAttempt: 0

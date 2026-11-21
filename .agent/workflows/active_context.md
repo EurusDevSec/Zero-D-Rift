@@ -1,8 +1,8 @@
 ---
 project: Zero D-Rift
-status: P4_T2_2_STATIC_PASSED
+status: P4_T3_2_STATIC_AND_KIND_DRY_RUN_PASSED
 active_phase: P4
-active_task: P4-T2.2 (DRF-46) PR; next P4-T3.2 (DRF-51)
+active_task: P4-T3.2 (DRF-51) PR; owner kind run pending; then DRF-56
 active_feature: RAGSandbox (SPEC-P4)
 active_spec: .agent/specs/SPEC-P4_RAG_SANDBOX.md
 current_learning: .agent/learning/CURRENT_STATUS.md
@@ -30,9 +30,7 @@ Follow [context governance](../references/context-governance.md).
   `zero-drift-bootstrap`, MFA device. No cluster, no P3 role.
 - R1 least privilege deferred; it lacks the `zero-drift-p3-*` role and
   `PutRolePolicy`. Redo before DRF-27 (19/11) or at DRF-29.
-- Tools: Terraform 1.16.4, kubectl v1.35.10 (`/r/_Dev_tools/kubectl`), kind
-  v0.33.0 (`/r/_Dev_tools/kind`, default node v1.37.0, so always pass `--image`),
-  Helm v4.2.2.
+- Tools: Terraform 1.16.4, kubectl v1.35.10, kind v0.33.0 (always pass `--image`), Helm v4.2.2.
 - SPEC-P4 `OWNER_APPROVED_20261114`: owner approved D1–D12 and the 5 USD P4
   cap ("Duyệt cả 12"), after Codex review APPROVE at `358da73` (three rounds,
   SPEC §9.4). Merged in PR #33 (`7dcaa44`). Nothing for P4 is built.
@@ -45,14 +43,16 @@ Follow [context governance](../references/context-governance.md).
   pins RDS 17.11, pgvector 0.8.2, prices unchanged, VERSION_MATRIX §8 (PR #37,
   `ef04ca3`). Evidence `docs/evidence/p4/P4-T1_*`.
 - DRF-45 done (PR #38, `39856e9`): db-init/bootstrap/cleanup; owner lab D1–D7
-  PASS. Found: non-superuser cannot restate NOSUPERUSER/NOCREATEDB in ALTER
-  ROLE (fixed). Learning gaps in `P4-T2.1_L2_KIND_DB_20261119.md` (D2, D4, D5/D6).
-- DRF-50 19/11 (PR #39, #40): image `rag-sandbox@sha256:bf199502…`
-  (VERSION_MATRIX §8), smoke PASS; DRF-51 probe `timeoutSeconds` >= 8.
-- DRF-46 19/11 (branch `hoang/drf-46-terraform-rag`): modules `shared-rds`,
-  `rag-identity` behind `enable_rag_platform` (off = P3 plan); plan_assert
-  14-17 + 44 guard cases; offline IAM matrix (53 rows) in terraform test;
-  `rag_iam_check.sh`, inventory P4 counts. Static only, no AWS.
+  PASS. Learning gaps in `P4-T2.1_L2_KIND_DB_20261119.md` (D2, D4, D5/D6).
+- DRF-50 (PR #39, #40): image `rag-sandbox@sha256:bf199502…` (VERSION_MATRIX §8).
+  DRF-46 (PR #41, `27058f9`): `shared-rds`, `rag-identity`; static only.
+- DRF-51 19/11 (branch `hoang/drf-51-rgd-requests-kind`, uncommitted): RGD
+  `rag-sandbox` (bucket/SA/app/service wait for the bootstrap Job), tenants app,
+  kro RBAC, requests + 2 negatives, check.sh rules 8-12 + 29 guards, CI
+  `static-gates.yml` (not yet run on GitHub). Kind graph: Claude dry run PASS;
+  owner run 21/11 G3-G11 with predictions (G11 missed what kro leaves behind).
+  Owner skipped the explanation questions (open gap, re-ask before DRF-57).
+  Found: `/readyz` hangs on a hung DB.
 - ADR-0009 `ACCEPTED` 17/11 (PR #36, `1277f7c`): AWS refused the G/VT quota
   twice, so P6 BatchTrainingJob runs on CPU nodes; limits recorded in the ADR
   and COST_PLAN §7.3.1. No AWS action authorised by it.
@@ -76,8 +76,9 @@ Follow [context governance](../references/context-governance.md).
 
 ## Next safe action
 
-Commit and PR DRF-46 on owner request. Then DRF-51 (RGD, requests, CI, kind
-graph lab) with the image digest. L3 (DRF-56) needs DRF-45, 46 and 51 merged.
+Merge the DRF-51 PR once CI `static-gates` passes. Re-ask the 4 open explanation
+questions (DRF-51 and DRF-45) before DRF-57. L3 (DRF-56)
+needs DRF-51 merged and the window approval (platform-config after db-init).
 
 ## Context expansion
 

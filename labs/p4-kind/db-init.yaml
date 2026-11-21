@@ -1,0 +1,38 @@
+# LAB ONLY (DRF-51). The once-per-window db-init, as a Job in zdr-platform with
+# the platform ServiceAccount rag-db-admin, the published image and the lab file
+# store. On EKS the same Job reads the RDS-managed master secret through IRSA.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: db-init
+  namespace: zdr-platform
+spec:
+  backoffLimit: 0
+  activeDeadlineSeconds: 180
+  template:
+    spec:
+      restartPolicy: Never
+      serviceAccountName: rag-db-admin
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile: {type: RuntimeDefault}
+      containers:
+        - name: db-init
+          image: ghcr.io/eurusdevsec/zero-d-rift/rag-sandbox@sha256:bf199502e5a0dd94b858de4cc8a516ad5683bfa1533c1879361a4a9b509bf0fa
+          args: ["db-init"]
+          env:
+            - {name: SECRET_BACKEND, value: file}
+            - {name: SECRET_DIR, value: /secrets}
+            - {name: MASTER_SECRET_ID, value: lab/master}
+            - {name: DB_HOST, value: lab-db}
+            - {name: DB_SSLMODE, value: disable}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: ["ALL"]}
+          volumeMounts:
+            - {name: secrets, mountPath: /secrets}
+      volumes:
+        - name: secrets
+          persistentVolumeClaim: {claimName: lab-secrets}
