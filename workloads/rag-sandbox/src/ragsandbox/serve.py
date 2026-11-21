@@ -17,6 +17,15 @@ connection error, the app reads the secret again and reconnects. Reads are
 spaced by ``SECRET_RELOAD_SECONDS`` so a failing probe does not hammer Secrets
 Manager.
 
+Time bound (DRF-51 finding 2): a hung server (process stopped, its kernel still
+ACKs TCP) defeats ``tcp_user_timeout`` and keepalives, and a frozen backend cannot
+apply its own ``statement_timeout``. So each database call has three bounds: the
+server cancels a statement after ``STATEMENT_TIMEOUT_MS`` (a live but slow
+server, a lock wait); a client watchdog shuts the socket down after
+``CALL_TIMEOUT`` (a frozen server); a request waits at most ``LOCK_WAIT`` for the
+one connection, then gets 503 ``busy`` instead of queueing. ``/readyz`` checks the
+database and the bucket in parallel, so its time is the slower of the two.
+
 Errors in ``/readyz``, ``/query`` and the log carry the exception class and a
 code only (``errors.safe_reason``): an AWS message would name the role ARN, a
 libpq message the database host.
@@ -30,7 +39,9 @@ from __future__ import annotations
 
 import json
 import math
+import os
 import signal
+import socket
 import sys
 import threading
 import time
@@ -49,6 +60,14 @@ from .secretstore import SecretStore, store_from_env
 DIM = 4
 TABLE = "documents"
 K_MAX = 10
+
+# Database time budget, well under the RGD readiness timeoutSeconds (8):
+# LOCK_WAIT + CALL_TIMEOUT, about 3 s. Connecting is bounded by connect_timeout.
+STATEMENT_TIMEOUT_MS = 2000
+CALL_TIMEOUT = 2.5
+LOCK_WAIT = 0.5
+# serve only: db-init and bootstrap connect without a statement_timeout.
+SERVE_CONNECT = {**FAST_FAIL, "options": f"-c statement_timeout={STATEMENT_TIMEOUT_MS}"}
 SEED = (
     (1, "kro builds the sandbox graph", (1.0, 0.0, 0.0, 0.0)),
     (2, "Crossplane owns the bucket", (0.0, 1.0, 0.0, 0.0)),
@@ -99,9 +118,62 @@ def parse_vector(raw: str) -> tuple[float, ...]:
 
 def _retryable(exc: BaseException) -> bool:
     import psycopg
+    from psycopg import errors
 
-    # Authentication failures and lost connections are both OperationalError.
-    return isinstance(exc, psycopg.OperationalError)
+    # Authentication failures and lost connections are both OperationalError:
+    # read the secret again and reconnect once. Not after a timeout: the server
+    # is slow or hung, and a second wait would double what the probe waits.
+    return isinstance(exc, psycopg.OperationalError) and not isinstance(
+        exc, (errors.ConnectionTimeout, errors.QueryCanceled)
+    )
+
+
+def shutdown_socket(conn) -> None:
+    """Wake a call blocked on a hung server: shut the connection's socket down, so
+    libpq reads end-of-file and the call fails. The descriptor itself stays open;
+    the thread that owns the connection closes it."""
+    sock = socket.socket(fileno=os.dup(conn.pgconn.socket))
+    try:
+        sock.shutdown(socket.SHUT_RDWR)
+    finally:
+        sock.close()
+
+
+class _Watchdog:
+    """After ``seconds``, abort the connection the call is using (or the next one
+    it opens). ``fired`` tells the call why it failed."""
+
+    def __init__(self, seconds: float, abort: Callable[[object], None]):
+        self.fired = False
+        self._abort = abort
+        self._conn = None
+        self._mutex = threading.Lock()
+        self._timer = threading.Timer(seconds, self._fire)
+        self._timer.daemon = True
+        self._timer.start()
+
+    def _kill(self, conn) -> None:
+        try:
+            self._abort(conn)
+        except Exception:  # already closed: nothing to wake
+            pass
+
+    def _fire(self) -> None:
+        with self._mutex:
+            self.fired, conn = True, self._conn
+        if conn is not None:
+            self._kill(conn)
+
+    def watch(self, conn) -> None:
+        with self._mutex:
+            self._conn, fired = conn, self.fired
+        if fired:
+            self._kill(conn)
+
+    def cancel(self) -> None:
+        self._timer.cancel()
+        with self._mutex:
+            self._conn = None
 
 
 class Database:
@@ -117,6 +189,9 @@ class Database:
         reload_seconds: float = 5.0,
         clock: Callable[[], float] = time.monotonic,
         connect_options: Mapping[str, object] | None = None,
+        lock_wait: float = LOCK_WAIT,
+        call_timeout: float = CALL_TIMEOUT,
+        abort_fn: Callable[[object], None] = shutdown_socket,
     ):
         self.endpoint = endpoint
         self.store = store
@@ -124,7 +199,10 @@ class Database:
         self.connect_fn = connect_fn
         self.reload_seconds = reload_seconds
         self.clock = clock
-        self.connect_options = dict(FAST_FAIL if connect_options is None else connect_options)
+        self.connect_options = dict(SERVE_CONNECT if connect_options is None else connect_options)
+        self.lock_wait = lock_wait
+        self.call_timeout = call_timeout
+        self.abort_fn = abort_fn
         self._lock = threading.Lock()
         self._conn = None
         self._credential: dict | None = None
@@ -158,7 +236,7 @@ class Database:
                 pass
         self._conn = None
 
-    def _open(self, *, fresh: bool):
+    def _open(self, *, fresh: bool, watch: Callable[[object], None]):
         credential = self._credential_now(fresh=fresh)
         conn = self.connect_fn(
             self.endpoint,
@@ -168,6 +246,7 @@ class Database:
             **self.connect_options,
         )
         self.connects += 1
+        watch(conn)
         try:
             ensure_seed(conn)
         except Exception:
@@ -178,19 +257,34 @@ class Database:
 
     def run(self, fn: Callable[[object], object]):
         """Run ``fn(conn)``. After a connection or authentication error, read the
-        secret again, reconnect and try once more."""
-        with self._lock:
+        secret again, reconnect and try once more. Bounded in time: see the
+        module docstring."""
+        if not self._lock.acquire(timeout=self.lock_wait):
+            raise NotReady("busy: an earlier database call has not finished")
+        dog = _Watchdog(self.call_timeout, self.abort_fn)
+        try:
             for attempt in (0, 1):
                 try:
-                    conn = self._conn or self._open(fresh=attempt == 1)
+                    conn = self._conn
+                    if conn is None:
+                        conn = self._open(fresh=attempt == 1, watch=dog.watch)
+                    else:
+                        dog.watch(conn)
                     return fn(conn)
                 except NotReady:
                     raise
                 except Exception as exc:
                     self._drop()
+                    if dog.fired:
+                        raise NotReady(
+                            f"timeout: no answer from the database within {self.call_timeout:g} s"
+                        ) from None
                     if attempt == 1 or not _retryable(exc):
                         raise NotReady(safe_reason(exc)) from None
             raise AssertionError("unreachable")
+        finally:
+            dog.cancel()
+            self._lock.release()
 
     def close(self) -> None:
         with self._lock:
@@ -257,18 +351,28 @@ class App:
 
     def readyz(self) -> tuple[int, dict]:
         body: dict = {"ready": False}
-        ok = True
+        bucket: dict = {}
+
+        def check_bucket():
+            try:
+                bucket["bucket"] = self.bucket.check()
+            except NotReady as exc:
+                bucket["bucket"] = f"error: {exc}"
+            except Exception as exc:
+                bucket["bucket"] = f"error: {safe_reason(exc)}"
+
+        # In parallel: the probe waits for the slower check, not for their sum.
+        worker = threading.Thread(target=check_bucket, daemon=True)
+        worker.start()
         try:
             body.update(self.db.run(check_schema))
             body["db"] = "ok"
         except NotReady as exc:
-            body["db"], ok = f"error: {exc}", False
-        try:
-            body["bucket"] = self.bucket.check()
-        except NotReady as exc:
-            body["bucket"], ok = f"error: {exc}", False
-        body["ready"] = ok
-        return (200 if ok else 503), body
+            body["db"] = f"error: {exc}"
+        worker.join()
+        body.update(bucket)
+        body["ready"] = body["db"] == "ok" and not body["bucket"].startswith("error")
+        return (200 if body["ready"] else 503), body
 
     def query(self, params: Mapping[str, list[str]]) -> tuple[int, dict]:
         try:
