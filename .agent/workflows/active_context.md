@@ -52,10 +52,10 @@ Follow [context governance](../references/context-governance.md).
   dry run PASS; owner run 21/11 G3-G11 with predictions (G11 missed what kro
   leaves behind). Owner skipped the explanation questions (open gap, re-ask
   before DRF-57). DRF-44/46/50/51 Done in Linear; DRF-49 open until DRF-56 bucket.
-- DRF-56 window `P4-L3-20261121-01` (21/11, 08:15-09:40Z): 65 added, B-E PASS on
+- DRF-56 window `P4-L3-20261121-01` (21/11, 08:15-09:40Z): 65 added, B-E PASS (C: sts output open) on
   EKS (probe platform/sandbox/cross, G2 both layers, G3, Git-only retry, cleanup),
   one fix PR #46 (`AWS_DEFAULT_REGION`); destroy 65, inventory CLEAN; est. 0.50 USD.
-  Evidence `docs/evidence/p4/P4-T4.1_L3_WINDOW_20261121.md` (uncommitted).
+  Evidence `docs/evidence/p4/P4-T4.1_L3_WINDOW_20261121.md` (PR #53).
 - ADR-0009 `ACCEPTED` 17/11 (PR #36): G/VT quota refused, P6 runs on CPU nodes.
 - [Linear routing](../docs/LINEAR_DELIVERY.md): P4 = 10 issues. DRF-40 (P4-T1,
   no sub-tasks); DRF-44 (P4-T2) → DRF-45, 46; DRF-49 (P4-T3) → DRF-50, 51;
@@ -75,9 +75,9 @@ Follow [context governance](../references/context-governance.md).
 
 ## Next safe action
 
-Commit the DRF-56 evidence by PR. Next day: inventory again (tag index lag) and
-owner reads Bills (DRF-57 A). Re-ask the 4 open explanation questions plus the
-orphan boot-0 Pod question before DRF-57 acceptance.
+Next day: inventory again (tag index lag) and owner reads Bills (DRF-57 A).
+Open from DRF-56 C: owner's `sts get-caller-identity` output was lost; rerun in
+the next window. Re-ask the 4 explanation questions + orphan boot-0 Pod question.
 
 ## Context expansion
 
