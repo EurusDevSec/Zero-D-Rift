@@ -47,7 +47,7 @@ Freeze-new-create: kết thúc cứng − 1,5 giờ (dọn P4 ≈ 10 phút reque
 expires_at (tag):  giờ kết thúc cứng, UTC ...Z (cũng là EXPIRES_AT của window.sh)
 Teardown owner:    HoangLV, có mặt suốt window; không rời máy khi cluster hoặc RDS còn chạy
 Git revision:      <commit main lúc plan>; nhánh chạy = main, git diff rỗng trên infra/ gitops/ workloads/
-Plan:              64 to add (51 của P2 window có admin + 13 của RAG: RDS, SG, rule, 5 role, 6 policy) — kiểm lại khi plan
+Plan:              65 to add (51 của P2 window có admin + 14 của RAG: RDS, SG, rule, 5 role, 6 policy; subnet group DB thuộc 51) — đo ngày 21/11
 Plan shape sha256: <điền lúc T+0 từ plan_fingerprint.sh>
 Node:              1 × m6i.large (như P3)
 Ước tính:          ≈ 0,35 USD/giờ (D10, đã gồm RDS 0,019 USD/giờ và Secrets Manager) → ≈ 1,75 USD cho 5 giờ
@@ -85,6 +85,9 @@ Rủi ro đã biết, kiểm lần đầu ở window này (DRF-46, DRF-51):
 - **IRSA với `automountServiceAccountToken: false`.** Job và app tắt token Kubernetes; webhook
   EKS gắn token IRSA riêng. Nếu `db-init` báo `NoCredentialsError`, đó là lỗi này. Sửa 1 lần:
   PR bật `automountServiceAccountToken` cho Job/app trong RGD, ghi lại.
+- **Region cho boto3 (gặp ở window 21/11).** botocore 1.44 chỉ đọc `AWS_DEFAULT_REGION`, bỏ qua
+  `AWS_REGION`, và webhook EKS không thêm biến này. Vì vậy RGD và `window.sh` đặt cả hai biến.
+  `NoRegionError` là dấu hiệu.
 - **Security group của node có cho đi ra 5432 không.** `db-init` báo `ConnectionTimeout` là dấu hiệu.
 - **Secret master `rds!…` khi xoá RDS** có bị giữ ở trạng thái chờ xoá không: inventory đếm cả secret chờ xoá.
 - **`db.t4g.micro` đặt được ở cả 2 AZ** của subnet group: kiểm ở C.
@@ -148,7 +151,7 @@ ADMIN_WINDOW=1 P4_WINDOW=1 ./scripts/plan_assert.sh tfplan
 ```
 
 **Phải thấy:**
-- `Plan: 64 to add, 0 to change, 0 to destroy` (khác thì đối chiếu từng resource trước khi đi tiếp);
+- `Plan: 65 to add, 0 to change, 0 to destroy` (khác thì đối chiếu từng resource trước khi đi tiếp);
 - `plan_assert`: `RESULT: PASS`; dòng `INFO` cho trust (OIDC chưa có) và cho `rag-db-admin-master` là bình thường;
 - shape sha256 **khớp** request (khác = S1);
 - `rag_iam_check`: `RESULT: PASS`; các dòng `MASTER` là `SKIP`.

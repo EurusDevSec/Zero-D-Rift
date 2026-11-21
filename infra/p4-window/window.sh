@@ -62,7 +62,7 @@ db_env() {
   else
     cfg
     jq -n --arg host "$(cfg_get .db_host)" --arg port "$(cfg_get .db_port)" --arg region "$(region)" \
-      '[{name:"SECRET_BACKEND",value:"aws"},{name:"AWS_REGION",value:$region},
+      '[{name:"SECRET_BACKEND",value:"aws"},{name:"AWS_REGION",value:$region},{name:"AWS_DEFAULT_REGION",value:$region},
         {name:"DB_HOST",value:$host},{name:"DB_PORT",value:$port},{name:"DB_SSLMODE",value:"verify-full"}]'
   fi
 }

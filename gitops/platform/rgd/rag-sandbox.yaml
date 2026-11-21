@@ -99,6 +99,7 @@ spec:
                     - {name: SANDBOX_NAME, value: "${schema.metadata.name}"}
                     - {name: SECRET_BACKEND, value: aws}
                     - {name: AWS_REGION, value: "${platformConfig.data.region}"}
+                    - {name: AWS_DEFAULT_REGION, value: "${platformConfig.data.region}"}
                     - {name: DB_HOST, value: "${platformConfig.data.dbHost}"}
                     - {name: DB_PORT, value: "${platformConfig.data.dbPort}"}
                     - {name: DB_SSLMODE, value: verify-full}
@@ -196,6 +197,7 @@ spec:
                     - {name: S3_BUCKET, value: "${bucket.metadata.name}"}
                     - {name: SECRET_BACKEND, value: aws}
                     - {name: AWS_REGION, value: "${platformConfig.data.region}"}
+                    - {name: AWS_DEFAULT_REGION, value: "${platformConfig.data.region}"}
                     - {name: DB_HOST, value: "${platformConfig.data.dbHost}"}
                     - {name: DB_PORT, value: "${platformConfig.data.dbPort}"}
                     - {name: DB_SSLMODE, value: verify-full}
