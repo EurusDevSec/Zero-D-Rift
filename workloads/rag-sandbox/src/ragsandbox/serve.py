@@ -54,7 +54,7 @@ from psycopg import sql
 
 from .db import FAST_FAIL, Endpoint, connect, endpoint_from_env
 from .errors import aws_error_code, safe_reason
-from .names import DATABASE
+from .names import DATABASE, SECRET_PREFIX, InvalidName, parse_sandbox
 from .secretstore import SecretStore, store_from_env
 
 DIM = 4
@@ -84,6 +84,7 @@ _CREATE_TABLE = sql.SQL(
 _INSERT_SEED = sql.SQL(
     "INSERT INTO {} (id, title, embedding) VALUES (%s, %s, %s::vector) ON CONFLICT (id) DO NOTHING"
 ).format(sql.Identifier(TABLE))
+_IDENTITY = sql.SQL("SELECT current_user, current_schema()")
 _SEED_LOCK = sql.SQL("SELECT pg_advisory_xact_lock(hashtext(current_schema()))")
 _VECTOR_COLUMN = sql.SQL(
     "SELECT current_schema(), count(*) FROM information_schema.columns "
@@ -192,8 +193,12 @@ class Database:
         lock_wait: float = LOCK_WAIT,
         call_timeout: float = CALL_TIMEOUT,
         abort_fn: Callable[[object], None] = shutdown_socket,
+        expect: tuple[str, str] | None = None,
     ):
         self.endpoint = endpoint
+        # (role, schema) this sandbox must connect as. A valid credential of another
+        # sandbox would otherwise seed and pass /readyz in the wrong schema (Codex C4).
+        self.expect = expect
         self.store = store
         self.secret_id = secret_id
         self.connect_fn = connect_fn
@@ -248,6 +253,7 @@ class Database:
         self.connects += 1
         watch(conn)
         try:
+            check_identity(conn, self.expect)
             ensure_seed(conn)
         except Exception:
             conn.close()
@@ -289,6 +295,32 @@ class Database:
     def close(self) -> None:
         with self._lock:
             self._drop()
+
+
+def check_identity(conn, expect: tuple[str, str] | None) -> None:
+    if expect is None:
+        return
+    row = conn.execute(_IDENTITY).fetchone()
+    seen = tuple(row) if row else None
+    if seen != tuple(expect):
+        raise NotReady(f"connected as {seen}, expected role and schema {tuple(expect)}")
+
+
+def expected_identity(env: Mapping[str, str], secret_id: str) -> tuple[str, str]:
+    """The sandbox comes from DB_SECRET_ID (``zero-drift/rag/<tenant>/<name>``); when
+    the RGD also gives SANDBOX_TENANT/SANDBOX_NAME, both must name the same sandbox."""
+    parts = secret_id.split("/")
+    prefix = SECRET_PREFIX.split("/")
+    if len(parts) != len(prefix) + 2 or parts[: len(prefix)] != prefix:
+        raise ConfigError(f"DB_SECRET_ID must be {SECRET_PREFIX}/<tenant>/<name>")
+    try:
+        sb = parse_sandbox(parts[-2], parts[-1])
+    except InvalidName as exc:
+        raise ConfigError(f"DB_SECRET_ID: {exc}") from None
+    tenant, name = env.get("SANDBOX_TENANT"), env.get("SANDBOX_NAME")
+    if (tenant or name) and (tenant, name) != (sb.tenant, sb.name):
+        raise ConfigError("SANDBOX_TENANT/SANDBOX_NAME do not match DB_SECRET_ID")
+    return sb.role, sb.schema
 
 
 def ensure_seed(conn) -> None:
@@ -433,12 +465,14 @@ def app_from_env(env: Mapping[str, str]) -> App:
     bucket = env.get("S3_BUCKET") or None
     if check == "on" and not bucket:
         raise ConfigError("S3_BUCKET is not set (BUCKET_CHECK=off is for the kind lab only)")
+    expect = expected_identity(env, secret_id)
     endpoint = endpoint_from_env(env)
     db = Database(
         endpoint,
         store_from_env(env),
         secret_id,
         reload_seconds=float(env.get("SECRET_RELOAD_SECONDS", "5")),
+        expect=expect,
     )
     return App(db, Bucket(bucket if check == "on" else None))
 

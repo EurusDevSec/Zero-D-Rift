@@ -249,12 +249,17 @@ aws s3api get-bucket-tagging --bucket zero-drift-rag-tenant-a-docs-qa --query 'T
 
 **Phải thấy:** `Project Owner Environment ManagedBy RunId ExpiresAt` đúng giá trị request.
 
-**Micro-lab owner tự gõ** (đoán trước: role nào hiện ra? bucket nào đọc được?):
+**Micro-lab owner tự gõ** (đoán trước: role nào hiện ra? bucket nào đọc được?).
+Pod chạy xong mới đọc log, và **mọi** dòng đi qua `sed`. Câu lỗi `AccessDenied` cũng chứa account
+ID, còn `run -i` làm mất các dòng đầu (window 21/11, F5):
 
 ```bash
-kubectl -n tenant-a run zdr-awscli --rm -i --restart=Never --override-type=strategic \
+kubectl -n tenant-a run zdr-awscli --restart=Never --override-type=strategic \
   --image=public.ecr.aws/aws-cli/aws-cli@sha256:b0102d2269f87d8531d931c1a59e248101ace586886e6c077058d94c1c37b846 \
-  --overrides='{"spec":{"serviceAccountName":"rag-docs-qa","securityContext":{"runAsNonRoot":true,"runAsUser":1000,"seccompProfile":{"type":"RuntimeDefault"}},"containers":[{"name":"zdr-awscli","image":"public.ecr.aws/aws-cli/aws-cli@sha256:b0102d2269f87d8531d931c1a59e248101ace586886e6c077058d94c1c37b846","command":["sh","-c","aws --version; aws sts get-caller-identity --query Arn --output text | sed -E \"s/[0-9]{12}/<ACCOUNT>/\"; aws s3 ls s3://zero-drift-rag-tenant-a-docs-qa && echo OWN_OK; aws s3 ls s3://zero-drift-rag-tenant-b-docs-qa || echo OTHER_DENIED"],"env":[{"name":"HOME","value":"/tmp"}],"securityContext":{"allowPrivilegeEscalation":false,"capabilities":{"drop":["ALL"]}}}]}}'
+  --overrides='{"spec":{"serviceAccountName":"rag-docs-qa","securityContext":{"runAsNonRoot":true,"runAsUser":1000,"seccompProfile":{"type":"RuntimeDefault"}},"containers":[{"name":"zdr-awscli","image":"public.ecr.aws/aws-cli/aws-cli@sha256:b0102d2269f87d8531d931c1a59e248101ace586886e6c077058d94c1c37b846","command":["sh","-c","aws --version; aws sts get-caller-identity --query Arn --output text; aws s3 ls s3://zero-drift-rag-tenant-a-docs-qa && echo OWN_OK; aws s3 ls s3://zero-drift-rag-tenant-b-docs-qa || echo OTHER_DENIED"],"env":[{"name":"HOME","value":"/tmp"}],"securityContext":{"allowPrivilegeEscalation":false,"capabilities":{"drop":["ALL"]}}}]}}'
+kubectl -n tenant-a wait pod/zdr-awscli --for=jsonpath='{.status.phase}'=Succeeded --timeout=120s
+kubectl -n tenant-a logs pod/zdr-awscli 2>&1 | sed -E 's/\b[0-9]{12}\b/<ACCOUNT>/g'
+kubectl -n tenant-a delete pod zdr-awscli
 ```
 
 **Phải thấy:** `assumed-role/zero-drift-rag-tenant-a/…`, `OWN_OK`, rồi `AccessDenied` và `OTHER_DENIED`.
@@ -282,7 +287,10 @@ bash infra/p4-window/window.sh probe cross tenant-b docs-qa tenant-a
 
 Ca "bootstrap không đọc được master" đã chạy ở E (`probe platform`).
 
-**G2. Request ở namespace không có role tenant.** Owner merge PR `neg-on`, rồi:
+**G2. Request ở namespace không có role tenant.** Ca này có hai lớp chặn. Lớp 1 là CI: job
+`gitops` của `static-gates` đỏ trên PR `neg-on`, vì rule namespace có từ DRF-51. Ghi lại lớp này
+trước. Lớp 2 là runtime. Muốn kiểm nó, owner phải cố ý merge dù CI đỏ. `main` không bảo vệ nhánh
+nên merge được: lớp CI chỉ là cảnh báo (window 21/11, F3). Owner merge PR `neg-on`, rồi:
 
 ```bash
 kubectl -n argocd annotate app zdr-requests argocd.argoproj.io/refresh=hard --overwrite
@@ -324,7 +332,8 @@ kubectl -n tenant-b get bucket.s3.aws.m.upbound.io,sa,deploy,svc | grep retry ||
 **Phải thấy:** log có `NoCredentialsError` (không role, và IMDS bị chặn nên cũng không lấy được role
 node); `IN_PROGRESS Failed`; không có gì cho `retry`.
 
-Sửa nguyên nhân, rồi đổi request **chỉ trong Git**:
+Sửa nguyên nhân. Lệnh dưới đây là thao tác phía nền tảng bằng `kubectl` (gắn lại annotation IRSA cho
+ServiceAccount `rag-bootstrap`), **không** đi qua Git. Phần chỉ đi qua Git là đổi request:
 
 ```bash
 bash infra/p4-window/window.sh bootstrap-identity on
@@ -342,7 +351,7 @@ bash infra/p4-window/window.sh probe sandbox tenant-b retry
 
 **Phải thấy:** `boot-1` log `secret_created true` (lần 0 không có credential nên chưa ghi được secret);
 instance `ACTIVE`; Job `boot-0` đã bị kro xoá, Pod của nó còn lại không owner; probe PASS. Không sửa
-hay xoá tay object nào trong cluster.
+hay xoá tay object nào của request. Thay đổi tay duy nhất là `bootstrap-identity` ở phía nền tảng.
 
 ## I. Xoá một request và cleanup
 

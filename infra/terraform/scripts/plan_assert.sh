@@ -38,8 +38,10 @@ p4_approved='{
     {"Sid": "ForceDestroyObjects", "Effect": "Allow", "Action": ["s3:DeleteObject", "s3:DeleteObjectVersion"],
      "Resource": ["arn:aws:s3:::zero-drift-rag-*/*"]},
     {"Sid": "RagBuckets", "Effect": "Allow",
-     "Action": ["s3:CreateBucket", "s3:DeleteBucket", "s3:GetAccelerateConfiguration", "s3:GetBucket*", "s3:GetEncryptionConfiguration",
-                "s3:GetLifecycleConfiguration", "s3:GetReplicationConfiguration", "s3:ListBucket", "s3:ListBucketVersions", "s3:PutBucketTagging"],
+     "Action": ["s3:CreateBucket", "s3:DeleteBucket", "s3:GetAccelerateConfiguration", "s3:GetBucketAcl", "s3:GetBucketCORS",
+                "s3:GetBucketLocation", "s3:GetBucketLogging", "s3:GetBucketObjectLockConfiguration", "s3:GetBucketPolicy",
+                "s3:GetBucketRequestPayment", "s3:GetBucketTagging", "s3:GetBucketVersioning", "s3:GetBucketWebsite",
+                "s3:GetEncryptionConfiguration", "s3:GetLifecycleConfiguration", "s3:GetReplicationConfiguration", "s3:ListBucket", "s3:ListBucketVersions", "s3:PutBucketTagging"],
      "Resource": ["arn:aws:s3:::zero-drift-rag-*"]}],
   "rag-tenant-a": [
     {"Sid": "OwnBuckets", "Effect": "Allow", "Action": ["s3:ListBucket"], "Resource": ["arn:aws:s3:::zero-drift-rag-tenant-a-*"]},
@@ -270,8 +272,8 @@ if [[ "${P4_WINDOW:-0}" == 1 ]]; then
     known="$(jq -c '[.[] | select(.unknown | not) | {name, doc: (.policy | fromjson)}]' <<< "$p4pol" 2>/dev/null || echo '[{"name":"unparsable"}]')"
     star="$(jq -r '[.[] | .doc.Statement[] | [.Resource] | flatten[] | select(. == "*")] | length' <<< "$known" 2>/dev/null || echo 1)"
     [[ "$star" == 0 ]] && pass "P4 policies no-star: no resource \"*\"" || fail "P4 policies no-star: $star statement resource(s) are \"*\""
-    iamx="$(jq -r '[.[] | .doc.Statement[] | [.Action] | flatten[] | select(test("^(iam|sts):|^\\*$|:\\*$"; "i"))] | unique | join(" ")' <<< "$known" 2>/dev/null || echo unparsable)"
-    [[ -z "$iamx" ]] && pass "P4 policies no-iam: no IAM/STS action, no service wildcard" || fail "P4 policies no-iam: forbidden action(s): $iamx"
+    iamx="$(jq -r '[.[] | .doc.Statement[] | [.Action] | flatten[] | select(test("^(iam|sts):|\\*"; "i"))] | unique | join(" ")' <<< "$known" 2>/dev/null || echo unparsable)"
+    [[ -z "$iamx" ]] && pass "P4 policies no-iam: no IAM/STS action, no wildcard action" || fail "P4 policies no-iam: forbidden action(s): $iamx"
     diffs="$(jq -r --argjson ok "$p4_approved" '[.[]
         | .name as $n
         | (.doc.Statement | map({Sid, Effect, Action: ([.Action] | flatten | sort), Resource: ([.Resource] | flatten | sort)})

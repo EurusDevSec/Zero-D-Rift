@@ -194,6 +194,9 @@ spec:
                   env:
                     - name: DB_SECRET_ID
                       value: ${bootstrap.metadata.annotations["rag.zero-drift.io/secret"]}
+                    # serve checks it is connected as this sandbox's role and schema (Codex C4).
+                    - {name: SANDBOX_TENANT, value: "${schema.metadata.namespace}"}
+                    - {name: SANDBOX_NAME, value: "${schema.metadata.name}"}
                     - {name: S3_BUCKET, value: "${bucket.metadata.name}"}
                     - {name: SECRET_BACKEND, value: aws}
                     - {name: AWS_REGION, value: "${platformConfig.data.region}"}

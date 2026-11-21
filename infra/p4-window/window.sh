@@ -239,7 +239,13 @@ cmd_cleanup() {
   need_run_vars
   local t=$1 n=$2 job="cleanup-$1-$2" env labels
   [[ "$t" =~ ^tenant-(a|b)$ && "$n" =~ ^[a-z]([a-z0-9-]{0,30}[a-z0-9])?$ && "$n" != *--* ]] || die "bad tenant or name"
-  kubectl -n "$t" get ragsandbox "$n" >/dev/null 2>&1 && die "request $t/$n still exists: remove it from Git first"
+  # Destructive: go on only when the read itself succeeded and the server said NotFound.
+  # Forbidden, a timeout or a missing CRD must stop here, not look like "gone" (Codex C1).
+  local out
+  if out="$(kubectl -n "$t" get ragsandbox "$n" -o name 2>&1)"; then
+    die "request $t/$n still exists: remove it from Git first"
+  fi
+  grep -q '(NotFound)' <<<"$out" || die "cannot confirm request $t/$n is gone, the read failed: $(head -1 <<<"$out")"
   env="$(concat "$(db_env)" "$(jq -n --arg t "$t" --arg n "$n" '[{name:"SANDBOX_TENANT",value:$t},{name:"SANDBOX_NAME",value:$n}]')")"
   labels="$(jq -n --arg t "$t" --arg n "$n" '{"app.kubernetes.io/name":"rag-cleanup","rag.zero-drift.io/cleanup-of":($t+"."+$n)}')"
   kubectl -n "$PLATFORM_NS" delete job "$job" --ignore-not-found >/dev/null

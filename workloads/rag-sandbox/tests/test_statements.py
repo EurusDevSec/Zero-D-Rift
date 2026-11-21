@@ -68,7 +68,11 @@ def test_sandbox_grants_are_limited_to_its_schema():
 def test_database_grants_revoke_public_first():
     text = [render(s) for s in st.database_grants("rag", "rag_bootstrap")]
     assert text[0] == 'REVOKE ALL ON DATABASE "rag" FROM PUBLIC'
-    assert text[1] == 'GRANT CONNECT, CREATE ON DATABASE "rag" TO "rag_bootstrap" WITH GRANT OPTION'
+    assert text[1:] == [
+        'GRANT CONNECT ON DATABASE "rag" TO "rag_bootstrap" WITH GRANT OPTION',
+        'GRANT CREATE ON DATABASE "rag" TO "rag_bootstrap"',
+        'REVOKE GRANT OPTION FOR CREATE ON DATABASE "rag" FROM "rag_bootstrap"',
+    ]
 
 
 def test_drop_role_revokes_before_drop():

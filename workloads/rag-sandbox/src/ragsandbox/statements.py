@@ -99,12 +99,15 @@ def create_database(database: str) -> sql.Composed:
 
 
 def database_grants(database: str, bootstrap_role: str) -> list[sql.Composed]:
-    db = sql.Identifier(database)
+    db, boot = sql.Identifier(database), sql.Identifier(bootstrap_role)
     return [
         sql.SQL("REVOKE ALL ON DATABASE {} FROM PUBLIC").format(db),
-        sql.SQL("GRANT CONNECT, CREATE ON DATABASE {} TO {} WITH GRANT OPTION").format(
-            db, sql.Identifier(bootstrap_role)
-        ),
+        # CREATE is only for the bootstrap's own CREATE SCHEMA; only CONNECT is passed
+        # on to sandbox roles, so only CONNECT carries the grant option (Codex C9).
+        # The REVOKE also narrows a database made by an older db-init.
+        sql.SQL("GRANT CONNECT ON DATABASE {} TO {} WITH GRANT OPTION").format(db, boot),
+        sql.SQL("GRANT CREATE ON DATABASE {} TO {}").format(db, boot),
+        sql.SQL("REVOKE GRANT OPTION FOR CREATE ON DATABASE {} FROM {}").format(db, boot),
     ]
 
 

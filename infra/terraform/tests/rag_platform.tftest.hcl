@@ -193,7 +193,10 @@ run "policies_are_exact_allowlists" {
       for k, ss in module.rag_identity[0].statements : [
         for s in ss : alltrue([for a in s.Action : contains([
           "secretsmanager:CreateSecret", "secretsmanager:DeleteSecret", "secretsmanager:GetSecretValue", "secretsmanager:TagResource",
-          "s3:CreateBucket", "s3:DeleteBucket", "s3:GetAccelerateConfiguration", "s3:GetBucket*", "s3:GetEncryptionConfiguration",
+          "s3:CreateBucket", "s3:DeleteBucket", "s3:GetAccelerateConfiguration", "s3:GetBucketAcl", "s3:GetBucketCORS",
+          "s3:GetBucketLocation", "s3:GetBucketLogging", "s3:GetBucketObjectLockConfiguration", "s3:GetBucketPolicy",
+          "s3:GetBucketRequestPayment", "s3:GetBucketTagging", "s3:GetBucketVersioning", "s3:GetBucketWebsite",
+          "s3:GetEncryptionConfiguration",
           "s3:GetLifecycleConfiguration", "s3:GetReplicationConfiguration", "s3:ListBucket", "s3:ListBucketVersions",
           "s3:PutBucketTagging", "s3:DeleteObject", "s3:DeleteObjectVersion", "s3:GetObject",
         ], a)])
@@ -201,6 +204,14 @@ run "policies_are_exact_allowlists" {
     ]))
     # Same union as plan_assert.sh check 16; per-statement sets are checked there.
     error_message = "An action outside the approved P4 list."
+  }
+
+  assert {
+    condition = alltrue(flatten([
+      for k, ss in module.rag_identity[0].statements : [for s in ss : [for a in s.Action : !strcontains(a, "*")]]
+    ]))
+    # ADR-0008 rule 3: an exact action list, no wildcard in any P4 role (Codex DRF-57 C6).
+    error_message = "A P4 policy action uses a wildcard."
   }
 }
 
