@@ -1,14 +1,14 @@
 ---
 project: Zero D-Rift
-status: P4_T3_2_STATIC_AND_KIND_DRY_RUN_PASSED
+status: P4_T4_1_WINDOW_PACKET_DRAFTED
 active_phase: P4
-active_task: P4-T3.2 (DRF-51) PR; owner kind run pending; then DRF-56
+active_task: P4-T4.1 (DRF-56) part A window packet; owner approval pending
 active_feature: RAGSandbox (SPEC-P4)
 active_spec: .agent/specs/SPEC-P4_RAG_SANDBOX.md
 current_learning: .agent/learning/CURRENT_STATUS.md
 mode: Coach
 authority: NO_INSTALL_NO_AWS_APPLY_UNTIL_TASK_GATES
-last_reviewed: 2026-11-19
+last_reviewed: 2026-11-21
 ---
 
 # Active Context
@@ -33,12 +33,11 @@ Follow [context governance](../references/context-governance.md).
 - Tools: Terraform 1.16.4, kubectl v1.35.10, kind v0.33.0 (always pass `--image`), Helm v4.2.2.
 - SPEC-P4 `OWNER_APPROVED_20261114`: owner approved D1–D12 and the 5 USD P4
   cap ("Duyệt cả 12"), after Codex review APPROVE at `358da73` (three rounds,
-  SPEC §9.4). Merged in PR #33 (`7dcaa44`). Nothing for P4 is built.
+  SPEC §9.4). Merged in PR #33 (`7dcaa44`).
 - ADR-0008 `ACCEPTED` 14/11 (Codex APPROVE at `8036e44`; owner "Chấp nhận
   ADR-0008"): Terraform owns shared RDS and every P4 role; direct SDK through
-  IRSA; master/bootstrap only in `zdr-platform`. Runtime still `UNVERIFIED`.
-  Merged in PR #34 (`df275e4`).
-- DRF-40 parts A–C done (owner to mark Done): kro spike 4/4 PASS on kind, kro
+  IRSA; master/bootstrap only in `zdr-platform`. Runtime `UNVERIFIED` (PR #34).
+- DRF-40 done: kro spike 4/4 PASS on kind, kro
   orphans deleted Jobs' Pods so D9 cleanup deletes them by label (PR #35);
   pins RDS 17.11, pgvector 0.8.2, prices unchanged, VERSION_MATRIX §8 (PR #37,
   `ef04ca3`). Evidence `docs/evidence/p4/P4-T1_*`.
@@ -53,9 +52,11 @@ Follow [context governance](../references/context-governance.md).
   dry run PASS; owner run 21/11 G3-G11 with predictions (G11 missed what kro
   leaves behind). Owner skipped the explanation questions (open gap, re-ask
   before DRF-57). DRF-44/46/50/51 Done in Linear; DRF-49 open until DRF-56 bucket.
-- ADR-0009 `ACCEPTED` 17/11 (PR #36, `1277f7c`): AWS refused the G/VT quota
-  twice, so P6 BatchTrainingJob runs on CPU nodes; limits recorded in the ADR
-  and COST_PLAN §7.3.1. No AWS action authorised by it.
+- DRF-56 part A (branch `hoang/drf-56-window-packet`, uncommitted): runbook
+  `docs/runbooks/P4_RAG_SANDBOX.md` (request, stop conditions R1-R7, B-E steps),
+  `infra/p4-window/window.sh` + `probe.py` (independent check, negatives; tested
+  on kind with LAB=1 only). Plan hash, Bills and approval are filled in the window.
+- ADR-0009 `ACCEPTED` 17/11 (PR #36): G/VT quota refused, P6 runs on CPU nodes.
 - [Linear routing](../docs/LINEAR_DELIVERY.md): P4 = 10 issues. DRF-40 (P4-T1,
   no sub-tasks); DRF-44 (P4-T2) → DRF-45, 46; DRF-49 (P4-T3) → DRF-50, 51;
   DRF-55 (P4-T4) → DRF-56, 57. Other DRF-41..63 and DRF-16/17 cancelled.
@@ -64,21 +65,19 @@ Follow [context governance](../references/context-governance.md).
 
 1. Carried from P3 (not gates): re-ask teach-back Q3–Q5 orally at P11; endpoint
    check 7 only type-checks `aws:ResourceAccount` (fix with R1).
-2. Schedule: P4 gate was 08/11, P6 14/11, P8 freeze 19/11. The 15/11 P4
-   target was missed; owner's new P4 target is 17/11/2026 (set 17/11). Still
-   open on 17/11: DRF-44/45/46, DRF-49/50/51 and the L3 window plus
-   acceptance (DRF-55/56/57). Ver3 §12.1 still forbids reducing trials,
-   acceptance, learning gate or teardown to meet it. Full rebaseline of P5–P11
-   is the owner's decision.
+2. Schedule: P4 gate was 08/11; owner's P4 target 17/11 was missed. Open on
+   21/11: the L3 window and acceptance (DRF-55/56/57). Ver3 §12.1 forbids
+   reducing trials, acceptance, learning gate or teardown to meet a date. Full
+   rebaseline of P5–P11 is the owner's decision.
 3. ADR-0005 still PROPOSED (owner review).
 4. SPEC approval is not AWS approval: every P4 window still needs its own
    execution approval, cost check and stop time (SPEC negative boundary 10).
 
 ## Next safe action
 
-DRF-56 part A: draft the window packet (no AWS). AWS reads and the window run
-need the owner's approval sentence (platform-config only after db-init).
-Re-ask the 4 open explanation questions (DRF-51, DRF-45) before DRF-57.
+Owner reviews the DRF-56 packet and picks a 5-hour slot; then T-30 reads, plan
+hash and the approval sentence "Duyệt window P4-L3-YYYYMMDD-01" before any
+apply. Re-ask the 4 open explanation questions (DRF-51, DRF-45) before DRF-57.
 
 ## Context expansion
 
