@@ -175,5 +175,5 @@ Owner chạy trên máy mình, với MFA, profile `zdr-tf`, rồi dán output v�
 | 22/11, sau window | 0,55 USD | 199,45 USD |
 
 - Chênh lệch **≈ 0,26 USD**. Đó là ước tính cho window 21/11, thấp hơn ước tính D10 là 0,50 USD. Lúc đọc, window mới kết thúc khoảng 17 giờ, nên số này có thể chưa đủ.
-- Đây là credit, không phải Bills gross. Để tính trần thì lấy số thận trọng: coi cả 0,55 USD là của P4, nên P4 còn **≥ 4,45 USD** dưới trần 5 USD.
+- Đây là credit ước tính, không phải Bills gross, nên không chặn trên được chi phí gross. Số còn lại dưới trần 5 USD (D10, gross) **chưa xác minh** cho tới khi đọc Bills. Theo ước tính, coi cả 0,55 USD là của P4, P4 còn khoảng 4,45 USD.
 - Bills gross: owner đọc một lần sau window xác nhận `P4-L3-20261122-01`, cho cả hai window.
