@@ -18,7 +18,7 @@
 | Inventory trễ sạch | **Đạt** 22/11 02:44Z: owner chạy với MFA, `RESULT: CLEAN`. Chỉ mục tag đã hết lệch (mục 6) |
 | Đã đọc billing | **Một phần**: owner đọc trang Credits ngày 22/11 (ước tính, dùng 0,55 USD cả tài khoản). Window xác nhận ước tính thêm khoảng 0,37 USD. Bills gross chưa đọc: đọc một lần cho cả hai window, khi số ước tính đã cập nhật (mục 6) |
 | Review độc lập ghi findings và giới hạn | **Đạt**: Codex review lần 1 (1 HIGH, 6 MEDIUM, 3 LOW, mục 5); đã sửa cả 10 (mục 5.1). Review lại 22/11: C1, C5, C6 sửa một phần; 2 MEDIUM, 2 LOW mới (mục 5.2), xử lý ở mục 5.3. Codex kiểm bản sửa `70ad8d8`: **APPROVE**, không finding mới; đồng ý giữ `GetBucketLocation` làm giới hạn LOW (mục 5.4). Sau đó `fec7847` siết thêm `cleanup` theo review Copilot, Codex chưa kiểm (mục 5.4) |
-| Owner `PRACTICED` + `EXPLAINED`: IRSA workload, luồng secret, tầng credential PostgreSQL | **Đạt có giới hạn**: IRSA đạt đầy đủ; hai mục kia có giới hạn nguồn gốc (`P4-T4.2_TEACHBACK_20261121.md`) |
+| Owner `PRACTICED` + `EXPLAINED`: IRSA workload, luồng secret, tầng credential PostgreSQL | **Đạt** 22/11: IRSA đạt từ 21/11 (dòng `sts` có ở window 22/11). Luồng secret và tầng credential được kiểm bằng hai câu chuyển giao trên ca mới (câu A, B), owner tự gõ, không gợi ý. Bốn câu còn nợ của DRF-51/45 cũng đã trả lời (`P4-T4.2_TEACHBACK_20261121.md`) |
 
 ## 2. Kịch bản §4 → evidence
 
