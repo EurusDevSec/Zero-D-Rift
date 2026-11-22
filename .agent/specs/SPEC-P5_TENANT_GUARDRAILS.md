@@ -1,17 +1,18 @@
 ---
 id: SPEC-P5
 title: Tenant guardrails — RBAC, quota, NetworkPolicy, Pod Security, Kyverno
-status: DRAFT_FABLE_20261116
+status: DRAFT_FABLE_20261116_RECHECKED_20261122
 phase: P5
-start: TBD (owner rebaseline)
+start: 2026-11-23 at the earliest (owner rebaseline, D11)
 deadline: TBD (owner rebaseline)
-schedule_baseline: ver3 §12 window 09–10/11 already missed; owner rebaseline open
+schedule_baseline: ver3 §12 window 09–10/11 already missed; owner rebaseline open (D11)
 estimated_effort: 20-24 hours (ROADMAP allocates 16 h)
 mode: Coach ("write and break one policy at a time"), then Pair
 canonical_scope: docs/de_cuong_tot_nghiep_ver3.md
 linear: DRF-18 (outline issue; split into P5-T tasks at the phase gate)
 authority: DRAFT_ONLY_NO_INSTALL_NO_AWS_NO_LINEAR_CHANGE
-drafted_from: main at df275e4 (2026-11-16); P4 runtime on EKS is UNVERIFIED
+drafted_from: main at df275e4 (2026-11-16), Claude Fable 5.2
+rechecked_at: main at df5d6f6 (2026-11-22), after P4 acceptance; §2 results recorded
 ---
 
 # 0. Draft status
@@ -26,6 +27,19 @@ agent review the candidate revision, and get the owner's decisions on §9.1. Onl
 then may the status move to `OWNER_APPROVED_<date>`. No date, trial count,
 acceptance, learning gate or teardown in ver3 is reduced by this draft
 (ver3 §12.1).
+
+**Recheck 22/11/2026.** P4 closed its technical gate on 22/11 (audit
+`docs/evidence/p4/P4_ACCEPTANCE_AUDIT_20261121.md`). Two procedural items are
+still open: the delayed inventory of the 22/11 window and Bills gross. §2 now
+records the result of every assumption.
+- One assumption was false: A8, the location of the independent check. The
+  ingress rule in D5 and P5-T3 changed with it.
+- One is still unmeasured: A6, node headroom.
+- New facts from P4 are rows A13–A17.
+
+Decisions changed by the recheck: D3 (GPU line, ADR-0009), D5 (ingress source),
+D10 (cost basis). New: D11 (schedule). Nothing in acceptance, trials or teardown
+changed. The second-agent review and the owner decisions are still open.
 
 # 1. Goal and boundaries
 
@@ -52,7 +66,7 @@ it the RAG and Batch paths cannot be offered to two tenants on one cluster.
 
 ## MUST deliverables
 
-- `SPEC-P5` approved by the owner with decisions D1–D10 (§9.1) resolved.
+- `SPEC-P5` approved by the owner with decisions D1–D12 (§9.1) resolved.
 - Tenant baseline under `gitops/platform/tenants/`: Pod Security labels, RBAC
   Role/RoleBinding per tenant, `default` ServiceAccount without token automount,
   ResourceQuota, LimitRange, NetworkPolicies.
@@ -100,24 +114,29 @@ it the RAG and Batch paths cannot be offered to two tenants on one cluster.
 
 # 2. Giả định từ phase trước (kiểm lại khi vào phase)
 
-Every row is an assumption on 16/11/2026. Each must be rechecked against live Git
-and the P4 evidence before P5-T1 closes; a row that turns out false changes the
+Every row was an assumption on 16/11/2026. On 22/11 each row was rechecked against
+`main` at `df5d6f6` and the P4 evidence. A row that turned out false changes the
 task list, not the acceptance.
 
-| # | Assumption | Source today | Recheck |
-|---|---|---|---|
-| A1 | P4 is complete on EKS: two `RAGSandbox` instances Ready, P4 negative suite passed, teardown clean | SPEC-P4 §8; nothing built yet | P4 acceptance audit in `docs/evidence/p4/` |
-| A2 | Namespaces `tenant-a`, `tenant-b`, `zdr-platform` and the P4 ServiceAccounts exist under `gitops/platform/tenants/` | SPEC-P4 P4-T3.2 A (planned) | `git ls-files gitops/platform/tenants` |
-| A3 | The reference image runs as non-root and tolerates a read-only root filesystem | SPEC-P4 P4-T3.1 B (planned) | image config and a `restricted` dry-run on kind |
-| A4 | kro v0.9.4 behaviour seen in the spike holds on EKS: child Job in `zdr-platform`, `readyWhen` on a Job, orphaned Job pods | spike on `origin/hoang/drf-40-kro-spike` (kind only, PR #35 not merged) | P4-T3.2 and P4-T4.1 evidence |
-| A5 | The VPC CNI add-on has no configuration values, so NetworkPolicy is **not** enabled today | `infra/terraform/modules/cluster/main.tf` at `df275e4`; add-on `v1.22.4-eksbuild.10` | read the module again; `aws eks describe-addon` in the window |
-| A6 | One or two `m6i.large` system nodes carry Argo CD, Crossplane, two providers, kro, the RAG workloads **and** Kyverno | root variables: desired 1, max 2 | pod count and allocatable memory in the P4 window (§10) |
-| A7 | `gitops/check.sh` and the pull-request CI workflow from P4-T3.2 B exist and can be extended | SPEC-P4 (planned) | `git ls-files .github gitops/check.sh` |
-| A8 | The independent RAG check runs from a Pod in `zdr-platform` | SPEC-P4 §4 says "outside the app Pod", location not fixed | P4 verify script; it decides the ingress rule in D5 |
-| A9 | Tenant app Pods do not need the Kubernetes API | THREAT_MODEL §6.4 | P4 app code |
-| A10 | The P4 trust subject is `system:serviceaccount:<tenant>:rag-*` (a pattern, not one exact name) | ADR-0008 §4, SPEC-P4 D6 | Terraform `rag-identity` module as merged |
-| A11 | R1 least privilege is still deferred; the Terraform role is broader than P5 needs | active context 14/11 | owner decision before DRF-27 |
-| A12 | Argo CD applications use the `default` AppProject | P3 manifests in `gitops/platform/apps/` | read the Application files |
+| # | Assumption (16/11) | Source then | Recheck | Result 22/11 |
+|---|---|---|---|---|
+| A1 | P4 is complete on EKS: two `RAGSandbox` instances Ready, P4 negative suite passed, teardown clean | SPEC-P4 §8; nothing built yet | P4 acceptance audit in `docs/evidence/p4/` | **True, with limits.** P4 audit: 7/7 scenarios with L3 evidence (scenario 6 partial, C7). Both sandboxes ACTIVE in windows `P4-L3-20261121-01` and `-20261122-01`. The P4 negatives (`probe sandbox`, `probe cross`, IMDS) passed. Teardown `65 destroyed`, inventory CLEAN. Open: delayed inventory of 22/11 and Bills gross |
+| A2 | Namespaces `tenant-a`, `tenant-b`, `zdr-platform` and the P4 ServiceAccounts exist under `gitops/platform/tenants/` | SPEC-P4 P4-T3.2 A (planned) | `git ls-files gitops/platform/tenants` | **True.** `namespaces.yaml`, `serviceaccounts.yaml`. Labels today: Pod Security `enforce: restricted` only (no `audit`/`warn`). Tenant namespaces carry `rag.zero-drift.io/tenant: "true"`, while Pods and Jobs carry `rag.zero-drift.io/tenant: <tenant>`. The draft's `zdr.io/tenant` label does not exist; P5 reuses the `rag.zero-drift.io/` prefix (P5-T2.1 A). Sandbox ServiceAccounts `rag-<name>` are created by the RGD, not listed in Git |
+| A3 | The reference image runs as non-root and tolerates a read-only root filesystem | SPEC-P4 P4-T3.1 B (planned) | image config and a `restricted` dry-run on kind | **True.** RGD containers: `runAsNonRoot`, `readOnlyRootFilesystem: true`, `allowPrivilegeEscalation: false`, `capabilities.drop: [ALL]`. Pods ran under `restricted` on EKS |
+| A4 | kro v0.9.4 behaviour seen in the spike holds on EKS: child Job in `zdr-platform`, `readyWhen` on a Job, orphaned Job pods | spike on `origin/hoang/drf-40-kro-spike` (kind only, PR #35 not merged) | P4-T3.2 and P4-T4.1 evidence | **True on EKS.** Job in `zdr-platform`, `readyWhen` on `Complete`, orphaned `boot-0` Pod seen in window 21/11 part H. PR #35 is merged. `propagationPolicy` as the cause is still unverified |
+| A5 | The VPC CNI add-on has no configuration values, so NetworkPolicy is **not** enabled today | `infra/terraform/modules/cluster/main.tf` at `df275e4`; add-on `v1.22.4-eksbuild.10` | read the module again; `aws eks describe-addon` in the window | **True.** `modules/cluster/main.tf` has no `configuration_values`; pin still `v1.22.4-eksbuild.10` |
+| A6 | One or two `m6i.large` system nodes carry Argo CD, Crossplane, two providers, kro, the RAG workloads **and** Kyverno | root variables: desired 1, max 2 | pod count and allocatable memory in the P4 window (§10) | **Unmeasured.** P4 ran with `system_node_desired_size = 1` (default) and recorded no Pod count or allocatable memory. Measure first thing in the P5 window, or plan two nodes (D7, §10) |
+| A7 | `gitops/check.sh` and the pull-request CI workflow from P4-T3.2 B exist and can be extended | SPEC-P4 (planned) | `git ls-files .github gitops/check.sh` | **True.** `gitops/check.sh` (rules 0–12, 35 guards) and `.github/workflows/static-gates.yml` |
+| A8 | The independent RAG check runs from a Pod in `zdr-platform` | SPEC-P4 §4 says "outside the app Pod", location not fixed | P4 verify script; it decides the ingress rule in D5 | **False.** The window probes run in the **tenant** namespace with the sandbox ServiceAccount (`window.sh run_probe`), and call `http://rag-<name>.<tenant>.svc:8080`. Only `probe platform` runs in `zdr-platform`. D5 and P5-T3 B now allow app ingress from the same namespace, not from `zdr-platform` |
+| A9 | Tenant app Pods do not need the Kubernetes API | THREAT_MODEL §6.4 | P4 app code | **True.** App and Job Pods run with `automountServiceAccountToken: false`; IRSA works through its own projected token |
+| A10 | The P4 trust subject is `system:serviceaccount:<tenant>:rag-*` (a pattern, not one exact name) | ADR-0008 §4, SPEC-P4 D6 | Terraform `rag-identity` module as merged | **True.** `rag-identity`: tenant trust `system:serviceaccount:<tenant>:rag-*` with `StringLike`; platform and Crossplane trust exact names |
+| A11 | R1 least privilege is still deferred; the Terraform role is broader than P5 needs | active context 14/11 | owner decision before DRF-27 | **True.** Still deferred (active context) |
+| A12 | Argo CD applications use the `default` AppProject | P3 manifests in `gitops/platform/apps/` | read the Application files | **True.** All nine Applications use `project: default` |
+| A13 | (new) Worker nodes are in public subnets with a public IPv4 and an IGW route, no NAT and no interface endpoints; only S3 has a gateway endpoint | `modules/network/main.tf` (ADR-0006) | — | **Fact.** STS and Secrets Manager are reached on public addresses, so the "443 outside the VPC" egress rule of P5-T3 B is required, not a shortcut. Removing that limit needs private subnets and interface endpoints: out of scope |
+| A14 | (new) `main` has no branch protection | GitHub settings; P4 teach-back case B (22/11) | — | **Fact.** A red CI does not block a merge. T01 stays open unless the owner enables a ruleset (D12) |
+| A15 | (new) The P4 window stack and tools are reusable | `infra/p4-window/`, `inventory.sh`, `plan_assert` (65 resources, shape hash) | — | **Fact.** P5 window = the P4 stack + VPC CNI configuration + Kyverno. Measured cost about 0.35 USD/h, so a 1 h 04 min confirm window cost about 0.37 USD |
+| A16 | (new) P4 process lessons | P4 evidence and PRs #55–#59 | — | **Fact.** Each lesson is now a rule in P5: <br>• Code changed after the window forced a second window, so the candidate is reviewed **before** the window and nothing changes in it. <br>• MFA lasts 1 h. Refresh with a plain `sts` call; never clear the CLI cache while Claude has commands running. <br>• The tag index lags teardown, so the delayed inventory runs next day. <br>• Merge only after checking `headRefOid` |
+| A17 | (new) Remaining calendar | ver3 §12, today 22/11 | — | **Fact.** P5–P11 cannot fit before 02/12 at 8 h/day; P9 alone is 44–48 h (D11) |
 
 # 3. Learning objectives
 
@@ -208,7 +227,7 @@ sub-task, lettered parts are 15–60 minute checklist groups.
 
 - [ ] Recheck §2; rewrite any task whose assumption is false.
 - [ ] Second agent reviews the candidate revision; findings recorded in §9.3.
-- [ ] Owner decides D1–D10 and the P5 gross cap.
+- [ ] Owner decides D1–D12 and the P5 gross cap.
 
 **B. Pins and sources (1.5 h)**
 
@@ -232,8 +251,10 @@ Gate: no manifest, policy or Terraform change before part A is approved.
 
 **A. Manifests (2 h)**
 
-- [ ] Namespace labels: `zdr.io/tenant=<name>` and Pod Security `enforce`,
-      `audit`, `warn` = `restricted`, version pinned to the cluster minor.
+- [ ] Namespace labels: keep `rag.zero-drift.io/tenant` (decide whether the
+      namespace value becomes the tenant name instead of `"true"`, since Pods and
+      Jobs already carry the name); add Pod Security `audit` and `warn` =
+      `restricted` next to the existing `enforce`, version pinned to the cluster minor.
 - [ ] RBAC per D1: Role `tenant-viewer` and RoleBinding to group
       `zdr:<tenant>:developers`; no ClusterRoleBinding for tenants; no `secrets`
       verb; no wildcard.
@@ -265,7 +286,7 @@ Evidence: `docs/evidence/p5/P5-T2.1_L2_KIND_BASELINE_<date>.md`.
 - [ ] Argo CD Application for the pinned chart; images by digest; server-side
       apply for the CRDs; components per D7; replica counts stated.
 - [ ] Policies per D6, each with `match` limited to namespaces labelled
-      `zdr.io/tenant`, each starting in `Audit`.
+      `rag.zero-drift.io/tenant`, each starting in `Audit`.
 - [ ] `kyverno test` cases (L1) for every rule: one resource that passes, one that
       fails.
 - [ ] Webhook scope and `failurePolicy` per D8; verified in the rendered
@@ -301,8 +322,8 @@ nothing about VPC CNI enforcement or IRSA.
 - [ ] Per tenant namespace: `default-deny` for ingress and egress; allow DNS to
       CoreDNS; allow 5432 to the DB subnets; allow 443 to addresses outside the
       VPC (AWS APIs and the S3 gateway endpoint), excluding the VPC range and the
-      link-local metadata address; allow ingress to the app port only from the
-      namespace that runs the independent check (A8).
+      link-local metadata address; allow ingress to the app port 8080 only from
+      the same tenant namespace, where the window probes run (A8, false on 22/11).
 - [ ] `zdr-platform`: policies for the bootstrap and cleanup Jobs if D5 says so.
 - [ ] Static check: every tenant namespace has a default-deny policy; no policy
       allows `0.0.0.0/0` on all ports.
@@ -399,20 +420,22 @@ Kyverno. The acceptance text states soft isolation and its limits.
 
 # 9. Decisions, traceability and tracking
 
-## 9.1. Decisions for the owner (D1–D10) — proposals, not approved
+## 9.1. Decisions for the owner (D1–D12) — proposals, not approved
 
 | ID | Decision | Proposal | Why | Alternative |
 |---|---|---|---|---|
 | D1 | Tenant identity for RBAC | A read-only Role per tenant bound to a group name; tested by impersonation from the admin session; no EKS access entry and no IAM role for a tenant persona | Tenants act through Git only; an access entry adds IAM for a path nobody uses | One IAM role and access entry per tenant, tested by a real login |
 | D2 | Kubernetes API token in tenant Pods | `automountServiceAccountToken: false` on the `default` ServiceAccount and on workload Pods; IRSA keeps its own projected token | Apps do not call the Kubernetes API (A9) | Leave automount on and rely on RBAC giving the ServiceAccount nothing |
-| D3 | Quota values | Per tenant: a small CPU/memory budget sized for two sandboxes, a Pod count, `count/` limits for Jobs and Services, `requests.nvidia.com/gpu: 0`; LimitRange with defaults and maxima. Exact numbers from the P4 window's observed usage | T11; a GPU quota of zero is the guard until P6 raises it on purpose | No GPU line until P6 |
+| D3 | Quota values | Per tenant: a small CPU/memory budget sized for two sandboxes, a Pod count, `count/` limits for Jobs and Services, `requests.nvidia.com/gpu: 0`; LimitRange with defaults and maxima. Exact numbers from the P4 window's observed usage | T11. ADR-0009 moved P6 to CPU nodes, so `requests.nvidia.com/gpu: 0` stays for the whole project as a guard. Exact numbers come from P4 requests (app `50m`/`96Mi`, memory limit `192Mi`, no CPU limit) plus probe Pods | No GPU line |
 | D4 | Request path scope | AppProject `zdr-requests`: sources this repository, destinations `tenant-a` and `tenant-b`, namespaced kinds `RAGSandbox` (and `BatchTrainingJob` from P6), no cluster-scoped kind | The only tenant write path is a pull request; this is its runtime backstop (T03) | CI check only |
-| D5 | NetworkPolicy mode and scope | Standard mode; policies for tenant namespaces; ingress to apps only from the check namespace. Record the start-up gap as a limit | Strict mode needs a policy for every endpoint, CoreDNS included, which is a large change for a PoC | Strict mode; or also policies for platform namespaces |
+| D5 | NetworkPolicy mode and scope | Standard mode; policies for tenant namespaces; ingress to the app port (8080) only from Pods in the same tenant namespace, where the window probes run (A8). Record the start-up gap as a limit | Strict mode needs a policy for every endpoint, CoreDNS included, which is a large change for a PoC | Strict mode; or also policies for platform namespaces |
 | D6 | Who blocks what | Pod Security owns privilege, host namespaces, hostPath, root and capabilities. Kyverno owns: requests and memory limit required, image by `@sha256` from the registry allowlist, tenant label equals the namespace's tenant. Validate only | One cause per rejection; the tenant-label rule protects the selectors NetworkPolicy relies on | Duplicate the Pod Security rules in Kyverno, as THREAT_MODEL §7.1 words it |
 | D7 | Kyverno footprint | Admission, background and reports controllers, one replica each; cleanup controller off | Reports are the audit evidence; the node is small (A6) | Admission controller only, using admission events as evidence |
 | D8 | Webhook failure behaviour | Fail closed for tenant namespaces only; platform namespaces excluded by namespace selector | A silent bypass is worse than a blocked tenant Pod (T15); excluding the platform keeps teardown possible | Fail open with an alert |
 | D9 | Exceptions | No PolicyException in P5. A workload that cannot comply is changed, or the rule is changed by pull request | Two tenants, two workload types | A reviewed exception process |
-| D10 | P5 gross cap and windows | 4 USD for all P5 windows and retries; one window planned, a second only on new approval | About 0.35 USD/h with RDS (SPEC-P4 D10 figure), 4–5 h | — |
+| D10 | P5 gross cap and windows | 4 USD for all P5 windows and retries; one window planned, a second only on new approval | Measured in P4: about 0.35 USD/h for the 65-resource stack (A15). The P4 total, including both windows, is ≤ 0.92 USD estimated (gross not yet read), so 4–5 h of P5 fits | — |
+| D11 | Schedule | P5 from 23/11; the owner rebaselines P6–P11 before the P5 window (ADR-0009 cut order P6 → P8 → P5) | A17; ver3 §12.1 forbids cutting trials, acceptance, learning gate or teardown to keep a date | Keep 02/12 and cut a phase per ADR-0009 |
+| D12 | Branch protection (T01) | Owner enables a ruleset on `main` requiring the `static-gates` check and a pull request; evidence is a redacted export | A14; the missing layer in teach-back case B. A GitHub setting, so the owner changes it | Record T01 as an accepted limit |
 
 D6 changes the wording of THREAT_MODEL §7.1, which lists the privilege rules
 under Kyverno. If the owner accepts D6, THREAT_MODEL is updated in P5-T1; if not,
@@ -433,7 +456,25 @@ the Kyverno policy set grows and the learning objective 1 gets harder to test.
 
 ## 9.3. Independent review
 
-Not done. This draft has had no second-agent review and no owner approval.
+Not done. This draft has had no second-agent review and no owner approval. The
+22/11 recheck was done by Claude (Opus 5.5); it is not a second-agent review.
+
+## 9.4. Linear tracking (proposal)
+
+Created after the owner approves the SPEC, parents just before their sub-tasks
+(LINEAR_DELIVERY). DRF-18 is cancelled as superseded, like DRF-16/17 in P4.
+
+| Code | Title | Est. |
+|---|---|---|
+| P5-T1 | Hợp đồng P5: quyết định D1–D12, pin Kyverno và VPC CNI | 3 h |
+| P5-T2 | Baseline namespace và admission | parent |
+| P5-T2.1 | Baseline, RBAC, quota, AppProject và lab kind | 4 h |
+| P5-T2.2 | Kyverno: cài đặt, policy và lab kind | 4 h |
+| P5-T3 | Network isolation: VPC CNI và NetworkPolicy | 3.5 h |
+| P5-T4 | Isolation suite, window L3 và nghiệm thu | parent |
+| P5-T4.1 | Isolation suite | 3 h |
+| P5-T4.2 | Window L3 trên EKS | 4 h |
+| P5-T4.3 | Nghiệm thu P5 | 2 h |
 
 # 10. Open risks
 
@@ -455,16 +496,16 @@ Not done. This draft has had no second-agent review and no owner approval.
 - **Kyverno CRD size and Argo CD.** Client-side apply can fail on large CRDs;
   use server-side apply. The pinned release may also deprecate `ClusterPolicy`
   in favour of CEL policy kinds; P5-T1 B decides.
-- **`restricted` and the P4 pod template.** If the RGD's Pod template lacks
-  `seccompProfile`, `runAsNonRoot` or dropped capabilities, P5 must change the
-  RGD, which is a P4 file under another writer until P4 closes.
+- **`restricted` and the P4 pod template.** Resolved 22/11 (A3). The RGD is
+  hardened and ran under `restricted` on EKS. The RGD may still change for the
+  Kyverno tenant label (D6), labels only, with no image rebuild.
 - **Impersonation is not a login.** D1 proves the authorizer's answer, not an
   end-to-end tenant session.
 - **Trust subject pattern.** `rag-*` (A10) lets any ServiceAccount with that
   prefix in the tenant namespace assume the tenant role. Tenants cannot create
   ServiceAccounts through the request path, and the suite tests a non-matching
   name; a tighter subject would be an ADR-0008 change.
-- **Schedule.** P5 starts after its ver3 window; the rebaseline is the owner's.
+- **Schedule.** P5 starts after its ver3 window; the rebaseline is the owner's (D11, A17).
 
 # 11. Sources and dated facts (recheck at P5-T1)
 
@@ -473,7 +514,7 @@ Not done. This draft has had no second-agent review and no owner approval.
 | S1 | Kyverno latest release `v1.20.0`, chart `3.10.0`; default install has four controllers | [Kyverno releases](https://github.com/kyverno/kyverno/releases), [installation](https://kyverno.io/docs/installation/) | 2026-11-16 | `SOURCE_VERIFIED`; Kubernetes 1.35 support for 1.20 **not** confirmed — recheck |
 | S2 | Kyverno `v1.19.1` supports Kubernetes 1.33–1.35 | VERSION_MATRIX §2 | 2026-09-25 | `DOC_VERIFIED`; recheck, a newer patch may exist |
 | S3 | VPC CNI NetworkPolicy: add-on value `enableNetworkPolicy: "true"`; minimum version 1.21 for standard and admin policies; `NETWORK_POLICY_ENFORCING_MODE=strict` gives default-deny at Pod start, standard mode starts default-allow | [EKS: restrict Pod traffic with network policies](https://docs.aws.amazon.com/eks/latest/userguide/cni-network-policy-configure.html) | 2026-11-16 | `DOC_VERIFIED`; runtime `UNVERIFIED` |
-| S4 | Cluster add-on pin `vpc-cni v1.22.4-eksbuild.10`, no configuration values | `infra/terraform/variables.tf`, `modules/cluster/main.tf` | 2026-11-16 (Git) | repository fact; recheck the default for 1.35 before the window |
+| S4 | Cluster add-on pin `vpc-cni v1.22.4-eksbuild.10`, no configuration values | `infra/terraform/variables.tf`, `modules/cluster/main.tf` | 2026-11-22 (Git) | repository fact, unchanged since 16/11; recheck the default for 1.35 before the window |
 | S5 | Standard On-Demand vCPU quota 5; `m6i.large` 0.096 USD/h; EKS 0.10 USD/h; public IPv4 0.005 USD/h; `db.t4g.micro` 0.016 USD/h | COST_PLAN §5.2, §7.3 | 2026-09-28 | `PRICE_API_VERIFIED` / `ACCOUNT_VERIFIED`; recheck before the window |
 | S6 | Pod Security Standards "restricted" profile | [Kubernetes Pod Security Standards](https://kubernetes.io/docs/concepts/security/pod-security-standards/) | THREAT_MODEL §13, 2026-09-28 | recheck against Kubernetes 1.35 |
 | S7 | `m6i.large` 29 Pods per node | author's recollection of the AWS `eni-max-pods` list | not looked up | `UNVERIFIED`; read the list or `kubectl describe node` |
