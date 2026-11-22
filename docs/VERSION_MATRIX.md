@@ -187,3 +187,18 @@ Parity gap: kind runs PostgreSQL 17.10 against RDS 17.11, with no TLS by default
 real superuser where the RDS master is only `rds_superuser` (limit already stated in
 SPEC-P4 P4-T2.1). TLS `verify-full` is proven only in L3, unless the kind lab adds its
 own CA.
+
+## 9. P5 pins (2026-11-22)
+
+Checked on 2026-11-22 for SPEC-P5 P5-T1 part B (DRF-64). Commands: `docs/runbooks/P5_PINS.md`;
+results and decisions: `docs/evidence/p5/P5-T1_PINS_20261122.md`. These supersede the §2 Kyverno
+row (`v1.19.1`); §7 and §8 pins carry over unchanged.
+
+| Component | Pin | Digest | Status |
+| --- | --- | --- | --- |
+| Kyverno | `v1.20.0`, chart `3.10.0` (`kyverno.github.io/kyverno`); supported release, Kubernetes 1.34–1.37 | chart sha256 `55961392…1642c2a301` (equals the repository index) | `SOURCE_VERIFIED`; K8s 1.35 `DOC_VERIFIED` |
+| Kyverno images | `kyverno`, `kyvernopre`, `background-controller`, `reports-controller`, `kyverno-cli` (`reg.kyverno.io`), `readiness-checker` (`ghcr.io`), all `v1.20.0`; cleanup controller off (D7) | index digests in the evidence file | `SOURCE_VERIFIED` |
+| Kyverno policy API | `ValidatingPolicy` `policies.kyverno.io/v1` (CEL); `kyverno.io/v1` `ClusterPolicy` is deprecated in 1.20 | — | `SOURCE_VERIFIED` (rendered CRDs) |
+| VPC CNI | add-on `v1.22.4-eksbuild.10` kept (default for 1.35 is now `.14`); NetworkPolicy needs 1.21+; schema has `enableNetworkPolicy` and `env.NETWORK_POLICY_ENFORCING_MODE` (`standard`/`strict`) | — | `ACCOUNT_VERIFIED` 2026-11-22 |
+
+Runtime status moves to `RUNTIME_VERIFIED` only after the P5 kind labs (L2) and the EKS window (L3).

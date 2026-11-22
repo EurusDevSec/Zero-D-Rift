@@ -30,7 +30,7 @@ Bỏ qua: `infra/terraform/.terraform/` (module tải về, Git bỏ qua, hơn 1
 | P2 nền AWS | `.agent/specs/SPEC-P2_*` | `P2_EKS`, `P2_NETWORK`, `P2_L3_WINDOW` | `evidence/p2/` |
 | P3 controller | `.agent/specs/SPEC-P3_*` | `P3_RESOURCE_GRAPH`, `P3_L2_KIND_LAB` | `evidence/p3/` |
 | P4 RAG sandbox | `.agent/specs/SPEC-P4_*` | `P4_L2_KIND_LAB`, `P4_TERRAFORM_RAG`, `P4_RAG_IMAGE` | `evidence/p4/` |
-| P5 tenant guardrails | `.agent/specs/SPEC-P5_*` (DRAFT, Codex APPROVE 22/11, owner chưa duyệt D1–D12) | chưa có | chưa có |
+| P5 tenant guardrails | `.agent/specs/SPEC-P5_*` (owner duyệt 22/11) | `P5_PINS` | `evidence/p5/` |
 
 **Bản nháp SPEC P6–P9 đã có sẵn, đừng viết mới từ đầu.** Claude Fable 5.2 phác thảo ngày 16/11 theo yêu cầu
 của owner, nằm trên nhánh `claude/specs-p5-p9-draft-ecc762` (chưa merge):
