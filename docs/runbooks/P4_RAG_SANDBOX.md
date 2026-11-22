@@ -214,6 +214,7 @@ bash infra/p4-window/window.sh platform-config
 - `annotate`: 3 dòng `OK`, `status` báo `provider pod has AWS_ROLE_ARN yes`;
 - `db-init`: log `"bootstrap_secret_created": true`, `"vector_version": "0.8.2"` (cũng chứng minh pull image ghcr.io qua endpoint);
 - `probe platform`: `TLS on the connection ssl=True`, `pgvector 0.8.2`, `rag_bootstrap … super=False createrole=True`,
+  `rag_bootstrap database grants … create_grant_option=False` (từ DRF-57),
   `bootstrap identity cannot read the master secret … AccessDenied…`, `RESULT: PASS`;
 - `platform-config`: `OK … applied HH:MM:SSZ` (mốc 2 của H1).
 
@@ -420,6 +421,70 @@ Ngày hôm sau: chạy lại `inventory.sh`, owner đọc Bills, ghi vào eviden
 `docs/evidence/p4/P4-T4.1_L3_WINDOW_<ngày>.md`, theo mẫu DRF-37: request đã duyệt, cổng trước apply,
 dòng thời gian, mốc H1 smoke, output probe (đã sạch ARN/host), test âm, retry, cleanup, inventory,
 chi phí, phát hiện, giới hạn. `smoke.out` và log thô **không** vào Git.
+
+## L. Window xác nhận ngắn (DRF-57, sau review Codex)
+
+**Vì sao cần.** Sau window `P4-L3-20261121-01`, PR #55 sửa code app, RGD và IAM theo review Codex.
+Bản nghiệm thu vì thế khác bản đã chạy trên EKS. Window này kiểm đúng các thay đổi đó, và giữ lại
+dòng `sts` còn thiếu của DRF-56 C. Nó **không** chạy lại G, H, I, và không cần PR nào trong lúc chạy.
+
+| # | Kiểm gì | Bước | Phải thấy |
+|---|---|---|---|
+| V1 | C9 grant của bootstrap | E, `probe platform` | `rag_bootstrap database grants … connect_grant_option=True create=True create_grant_option=False` PASS |
+| V2 | C6 quyền Crossplane không wildcard | F, rồi chờ thêm 5 phút | 2 bucket `SYNCED True READY True`; không event `AccessDenied` (lệnh dưới bảng) |
+| V3 | C4 kiểm danh tính, image `850c77c2…` | F, `probe sandbox` ×2 | `/readyz` `ready: True`, probe 6/6 PASS. Log app không có `connected as` |
+| V4 | DRF-56 C: dòng `sts` owner tự gõ | F, micro-lab | output đủ từ `aws --version`, có `assumed-role/zero-drift-rag-tenant-a/…`; owner dán nguyên văn vào chat |
+| V5 | C6 xoá được, C1 kiểm lại sau Job | J bước 1 | `head-bucket` `Not Found` cho cả hai; `cleanup` không báo `reappeared` |
+| V6 | Teardown | J | `65 destroyed`, state 0, `inventory.sh` `RESULT: CLEAN` |
+
+Lệnh cho V2, chạy sau khi hai sandbox `ACTIVE` khoảng 5 phút (provider đã observe lại ít nhất một lần):
+
+```bash
+kubectl get bucket.s3.aws.m.upbound.io -A
+# A failed read must stop here, not look like "no AccessDenied" (PR #56 review).
+denied() { # what, kubectl args...
+  local what=$1 out; shift
+  if out="$(kubectl "$@" 2>&1)"; then
+    grep -iE 'denied|forbidden' <<<"$out" || echo "OK    no AccessDenied in $what"
+  else
+    echo "STOP  cannot read $what: $(head -1 <<<"$out")"
+  fi
+}
+denied "Bucket events" get events -A --field-selector involvedObject.kind=Bucket
+denied "Bucket conditions" get bucket.s3.aws.m.upbound.io -A \
+  -o jsonpath='{range .items[*]}{.metadata.name}{range .status.conditions[*]}{" "}{.message}{end}{"\n"}{end}'
+```
+
+**Phải thấy:** hai dòng `OK`. Có dòng `STOP` thì V2 chưa được tính: đọc lại cho tới khi được.
+
+Điều kiện dừng riêng (thêm vào B):
+
+| # | Tình huống | Làm gì |
+|---|---|---|
+| R8 | Bucket báo `AccessDenied` cho một action `s3:Get…` | Ghi tên action. **Không** thêm quyền trong window. Teardown, rồi sửa bằng PR có test |
+| R9 | App không Ready, log có `connected as … expected …` | Đây là C4 chặn đúng hoặc sai cấu hình. Ghi log, không sửa trong window, teardown |
+
+Window request (chép vào chat; owner điền chỗ trống):
+
+```
+WINDOW REQUEST — P4 L3 xác nhận
+RunId:             P4-L3-20261122-01
+Bắt đầu:           2026-11-22 HH:MM Asia/Saigon (= HH:MM UTC)
+Kết thúc cứng:     bắt đầu + 2,5 giờ
+Freeze-new-create: kết thúc cứng − 1 giờ
+expires_at (tag):  giờ kết thúc cứng, UTC ...Z
+Teardown owner:    HoangLV, có mặt suốt window
+Git revision:      <commit main lúc plan>; git diff rỗng trên infra/ gitops/ workloads/
+Plan:              65 to add; shape sha256 phải bằng 56963920ba954bd71979f158d02ff903e85d04e33250ec4dc10f5615bb7d17f9
+                   (shape chỉ gồm địa chỉ resource; PR #55 chỉ đổi nội dung policy)
+Phạm vi:           C, D, E, F, J của runbook này + V1–V6; bỏ G, H, I
+Ước tính:          ≈ 0,35 USD/giờ → tối đa ≈ 0,9 USD cho 2,5 giờ; dự kiến ≈ 0,4 USD (≈ 70 phút)
+Trần P4 (D10):     5 USD gross
+P4 đã tiêu:        ___ USD (Bills, owner đọc hôm nay); còn lại sau window: ___ USD (phải ≥ 0)
+Owner duyệt:       "Duyệt window P4-L3-20261122-01" (gõ trong chat)
+```
+
+Sáu điều kiện apply ở A vẫn áp dụng. Evidence: `docs/evidence/p4/P4-T4.2_L3_CONFIRM_20261122.md`.
 
 ## Tự thử (không cần AWS)
 

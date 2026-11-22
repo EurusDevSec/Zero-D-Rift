@@ -1,8 +1,8 @@
 ---
 project: Zero D-Rift
-status: P4_T4_2_CODEX_FIXES_PENDING_REREVIEW
+status: P4_T4_2_CONFIRM_WINDOW_PLANNED
 active_phase: P4
-active_task: P4-T4.2 (DRF-57) Codex REQUEST CHANGES fixed on branch; re-review next
+active_task: P4-T4.2 (DRF-57) fixes merged (PR #55); confirm window P4-L3-20261122-01 planned
 active_feature: RAGSandbox (SPEC-P4)
 active_spec: .agent/specs/SPEC-P4_RAG_SANDBOX.md
 current_learning: .agent/learning/CURRENT_STATUS.md
@@ -44,7 +44,7 @@ Follow [context governance](../references/context-governance.md).
 - DRF-45 done (PR #38, `39856e9`): db-init/bootstrap/cleanup; owner lab D1–D7
   PASS. Learning gaps in `P4-T2.1_L2_KIND_DB_20261119.md` (D2, D4, D5/D6).
 - DRF-50 (PR #39, #40; time-bound fix PR #43): image
-  `rag-sandbox@sha256:512e982a…` from `3d38719` (VERSION_MATRIX §8).
+  `rag-sandbox@sha256:850c77c2…` from `e0c8319` (22/11; window 21/11 ran `512e982a…`).
   DRF-46 (PR #41, `27058f9`): `shared-rds`, `rag-identity`; static only.
 - DRF-51 done (PR #42, `2db156a`, CI `static-gates` PASS): RGD `rag-sandbox`
   (bucket/SA/app/service wait for the bootstrap Job), tenants app, kro RBAC,
@@ -76,9 +76,9 @@ Follow [context governance](../references/context-governance.md).
 ## Next safe action
 
 DRF-57: audit `docs/evidence/p4/P4_ACCEPTANCE_AUDIT_20261121.md`. Codex REQUEST
-CHANGES (10 findings) fixed with negative tests on `hoang/drf-57-review-fixes`
-(§5.1). After merge: pin the new app image digest, then owner runs Codex re-review.
-C4/C6/C9 are not run on AWS yet.
+CHANGES (10 findings) fixed with negative tests, PR #55 merged. New image pinned.
+Owner chose a short confirm window (runbook §L, V1-V6) for C4/C6/C9 + sts; then
+Codex re-review.
 Next day: inventory again (tag index lag) and owner reads Bills (DRF-57 A).
 Open from DRF-56 C: owner's `sts get-caller-identity` output was lost; rerun in
 the next window. Re-ask the 4 explanation questions + orphan boot-0 Pod question.

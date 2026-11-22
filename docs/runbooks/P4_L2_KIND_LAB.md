@@ -315,7 +315,7 @@ Manifest:
 - **chỉ cho lab:** `labs/p4-kind/lab.yaml` (PostgreSQL, kho secret), `db-init.yaml`,
   `platform-config.yaml`, `cleanup.yaml`.
 
-Image app là image đã publish (`ghcr.io/.../rag-sandbox@sha256:512e982a…`), kéo ẩn danh. Không cần build.
+Image app là image đã publish (`ghcr.io/.../rag-sandbox@sha256:850c77c2…`), kéo ẩn danh. Không cần build.
 Mất khoảng 40 phút. **Trước mỗi bước, ghi dự đoán vào `Dự đoán:` rồi mới gõ.**
 
 ### G0. Chuẩn bị shell (Git Bash)

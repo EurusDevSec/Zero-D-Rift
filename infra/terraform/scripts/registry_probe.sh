@@ -37,6 +37,6 @@ probe xpkg.crossplane.io crossplane/crossplane sha256:1c66261d805a73cade46e2ac94
 probe xpkg.crossplane.io crossplane-contrib/provider-family-aws sha256:ea0d1ff932c78d5a6ef34d6ca1c83a5e6a304173b0735a05fee389f82db25f92
 probe xpkg.crossplane.io crossplane-contrib/provider-aws-s3 sha256:4e6277277e91672d4a8b444f98b22723b4ca984d2e5845042188f429807919bd
 # P4 (DRF-56): the RAGSandbox image (VERSION_MATRIX §8) and the aws-cli image of the owner micro-lab.
-probe ghcr.io eurusdevsec/zero-d-rift/rag-sandbox sha256:512e982a4f530a20d8918f02fcb865c7c3212d6a1894278251658685f2987a57
+probe ghcr.io eurusdevsec/zero-d-rift/rag-sandbox sha256:850c77c200a798b5706ce56c7878164d4887fcf3661bbec91b2d8564df735263
 probe public.ecr.aws aws-cli/aws-cli sha256:b0102d2269f87d8531d931c1a59e248101ace586886e6c077058d94c1c37b846
 echo PROBE_DONE
