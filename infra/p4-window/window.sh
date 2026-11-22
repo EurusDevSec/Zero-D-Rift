@@ -237,10 +237,13 @@ cmd_probe() {
 # State of request $1/$2: "exists", "gone" (the read itself succeeded in reaching the
 # server and it said NotFound) or "unknown: <first error line>" (Forbidden, timeout,
 # missing CRD...). Only "gone" may be treated as absent (Codex C1, re-review 22/11).
+# The NotFound must name this object: a stale discovery cache after the CRD is gone
+# also answers "(NotFound): the server could not find the requested resource" (PR #58).
+# The plural is matched loosely (kro derives it); $2 is already validated as [a-z0-9-].
 request_state() {
   local out
   if out="$(kubectl -n "$1" get ragsandbox "$2" -o name 2>&1)"; then echo exists
-  elif grep -q '(NotFound)' <<<"$out"; then echo gone
+  elif grep -qE "\(NotFound\): ragsandbox[a-z]*\.kro\.run \"$2\" not found" <<<"$out"; then echo gone
   else echo "unknown: $(head -1 <<<"$out")"; fi
 }
 
