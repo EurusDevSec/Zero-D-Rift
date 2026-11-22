@@ -3,6 +3,8 @@
 # drops a sandbox's schema, role and secret, so it may start only when the read of
 # the request succeeded and returned NotFound. A stub kubectl plays each answer;
 # the test fails if any case other than NotFound reaches "kubectl apply".
+# Cases "apinotfound" and "othername" (PR #58 review): a NotFound that does not
+# name this request (stale discovery, another object) is not "gone".
 # Case "reappear" (PR #55 review): NotFound before the Job, the request back after
 # it (Git merge and Argo sync meanwhile). Cleanup must then exit non-zero with the
 # recovery hint.
@@ -24,6 +26,8 @@ case "$*" in
       forbidden) echo 'Error from server (Forbidden): ragsandboxes.kro.run "retry" is forbidden' >&2; exit 1 ;;
       timeout)   echo 'Unable to connect to the server: dial tcp: i/o timeout' >&2; exit 1 ;;
       nocrd)     echo 'error: the server does not have a resource type "ragsandbox"' >&2; exit 1 ;;
+      apinotfound) echo 'Error from server (NotFound): the server could not find the requested resource' >&2; exit 1 ;;
+      othername) echo 'Error from server (NotFound): ragsandboxes.kro.run "other" not found' >&2; exit 1 ;;
       reappear)
         if grep -q '^apply' "$STUB_LOG"; then echo "ragsandbox.kro.run/retry"; exit 0; fi
         echo 'Error from server (NotFound): ragsandboxes.kro.run "retry" not found' >&2; exit 1 ;;
@@ -60,6 +64,8 @@ check exists no
 check forbidden no
 check timeout no
 check nocrd no
+check apinotfound no
+check othername no
 check notfound yes 0
 check reappear yes nonzero
 check after-forbidden yes nonzero 'cannot confirm request tenant-b/retry is still gone'

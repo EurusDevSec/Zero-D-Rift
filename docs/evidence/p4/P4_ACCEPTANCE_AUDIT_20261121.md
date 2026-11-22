@@ -6,6 +6,7 @@
 - Đã che: account ID, ARN, IP, endpoint RDS, tên bucket state.
 - Codex đã review bản nháp theo mục 4: REQUEST CHANGES (mục 5). Các sửa ở mục 5.1 đã merge (PR #55–#57).
   Codex review lại ngày 22/11: REQUEST CHANGES, 2 MEDIUM, 2 LOW (mục 5.2); xử lý ở mục 5.3.
+  Codex kiểm bản sửa ở `70ad8d8`: APPROVE, không finding mới (mục 5.4).
   Mục 6 (inventory trễ, Bills) điền ngày 22/11.
 
 ## 1. Quy tắc hoàn thành P4 (SPEC §8)
@@ -16,7 +17,7 @@
 | Teardown sạch | **Đạt** 21/11 và 22/11: mỗi lần `65 destroyed`, state 0, `inventory.sh` `RESULT: CLEAN` |
 | Inventory trễ sạch | **Đạt** 22/11 02:44Z: owner chạy với MFA, `RESULT: CLEAN`. Chỉ mục tag đã hết lệch (mục 6) |
 | Đã đọc billing | **Một phần**: owner đọc trang Credits ngày 22/11 (ước tính, dùng 0,55 USD cả tài khoản). Window xác nhận ước tính thêm khoảng 0,37 USD. Bills gross chưa đọc: đọc một lần cho cả hai window, khi số ước tính đã cập nhật (mục 6) |
-| Review độc lập ghi findings và giới hạn | **Đang làm**: Codex review lần 1 (1 HIGH, 6 MEDIUM, 3 LOW, mục 5); đã sửa cả 10 (mục 5.1). Review lại 22/11: 7 mục Đã sửa, C1, C5, C6 sửa một phần; 2 MEDIUM, 2 LOW mới (mục 5.2). Đã sửa 2 MEDIUM và 1 LOW kèm test âm; giữ `GetBucketLocation` làm giới hạn (mục 5.3). Còn chờ Codex kiểm lại bản sửa R1, R2 |
+| Review độc lập ghi findings và giới hạn | **Đạt**: Codex review lần 1 (1 HIGH, 6 MEDIUM, 3 LOW, mục 5); đã sửa cả 10 (mục 5.1). Review lại 22/11: C1, C5, C6 sửa một phần; 2 MEDIUM, 2 LOW mới (mục 5.2), xử lý ở mục 5.3. Codex kiểm bản sửa `70ad8d8`: **APPROVE**, không finding mới; đồng ý giữ `GetBucketLocation` làm giới hạn LOW (mục 5.4). Sau đó `fec7847` siết thêm `cleanup` theo review Copilot, Codex chưa kiểm (mục 5.4) |
 | Owner `PRACTICED` + `EXPLAINED`: IRSA workload, luồng secret, tầng credential PostgreSQL | **Đạt có giới hạn**: IRSA đạt đầy đủ; hai mục kia có giới hạn nguồn gốc (`P4-T4.2_TEACHBACK_20261121.md`) |
 
 ## 2. Kịch bản §4 → evidence
@@ -220,6 +221,28 @@ Owner chạy Codex theo câu hỏi Claude soạn (phạm vi `5e5067f..50ddefd`, 
 | R5 | (lộ thông tin) | Câu "đã che ARN" rộng hơn dữ liệu: V4 giữ ARN S3 của bucket sandbox | Evidence ghi rõ: che ARN role đầy đủ; giữ ARN S3 `zero-drift-rag-tenant-b-docs-qa` vì tên dẫn xuất từ tenant/name theo RGD và không có account ID | — |
 
 R1 và R2 chỉ đổi script và CI, không đổi gì đã chạy trên AWS; bản sửa R1 chỉ được kiểm bằng stub.
+
+### 5.4. Codex kiểm bản sửa R1–R5 (22/11)
+
+Owner chạy Codex trên `50ddefd..70ad8d8` (PR #58), rồi dán kết quả vào chat ngày 22/11/2026.
+Claude ghi nguyên văn; chỉ đổi link tuyệt đối trên máy thành đường dẫn trong repo `path:dòng`.
+
+> **APPROVE** cho bản sửa DRF-57. Hai finding MEDIUM **R1 và R2 đã được sửa đúng**. Mình đã chạy đối chứng: cả bốn ca test mới đều đỏ trên `50ddefd` và xanh trên `70ad8d8`. Không có finding mới trong phạm vi review.
+>
+> **Reviewer:** Codex · **Revision:** `50ddefd..70ad8d86e2dc11cd1a3a897149b75f6c8a991ce6` · 7 file. Bản sửa đã được commit trên nhánh `hoang/drf-57-rereview`.
+>
+> | Mục | Kết quả |
+> |---|---|
+> | **R1 — cleanup sau Job** | Trước và sau Job dùng cùng quy tắc: chỉ `NotFound` xác nhận request đã mất. Khi lần đọc sau Job gặp `Forbidden` hoặc timeout, bản cũ trả `0`, bản mới trả `1`. Evidence V5 cũng đã ghi đúng rằng bản sửa mới chỉ được kiểm bằng stub. `infra/p4-window/window.sh:271` · `docs/evidence/p4/P4-T4.2_L3_CONFIRM_20261122.md:110` |
+> | **R2 — GitOps** | Bản cũ cho qua cả `.jsonnet` và `platform-config` nằm trong Kubernetes `List`. Bản mới chặn cả hai, đúng lý do mà từng test yêu cầu. `gitops/check.sh:20` · `gitops/check.sh:55` |
+> | **R3 — IAM** | Mình đồng ý **giữ `s3:GetBucketLocation` trong P4** như một giới hạn LOW. Đây là quyền đọc region trên prefix bucket sandbox; policy hiện tại đúng bản đã chạy V2/V5. R3 không chặn bản sửa này. `docs/evidence/p4/P4_ACCEPTANCE_AUDIT_20261121.md:218` |
+> | **R4–R5 — evidence** | Đã ghi đúng `0,55 USD` là Credits ước tính cả tài khoản, gross P4 chưa xác minh. Phần che thông tin cũng ghi rõ ARN role đã được che và ARN S3 của bucket sandbox được giữ lại. `docs/evidence/p4/P4-T4.2_L3_CONFIRM_20261122.md:25` · `docs/evidence/p4/P4-T4.2_L3_CONFIRM_20261122.md:8` |
+>
+> **Kiểm tra độc lập:** `bash infra/p4-window/tests/cleanup_guard.sh` **8/8**, `bash gitops/tests/check_guards.sh` **35/35**, `bash gitops/check.sh` **PASS**, `git diff --check 50ddefd..70ad8d8` **PASS**.
+>
+> Review chỉ đọc, dựa trên diff, test cục bộ và evidence đã lưu. Mình không chạy AWS, sửa file hay commit.
+
+Sau APPROVE, Copilot review PR #58 báo: `NotFound` không nêu đúng object (ví dụ discovery cũ trả "the server could not find the requested resource") vẫn bị coi là request đã mất. Commit `fec7847` sửa: `request_state` chỉ trả `gone` khi lỗi nêu `ragsandbox…kro.run` và đúng tên request. `cleanup_guard.sh` thêm 2 ca `apinotfound`, `othername` (13 dòng kiểm); cả hai FAIL trên `70ad8d8`. **Codex chưa kiểm `fec7847`.**
 
 ## 6. Inventory trễ và billing (22/11)
 
