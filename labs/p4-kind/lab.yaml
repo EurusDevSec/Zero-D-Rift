@@ -92,7 +92,7 @@ spec:
     # Writes the stand-in for the RDS-managed master secret (labs/p4-kind-db/seed_master.py,
     # mounted from a ConfigMap) with the published image: no lab image to build.
     - name: seed-master
-      image: ghcr.io/eurusdevsec/zero-d-rift/rag-sandbox@sha256:512e982a4f530a20d8918f02fcb865c7c3212d6a1894278251658685f2987a57
+      image: ghcr.io/eurusdevsec/zero-d-rift/rag-sandbox@sha256:850c77c200a798b5706ce56c7878164d4887fcf3661bbec91b2d8564df735263
       command: ["python", "/seed/seed_master.py"]
       env:
         - {name: SECRET_DIR, value: /secrets}

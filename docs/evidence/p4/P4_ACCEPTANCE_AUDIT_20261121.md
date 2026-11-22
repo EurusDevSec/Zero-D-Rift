@@ -147,7 +147,7 @@ Owner chạy Codex ("codex gpt 6.2 astra") theo mục 4, rồi dán kết quả 
 
 Ngoài phạm vi C6: role P3 `zero-drift-p3-crossplane-s3` vẫn dùng `s3:GetBucket*` (`modules/p3-provider-irsa`). P3 đã nghiệm thu và flag P3 đang tắt. Nếu bật lại P3, sửa theo cùng cách.
 
-Chưa kiểm trên AWS: C4 (biến môi trường mới của RGD), C6 (danh sách action mới của Crossplane) và C9 (grant mới). Cả ba cần một window sau xác nhận. C3, C4 và C9 nằm trong code app: chúng chỉ có hiệu lực khi RGD pin image build từ commit có bản sửa. Cho tới PR pin digest, image `512e982a…` bỏ qua `SANDBOX_TENANT`/`SANDBOX_NAME`. C1, C2, C5, C8 chỉ đổi script, test hoặc tài liệu.
+Chưa kiểm trên AWS: C4 (biến môi trường mới của RGD), C6 (danh sách action mới của Crossplane) và C9 (grant mới). Cả ba cần một window sau xác nhận. C3, C4 và C9 nằm trong code app: chúng chỉ có hiệu lực khi RGD pin image build từ commit có bản sửa. Image `512e982a…` của window 21/11 bỏ qua `SANDBOX_TENANT`/`SANDBOX_NAME`. Image `850c77c2…` (build từ `e0c8319`, đã pin ngày 22/11) có đủ ba bản sửa và `smoke.sh` PASS. Window xác nhận `P4-L3-20261122-01` sẽ kiểm chúng trên EKS. C1, C2, C5, C8 chỉ đổi script, test hoặc tài liệu.
 
 ## 6. Inventory trễ và billing (22/11)
 

@@ -92,7 +92,7 @@ spec:
                 seccompProfile: {type: RuntimeDefault}
               containers:
                 - name: bootstrap
-                  image: ghcr.io/eurusdevsec/zero-d-rift/rag-sandbox@sha256:512e982a4f530a20d8918f02fcb865c7c3212d6a1894278251658685f2987a57
+                  image: ghcr.io/eurusdevsec/zero-d-rift/rag-sandbox@sha256:850c77c200a798b5706ce56c7878164d4887fcf3661bbec91b2d8564df735263
                   args: ["bootstrap"]
                   env:
                     - {name: SANDBOX_TENANT, value: "${schema.metadata.namespace}"}
@@ -187,7 +187,7 @@ spec:
                 seccompProfile: {type: RuntimeDefault}
               containers:
                 - name: app
-                  image: ghcr.io/eurusdevsec/zero-d-rift/rag-sandbox@sha256:512e982a4f530a20d8918f02fcb865c7c3212d6a1894278251658685f2987a57
+                  image: ghcr.io/eurusdevsec/zero-d-rift/rag-sandbox@sha256:850c77c200a798b5706ce56c7878164d4887fcf3661bbec91b2d8564df735263
                   args: ["serve"]
                   ports:
                     - {name: http, containerPort: 8080}

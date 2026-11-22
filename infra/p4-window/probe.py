@@ -150,6 +150,19 @@ def platform():
             "CREATEROLE only, not superuser",
             f"super={sup} createrole={crole} createdb={cdb} bypassrls={bypass} replication={repl}",
         )
+        # Codex C9: bootstrap may pass on CONNECT to sandbox roles, but only use CREATE.
+        cur.execute(
+            "select has_database_privilege(current_user, current_database(), 'CONNECT WITH GRANT OPTION'),"
+            " has_database_privilege(current_user, current_database(), 'CREATE'),"
+            " has_database_privilege(current_user, current_database(), 'CREATE WITH GRANT OPTION')"
+        )
+        conn_go, create, create_go = cur.fetchone()
+        report(
+            (conn_go, create, create_go) == (True, True, False),
+            "rag_bootstrap database grants",
+            "CONNECT with grant option, CREATE without",
+            f"connect_grant_option={conn_go} create={create} create_grant_option={create_go}",
+        )
     master = ENV.get("MASTER_SECRET_ID")
     if master:
         expect_secret_denied("bootstrap identity cannot read the master secret", master)
