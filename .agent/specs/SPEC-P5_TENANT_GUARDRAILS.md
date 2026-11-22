@@ -236,15 +236,17 @@ sub-task, lettered parts are 15–60 minute checklist groups.
 
 **B. Pins and sources (1.5 h)**
 
-- [ ] Kyverno: choose the release (§11 row S1), confirm Kubernetes 1.35 in its
-      support table, record chart version and every image digest.
-- [ ] Policy API: decide between `ClusterPolicy` (`kyverno.io`) and the CEL
+- [x] Kyverno: choose the release (§11 row S1), confirm Kubernetes 1.35 in its
+      support table, record chart version and every image digest (22/11:
+      `v1.20.0`, chart `3.10.0`, evidence `P5-T1_PINS_20261122.md`).
+- [x] Policy API: decide between `ClusterPolicy` (`kyverno.io`) and the CEL
       policy kinds (`policies.kyverno.io`) for the pinned release; read the CRD,
-      do not copy an older example.
-- [ ] VPC CNI: confirm the pinned add-on version meets the NetworkPolicy minimum
+      do not copy an older example (22/11: `ValidatingPolicy` `v1`).
+- [x] VPC CNI: confirm the pinned add-on version meets the NetworkPolicy minimum
       and read the configuration schema with
-      `aws eks describe-addon-configuration` (read-only, owner's session).
-- [ ] VERSION_MATRIX gets a "P5 pins" section. THREAT_MODEL §11 rows "VPC CNI
+      `aws eks describe-addon-configuration` (read-only, owner's session) (22/11:
+      `.10` kept, schema has `enableNetworkPolicy` and the enforcing mode).
+- [x] VERSION_MATRIX gets a "P5 pins" section. THREAT_MODEL §11 rows "VPC CNI
       version, NetworkPolicy enablement and strict mode" and "Kyverno failure
       policy and exception process" point at the decisions here.
 
@@ -549,10 +551,10 @@ Created after the owner approves the SPEC, parents just before their sub-tasks
 
 | # | Fact | Source | Checked | Status |
 |---|---|---|---|---|
-| S1 | Kyverno latest release `v1.20.0`, chart `3.10.0`; default install has four controllers | [Kyverno releases](https://github.com/kyverno/kyverno/releases), [installation](https://kyverno.io/docs/installation/) | 2026-11-16 | `SOURCE_VERIFIED`; Kubernetes 1.35 support for 1.20 **not** confirmed — recheck |
-| S2 | Kyverno `v1.19.1` supports Kubernetes 1.33–1.35 | VERSION_MATRIX §2 | 2026-09-25 | `DOC_VERIFIED`; recheck, a newer patch may exist |
+| S1 | Kyverno latest release `v1.20.0`, chart `3.10.0`; default install has four controllers | [Kyverno releases](https://github.com/kyverno/kyverno/releases), [installation](https://kyverno.io/docs/installation/) | 2026-11-22 | `SOURCE_VERIFIED`; **pinned** (VERSION_MATRIX §9): chart `3.10.0` = app `v1.20.0`; Kubernetes 1.34–1.37 supported (`docs/installation/releases.md`). `ClusterPolicy` deprecated, P5 uses `ValidatingPolicy` |
+| S2 | Kyverno `v1.19.1` supports Kubernetes 1.33–1.35 | VERSION_MATRIX §2 | 2026-11-22 | **Superseded**: `v1.19.2` exists, but only `v1.20` is a supported release |
 | S3 | VPC CNI NetworkPolicy: add-on value `enableNetworkPolicy: "true"`; minimum version 1.21 for standard and admin policies; `NETWORK_POLICY_ENFORCING_MODE=strict` gives default-deny at Pod start, standard mode starts default-allow | [EKS: restrict Pod traffic with network policies](https://docs.aws.amazon.com/eks/latest/userguide/cni-network-policy-configure.html) | 2026-11-16 | `DOC_VERIFIED`; runtime `UNVERIFIED` |
-| S4 | Cluster add-on pin `vpc-cni v1.22.4-eksbuild.10`, no configuration values | `infra/terraform/variables.tf`, `modules/cluster/main.tf` | 2026-11-22 (Git) | repository fact, unchanged since 16/11; recheck the default for 1.35 before the window |
+| S4 | Cluster add-on pin `vpc-cni v1.22.4-eksbuild.10`, no configuration values | `infra/terraform/variables.tf`, `modules/cluster/main.tf` | 2026-11-22 (Git, account) | `ACCOUNT_VERIFIED`: `.10` still offered for 1.35, default now `.14`; pin kept (evidence `P5-T1_PINS_20261122.md` §4) |
 | S5 | Standard On-Demand vCPU quota 5; `m6i.large` 0.096 USD/h; EKS 0.10 USD/h; public IPv4 0.005 USD/h; `db.t4g.micro` 0.016 USD/h | COST_PLAN §5.2, §7.3 | 2026-09-28 | `PRICE_API_VERIFIED` / `ACCOUNT_VERIFIED`; recheck before the window |
 | S6 | Pod Security Standards "restricted" profile | [Kubernetes Pod Security Standards](https://kubernetes.io/docs/concepts/security/pod-security-standards/) | THREAT_MODEL §13, 2026-09-28 | recheck against Kubernetes 1.35 |
 | S7 | `m6i.large` 29 Pods per node | author's recollection of the AWS `eni-max-pods` list | not looked up | `UNVERIFIED`; read the list or `kubectl describe node` |

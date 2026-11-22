@@ -287,12 +287,14 @@ resource ARN chỉ được pin khi resource names, Region và provider APIs đ�
   approved endpoints/namespace flows tối thiểu.
 - EKS VPC CNI NetworkPolicy feature phải được bật và runtime-tested; tạo YAML
   NetworkPolicy khi CNI không enforce không tạo isolation.
-- Pod Security `restricted` cho tenant workload; exception chỉ qua review và
-  không mặc định áp dụng cho platform-system namespaces.
-- Kyverno `Enforce` cho guardrail đã test: required tenant/owner labels, resource
-  requests/limits, cấm privileged/host namespace/hostPath và mutable image policy
-  theo implementation spec. Audit trước khi Enforce nếu policy có nguy cơ chặn
-  controller cần thiết.
+- Pod Security `restricted` cho tenant workload: chặn privileged, host namespace,
+  hostPath, chạy root và capability thừa; exception chỉ qua review và không mặc
+  định áp dụng cho platform-system namespaces.
+- Kyverno `Enforce` cho guardrail đã test, không lặp lại phần của Pod Security
+  (SPEC-P5 D6, owner duyệt 22/11): resource requests và memory limit bắt buộc,
+  image theo `@sha256` từ registry allowlist, nhãn tenant khớp tenant của
+  namespace. Viết bằng `ValidatingPolicy` (Kyverno 1.20, VERSION_MATRIX §9).
+  Audit trước khi Enforce nếu policy có nguy cơ chặn controller cần thiết.
 - Tenant developer không được tạo trực tiếp Provider, ProviderConfig,
   DeploymentRuntimeConfig, ClusterRole/Binding, Namespace hoặc cluster-scoped policy.
 
@@ -402,17 +404,17 @@ một security product mới.
 
 | Item | Status | Required decision/evidence |
 | --- | --- | --- |
-| Git branch protection and CI token permissions | `UNVERIFIED` | Inspect actual repository settings and workflow permissions before GitOps implementation. |
+| Git branch protection and CI token permissions | `OPEN` — SPEC-P5 D12 deferred | `main` has no branch protection (22/11), so a red CI does not block a merge (T01). The owner deferred the ruleset until the remaining phases are done. |
 | Human AWS federation and EKS access-entry policy | `UNVERIFIED` | Choose existing account sign-in mechanism and define daily/break-glass roles in P2. |
 | EKS API endpoint public/private access | `UNVERIFIED` | Decide with network/cost plan; document allowed CIDRs/connectivity. |
 | Exact IRSA IAM actions and resource ARNs | `UNVERIFIED` | Generate from selected resources/provider API calls; run positive and negative L3 tests. |
 | IMDS restriction and node launch-template settings | `UNVERIFIED` | Verify AL2023/Karpenter node behavior on EKS. |
-| VPC CNI version, NetworkPolicy enablement and strict mode | `UNVERIFIED` | Pin add-on/config and run EKS connectivity matrix. |
+| VPC CNI version, NetworkPolicy enablement and strict mode | `DECIDED` — SPEC-P5 D5 | Standard mode, add-on `v1.22.4-eksbuild.10` (VERSION_MATRIX §9; schema read pending). Runtime proof in the P5 EKS window (P5-T4.2). |
 | Secret integration from Secrets Manager | `ACCEPTED` — ADR-0008 | Direct SDK through IRSA chosen over CSI and external sync (SPEC-P4 D5, owner approved 2026-11-14). Runtime proof and cross-tenant negatives in P4-T4.1. |
 | Kubernetes secret encryption/KMS configuration | `UNVERIFIED` | Decide after EKS/bootstrap and cost review. |
 | Crossplane provider exact allowlist and lifecycle policy | `UNVERIFIED` | Complete L2 pairing, ownership and deletion/management-policy review. |
 | Karpenter controller/node-role IAM boundary | `UNVERIFIED` | Pin version-specific permissions and bounded `iam:PassRole` during P6. |
-| Kyverno failure policy and exception process | `UNVERIFIED` | Test required policies in Audit then Enforce; define who may approve exceptions. |
+| Kyverno failure policy and exception process | `DECIDED` — SPEC-P5 D8, D9 | Fail closed for tenant namespaces only; no PolicyException in P5, a workload is changed or the rule is changed by pull request. Audit then Enforce tested in P5-T2.2 (kind) and P5-T4.2 (EKS). |
 | RDS database/schema privilege statements | `UNVERIFIED` | Three tiers fixed in ADR-0008 (master → `rag_bootstrap` → sandbox role). Statements and SQL negatives in P4-T2.1 (kind) and P4-T4.1 (EKS). |
 | Evidence storage path and run-manifest schema | `APPROVED_CONTRACT` | Task 6 contract v0.1.0 defines the planned immutable raw-data layout, manifest fields and redacted publication boundary; later harness/runtime enforcement remains unverified. |
 
