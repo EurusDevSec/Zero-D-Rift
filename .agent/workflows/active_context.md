@@ -1,8 +1,8 @@
 ---
 project: Zero D-Rift
-status: P5_SPEC_CODEX_APPROVED_OWNER_DECISIONS_OPEN
+status: P5_SPEC_OWNER_APPROVED
 active_phase: P5 (P4 closing items open)
-active_task: SPEC-P5 owner decisions D1–D12, then Linear P5 issues (DRF-18 superseded)
+active_task: P5-T1 B (DRF-64) pins and sources, 23/11
 active_feature: Tenant guardrails (SPEC-P5)
 active_spec: .agent/specs/SPEC-P5_TENANT_GUARDRAILS.md
 current_learning: .agent/learning/CURRENT_STATUS.md
@@ -33,9 +33,13 @@ Follow [context governance](../references/context-governance.md).
 - **SPEC-P5** merged (PR #61, #62, `183a553`): Fable 5.2 draft of 16/11 kept as
   first commit, rechecked 22/11 against P4 (A8 false → same-namespace ingress
   and egress on 8080; A6 unmeasured). Codex review 1 REQUEST CHANGES fixed;
-  review 2 APPROVE at `26d3481` (SPEC §9.3). Status still DRAFT.
+  review 2 APPROVE at `26d3481` (SPEC §9.3). Owner 22/11: D1–D10 as proposed,
+  D11 rebaseline (P5 on 23/11, overflow moves a day, never cut), D12 deferred.
+  Status `OWNER_APPROVED_20261122`.
 - [Linear routing](../docs/LINEAR_DELIVERY.md): P4 = 10 issues, DRF-40,
-  DRF-44 → 45/46, DRF-49 → 50/51, DRF-55 → 56/57. P5 = DRF-18 outline only.
+  DRF-44 → 45/46, DRF-49 → 50/51, DRF-55 → 56/57. P5 = 9 issues created 22/11:
+  DRF-64 (T1), DRF-65 → 66/67, DRF-68 (T3), DRF-69 → 70/71/72, due 23/11;
+  DRF-18 cancelled as superseded.
 
 ## Drafts and local records (read before writing anything new)
 
@@ -44,8 +48,8 @@ Follow [context governance](../references/context-governance.md).
   that draft and recheck it against `main`; never write a new SPEC from
   scratch. SPEC-P6 predates ADR-0009 and must follow it. Index:
   `docs/README.md` §3.
-- **Owner side-chat records** (21/11, uncommitted, owner decides whether to
-  push): `.agent/references/AI_INFRA_COST.md` (cost-motivation sources with a
+- **Owner side-chat records** (21/11, committed in PR #63):
+  `.agent/references/AI_INFRA_COST.md` (cost-motivation sources with a
   reliability column), `docs/learning/` (visual explorer), and the repo-map
   rewrite of `docs/README.md`. They record real owner discussions, not agent
   invention. Do not delete or overwrite them; cite a claim only at the
@@ -53,9 +57,9 @@ Follow [context governance](../references/context-governance.md).
 
 ## Open decisions and blockers
 
-1. SPEC-P5 D1–D12 are the owner's (§9.1). D11 schedule rebaseline: P5–P11 do
-   not fit 02/12; ver3 §12.1 forbids cutting trials, acceptance, learning gate
-   or teardown. D12 branch protection is a GitHub setting the owner changes.
+1. Owner rebaselines P6–P11 before the P6 gate (D11); ver3 §12.1 forbids
+   cutting trials, acceptance, learning gate or teardown. D12 (branch
+   protection) deferred by the owner, so T01 stays an open limit.
 2. P4 closing items: delayed inventory of the 22/11 window (23/11); owner reads
    Bills gross for both windows; record both in audit §1/§6 by PR; Linear
    DRF-55/56/57 Done.
@@ -67,9 +71,9 @@ Follow [context governance](../references/context-governance.md).
 
 ## Next safe action
 
-Owner decides SPEC-P5 D1–D12; Claude sets status APPROVED by PR. Then, with
-owner approval, create the nine P5 issues of SPEC §9.4 and cancel DRF-18 as
-superseded. Start P5-T1 only after that. P4 closing items run in parallel.
+P5-T1 B (DRF-64): pin Kyverno and its policy API, confirm VPC CNI version and
+schema (read-only AWS in the owner's MFA session), VERSION_MATRIX "P5 pins".
+Then P5-T2/T3 code on kind. P4 closing items run in parallel on 23/11.
 
 ## Context expansion
 
