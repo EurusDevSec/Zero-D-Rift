@@ -11,10 +11,10 @@
 
 | Điều kiện | Trạng thái |
 |---|---|
-| Mọi kịch bản §4 có evidence L3 trên EKS | **Gần đủ**: 7/7 kịch bản có evidence L3. Còn mở: (a) dòng `sts get-caller-identity` do owner tự gõ trong micro-lab (DRF-56 C) không được giữ (mục 3, L1); (b) kịch bản 6 chỉ đạt một phần: nguyên nhân lỗi retry được gỡ bằng `kubectl`, không qua Git (C7) |
-| Teardown sạch | **Đạt** 21/11: `65 destroyed`, state 0, `inventory.sh` `RESULT: CLEAN` (window evidence, phần Teardown) |
-| Inventory trễ sạch | **Chưa**: ngày 22/11, owner chạy với MFA (mục 6) |
-| Đã đọc billing | **Chưa**: ngày 22/11, owner đọc Bills (mục 6). Ước tính của window khoảng 0,50 USD |
+| Mọi kịch bản §4 có evidence L3 trên EKS | **Đạt có giới hạn**: 7/7 kịch bản có evidence L3. Dòng `sts` do owner tự gõ (DRF-56 C) đã có ở window xác nhận 22/11 (`P4-T4.2_L3_CONFIRM_20261122.md`, V4). Còn một giới hạn: kịch bản 6 chỉ đạt một phần, vì nguyên nhân lỗi retry được gỡ bằng `kubectl`, không qua Git (C7) |
+| Teardown sạch | **Đạt** 21/11 và 22/11: mỗi lần `65 destroyed`, state 0, `inventory.sh` `RESULT: CLEAN` |
+| Inventory trễ sạch | **Đạt** 22/11 02:44Z: owner chạy với MFA, `RESULT: CLEAN`. Chỉ mục tag đã hết lệch (mục 6) |
+| Đã đọc billing | **Một phần**: owner đọc trang Credits ngày 22/11 (ước tính, dùng 0,55 USD cả tài khoản). Window xác nhận ước tính thêm khoảng 0,37 USD. Bills gross chưa đọc: đọc một lần cho cả hai window, khi số ước tính đã cập nhật (mục 6) |
 | Review độc lập ghi findings và giới hạn | **Đang làm**: Codex đã review (REQUEST CHANGES: 1 HIGH, 6 MEDIUM, 3 LOW, mục 5). Đã sửa cả 10, kèm test âm (mục 5.1). Còn chờ Codex kiểm lại |
 | Owner `PRACTICED` + `EXPLAINED`: IRSA workload, luồng secret, tầng credential PostgreSQL | **Đạt có giới hạn**: IRSA đạt đầy đủ; hai mục kia có giới hạn nguồn gốc (`P4-T4.2_TEACHBACK_20261121.md`) |
 
@@ -58,7 +58,7 @@ Từ window (chi tiết ở W, mục "Phát hiện"):
 - **F5:** lệnh micro-lab trong runbook làm lộ account ID ở câu lỗi, và `-i` làm mất các dòng đầu.
 
 Giới hạn:
-- **L1.** Dòng `sts get-caller-identity` do owner tự gõ chưa được giữ. Role chỉ thấy gián tiếp trong câu lỗi S3. Owner quyết định: chạy lại ở một window ngắn, hoặc hoãn kèm lý do.
+- **L1.** Window 21/11 không giữ được dòng `sts get-caller-identity` do owner tự gõ. Owner chọn window ngắn: dòng đó đã có ở `P4-T4.2_L3_CONFIRM_20261122.md` V4 (`assumed-role/zero-drift-rag-tenant-a/…`). **Đã đóng.**
 - **L2.** H1 chỉ là **smoke** (một lần, ranh giới âm 12); trial chính thức ở P9.
 - **L3.** "Không tới được từ ngoài" chỉ kiểm bằng cấu hình (ranh giới âm 6).
 - **L4.** Ca "retry không đổi mật khẩu đang có" chỉ có ở L2 kind.
@@ -147,8 +147,33 @@ Owner chạy Codex ("codex gpt 6.2 astra") theo mục 4, rồi dán kết quả 
 
 Ngoài phạm vi C6: role P3 `zero-drift-p3-crossplane-s3` vẫn dùng `s3:GetBucket*` (`modules/p3-provider-irsa`). P3 đã nghiệm thu và flag P3 đang tắt. Nếu bật lại P3, sửa theo cùng cách.
 
-Chưa kiểm trên AWS: C4 (biến môi trường mới của RGD), C6 (danh sách action mới của Crossplane) và C9 (grant mới). Cả ba cần một window sau xác nhận. C3, C4 và C9 nằm trong code app: chúng chỉ có hiệu lực khi RGD pin image build từ commit có bản sửa. Image `512e982a…` của window 21/11 bỏ qua `SANDBOX_TENANT`/`SANDBOX_NAME`. Image `850c77c2…` (build từ `e0c8319`, đã pin ngày 22/11) có đủ ba bản sửa và `smoke.sh` PASS. Window xác nhận `P4-L3-20261122-01` sẽ kiểm chúng trên EKS. C1, C2, C5, C8 chỉ đổi script, test hoặc tài liệu.
+Đã kiểm trên AWS ở window xác nhận `P4-L3-20261122-01` (`P4-T4.2_L3_CONFIRM_20261122.md`):
+- C9: V1 `create_grant_option=False` PASS;
+- C6: V2 bucket `SYNCED/READY`, không `AccessDenied` sau 16 phút; V5 xoá được;
+- C4: V3 app image mới Ready, probe 6/6 ×2, đường đúng. Ca từ chối chỉ có ở L2;
+- C1: V5 cleanup kiểm lại sau Job, không báo `reappeared`;
+- C3: chỉ ở L2.
+
+Ghi chú lịch sử, trước window xác nhận: C3, C4 và C9 nằm trong code app: chúng chỉ có hiệu lực khi RGD pin image build từ commit có bản sửa. Image `512e982a…` của window 21/11 bỏ qua `SANDBOX_TENANT`/`SANDBOX_NAME`. Image `850c77c2…` (build từ `e0c8319`, đã pin ngày 22/11) có đủ ba bản sửa và `smoke.sh` PASS. Window xác nhận `P4-L3-20261122-01` sẽ kiểm chúng trên EKS. C1, C2, C5, C8 chỉ đổi script, test hoặc tài liệu.
 
 ## 6. Inventory trễ và billing (22/11)
 
-Chưa có.
+Owner chạy trên máy mình, với MFA, profile `zdr-tf`, rồi dán output vào chat. Claude ghi lại, đã che account ID.
+
+**Danh tính:** `arn:aws:sts::<ACCOUNT>:assumed-role/zero-drift-bootstrap/hoang-bootstrap`.
+
+**Inventory** `2026-11-22T02:44:03Z`, `us-east-1`: `RESULT: CLEAN (only the retain allowlist remains)`.
+- Mọi bộ đếm đều 0, gồm `eks_clusters`, `rds_instances`, `rds_snapshots_*`, `rds_automated_backups`, `p4_secrets_incl_pending`, `rds_managed_secrets_incl_pending`, `p4_buckets`, `p4_iam_roles`, `vpc_endpoints_live`, `sg_non_default`, `enis`.
+- Chỉ còn `s3_buckets=1`, là bucket state (allowlist).
+- Chỉ mục tag `Project=Zero-D-Rift` giờ chỉ còn `1 s3:bucket`. Lúc 09:39Z ngày 21/11, nó còn liệt kê SG, rule SG, subnet và endpoint, dù API trực tiếp đếm 0. Độ lệch đó đã hết, đúng như giả thuyết chỉ mục cập nhật chậm.
+
+**Chi phí** (trang Credits, owner đọc 22/11; số ước tính, cập nhật khoảng 24 giờ một lần):
+
+| Mốc | Credit đã dùng (ước tính) | Còn lại |
+|---|---|---|
+| 21/11, trước window | 0,29 USD | 199,71 USD |
+| 22/11, sau window | 0,55 USD | 199,45 USD |
+
+- Chênh lệch **≈ 0,26 USD**. Đó là ước tính cho window 21/11, thấp hơn ước tính D10 là 0,50 USD. Lúc đọc, window mới kết thúc khoảng 17 giờ, nên số này có thể chưa đủ.
+- Đây là credit, không phải Bills gross. Để tính trần thì lấy số thận trọng: coi cả 0,55 USD là của P4, nên P4 còn **≥ 4,45 USD** dưới trần 5 USD.
+- Bills gross: owner đọc một lần sau window xác nhận `P4-L3-20261122-01`, cho cả hai window.

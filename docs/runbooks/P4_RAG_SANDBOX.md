@@ -480,7 +480,8 @@ Plan:              65 to add; shape sha256 phải bằng 56963920ba954bd71979f15
 Phạm vi:           C, D, E, F, J của runbook này + V1–V6; bỏ G, H, I
 Ước tính:          ≈ 0,35 USD/giờ → tối đa ≈ 0,9 USD cho 2,5 giờ; dự kiến ≈ 0,4 USD (≈ 70 phút)
 Trần P4 (D10):     5 USD gross
-P4 đã tiêu:        ___ USD (Bills, owner đọc hôm nay); còn lại sau window: ___ USD (phải ≥ 0)
+P4 đã tiêu:        ≤ 0,55 USD (Credits 22/11, thận trọng: tính cả tài khoản vào P4); Bills gross đọc sau window này
+                   còn lại sau window: ≥ 5 − 0,55 − 0,9 = 3,55 USD
 Owner duyệt:       "Duyệt window P4-L3-20261122-01" (gõ trong chat)
 ```
 
