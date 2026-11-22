@@ -2,7 +2,7 @@
 project: Zero D-Rift
 status: P5_SPEC_OWNER_APPROVED
 active_phase: P5 (P4 closing items open)
-active_task: Linear P5 issues (SPEC-P5 §9.4, DRF-18 superseded), then P5-T1 on 23/11
+active_task: P5-T1 B (DRF-64) pins and sources, 23/11
 active_feature: Tenant guardrails (SPEC-P5)
 active_spec: .agent/specs/SPEC-P5_TENANT_GUARDRAILS.md
 current_learning: .agent/learning/CURRENT_STATUS.md
@@ -37,7 +37,9 @@ Follow [context governance](../references/context-governance.md).
   D11 rebaseline (P5 on 23/11, overflow moves a day, never cut), D12 deferred.
   Status `OWNER_APPROVED_20261122`.
 - [Linear routing](../docs/LINEAR_DELIVERY.md): P4 = 10 issues, DRF-40,
-  DRF-44 → 45/46, DRF-49 → 50/51, DRF-55 → 56/57. P5 = DRF-18 outline only.
+  DRF-44 → 45/46, DRF-49 → 50/51, DRF-55 → 56/57. P5 = 9 issues created 22/11:
+  DRF-64 (T1), DRF-65 → 66/67, DRF-68 (T3), DRF-69 → 70/71/72, due 23/11;
+  DRF-18 cancelled as superseded.
 
 ## Drafts and local records (read before writing anything new)
 
@@ -69,9 +71,9 @@ Follow [context governance](../references/context-governance.md).
 
 ## Next safe action
 
-With owner approval, create the nine P5 issues of SPEC §9.4 (due 23/11) and
-cancel DRF-18 as superseded. Then P5-T1 B (pins and sources). P4 closing items
-run in parallel on 23/11.
+P5-T1 B (DRF-64): pin Kyverno and its policy API, confirm VPC CNI version and
+schema (read-only AWS in the owner's MFA session), VERSION_MATRIX "P5 pins".
+Then P5-T2/T3 code on kind. P4 closing items run in parallel on 23/11.
 
 ## Context expansion
 

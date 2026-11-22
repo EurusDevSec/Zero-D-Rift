@@ -68,7 +68,11 @@ lab session of up to about a day, with lettered parts inside it, not more issues
 | [DRF-49](https://linear.app/zero-door/issue/DRF-49) | P4 | P4-T3 — RAGSandbox: một request tạo môi trường dùng được; sub-tasks DRF-50, DRF-51 |
 | [DRF-55](https://linear.app/zero-door/issue/DRF-55) | P4 | P4-T4 — Window L3 trên EKS và nghiệm thu P4; sub-tasks DRF-56, DRF-57 |
 | DRF-41..43, 47, 48, 52..54, 58..63 | P4 | Cancelled 14/11/2026 as merged when P4 went from 24 to 10 issues (SPEC-P4 §9.3) |
-| [DRF-18](https://linear.app/zero-door/issue/DRF-18/tenant-guardrails-negative-suite-chung-minh-soft-isolation) | P5 | Tenant guardrails: negative suite chứng minh soft isolation — ver3/current experiment contract; future SPEC pending |
+| DRF-18 | P5 | Outline issue, cancelled as superseded on 22/11/2026; replaced by the four P5-T tasks below |
+| [DRF-64](https://linear.app/zero-door/issue/DRF-64) | P5 | P5-T1 — Hợp đồng P5: quyết định D1–D12, pin Kyverno và VPC CNI; SPEC-P5 §5, no sub-tasks |
+| [DRF-65](https://linear.app/zero-door/issue/DRF-65) | P5 | P5-T2 — Baseline namespace và admission; sub-tasks DRF-66 (T2.1), DRF-67 (T2.2) |
+| [DRF-68](https://linear.app/zero-door/issue/DRF-68) | P5 | P5-T3 — Network isolation: VPC CNI và NetworkPolicy; no sub-tasks |
+| [DRF-69](https://linear.app/zero-door/issue/DRF-69) | P5 | P5-T4 — Isolation suite, window L3 và nghiệm thu P5; sub-tasks DRF-70 (T4.1), DRF-71 (T4.2), DRF-72 (T4.3) |
 | [DRF-19](https://linear.app/zero-door/issue/DRF-19/batch-contract-queue-checkpoint-gpu-quota-va-lifecycle) | P6 | Batch contract: queue, checkpoint, GPU quota và lifecycle — ver3/current experiment contract; future SPEC pending |
 | [DRF-20](https://linear.app/zero-door/issue/DRF-20/batchtrainingjob-outcome-checkpoint-va-node-reclamation) | P6 | BatchTrainingJob: outcome, checkpoint và node reclamation — ver3/current experiment contract; future SPEC pending |
 | [DRF-21](https://linear.app/zero-door/issue/DRF-21/measurements-prometheusopencost-va-raw-cost-evidence) | P7 | Measurements: Prometheus/OpenCost và raw cost evidence — ver3/current experiment contract; future SPEC pending |
