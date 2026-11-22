@@ -1,16 +1,16 @@
 ---
 id: SPEC-P5
 title: Tenant guardrails — RBAC, quota, NetworkPolicy, Pod Security, Kyverno
-status: DRAFT_FABLE_20261116_RECHECKED_20261122
+status: OWNER_APPROVED_20261122
 phase: P5
-start: 2026-11-23 at the earliest (owner rebaseline, D11)
-deadline: TBD (owner rebaseline)
-schedule_baseline: ver3 §12 window 09–10/11 already missed; owner rebaseline open (D11)
+start: 2026-11-23 (owner, D11)
+deadline: 2026-11-23 target (owner, D11); a step that does not fit moves to the next day, it is never cut
+schedule_baseline: ver3 §12 window 09–10/11 missed; owner rebaselined P5 to 23/11 on 22/11; P6–P11 rebaselined by the owner before the P6 gate (D11)
 estimated_effort: 20-24 hours (ROADMAP allocates 16 h)
 mode: Coach ("write and break one policy at a time"), then Pair
 canonical_scope: docs/de_cuong_tot_nghiep_ver3.md
-linear: DRF-18 (outline issue; split into P5-T tasks at the phase gate)
-authority: DRAFT_ONLY_NO_INSTALL_NO_AWS_NO_LINEAR_CHANGE
+linear: DRF-18 (outline issue; split into the P5-T issues of §9.4 after approval, then cancelled as superseded)
+authority: CONTRACT_APPROVED_NO_INSTALL_NO_AWS_UNTIL_TASK_GATES
 drafted_from: main at df275e4 (2026-11-16), Claude Fable 5.2
 rechecked_at: main at df5d6f6 (2026-11-22), after P4 acceptance; §2 results recorded
 ---
@@ -39,7 +39,12 @@ records the result of every assumption.
 
 Decisions changed by the recheck: D3 (GPU line, ADR-0009), D5 (ingress source),
 D10 (cost basis). New: D11 (schedule). Nothing in acceptance, trials or teardown
-changed. The second-agent review and the owner decisions are still open.
+changed.
+
+**Approval 22/11/2026.** Codex review 2 APPROVE (§9.3). The owner approved D1–D10
+as proposed ("được duyệt d1 - d10"), chose D11 rebaseline with P5 to finish on
+23/11, and deferred D12 ("giờ chưa cần vài bữa xong các phase rồi tính"). SPEC
+approval is not AWS approval: each window still needs its own approval.
 
 # 1. Goal and boundaries
 
@@ -225,9 +230,9 @@ sub-task, lettered parts are 15–60 minute checklist groups.
 
 **A. SPEC, review, approval (1.5 h)**
 
-- [ ] Recheck §2; rewrite any task whose assumption is false.
-- [ ] Second agent reviews the candidate revision; findings recorded in §9.3.
-- [ ] Owner decides D1–D12 and the P5 gross cap.
+- [x] Recheck §2; rewrite any task whose assumption is false (22/11).
+- [x] Second agent reviews the candidate revision; findings recorded in §9.3 (Codex, 22/11).
+- [x] Owner decides D1–D12 and the P5 gross cap (22/11; D12 deferred).
 
 **B. Pins and sources (1.5 h)**
 
@@ -427,7 +432,7 @@ Kyverno. The acceptance text states soft isolation and its limits.
 
 # 9. Decisions, traceability and tracking
 
-## 9.1. Decisions for the owner (D1–D12) — proposals, not approved
+## 9.1. Decisions (D1–D12) — owner decided 22/11
 
 | ID | Decision | Proposal | Why | Alternative |
 |---|---|---|---|---|
@@ -441,8 +446,8 @@ Kyverno. The acceptance text states soft isolation and its limits.
 | D8 | Webhook failure behaviour | Fail closed for tenant namespaces only; platform namespaces excluded by namespace selector | A silent bypass is worse than a blocked tenant Pod (T15); excluding the platform keeps teardown possible | Fail open with an alert |
 | D9 | Exceptions | No PolicyException in P5. A workload that cannot comply is changed, or the rule is changed by pull request | Two tenants, two workload types | A reviewed exception process |
 | D10 | P5 gross cap and windows | 4 USD for all P5 windows and retries; one window planned, a second only on new approval | P4 estimate rate: 0.35 USD/h for the 65-resource stack (A15). The P4 total for both windows is estimated at about 0.92 USD, Credits included; gross not yet read. On that estimate 4–5 h of P5 fits | — |
-| D11 | Schedule | P5 from 23/11; the owner rebaselines P6–P11 before the P5 window (ADR-0009 cut order P6 → P8 → P5) | A17; ver3 §12.1 forbids cutting trials, acceptance, learning gate or teardown to keep a date | Keep 02/12 and cut a phase per ADR-0009 |
-| D12 | Branch protection (T01) | Owner enables a ruleset on `main` requiring the `static-gates` check and a pull request; evidence is a redacted export | A14; the missing layer in teach-back case B. A GitHub setting, so the owner changes it | Record T01 as an accepted limit |
+| D11 | Schedule | **Owner 22/11: rebaseline.** P5 runs and should finish on 23/11; a step that does not fit moves to 24/11 and is never cut. The owner rebaselines P6–P11 before the P6 gate (ADR-0009 cut order P6 → P8 → P5 stays the fallback) | A17; ver3 §12.1 forbids cutting trials, acceptance, learning gate or teardown to keep a date | Keep 02/12 and cut a phase per ADR-0009 |
+| D12 | Branch protection (T01) | **Owner 22/11: deferred** until the remaining phases are done. T01 stays an open limit in P5 acceptance; proposal kept: a ruleset on `main` requiring `static-gates` and a pull request | A14; the missing layer in teach-back case B. A GitHub setting, so the owner changes it | Record T01 as an accepted limit |
 
 D6 changes the wording of THREAT_MODEL §7.1, which lists the privilege rules
 under Kyverno. If the owner accepts D6, THREAT_MODEL is updated in P5-T1; if not,
@@ -484,8 +489,10 @@ points, not blocking:
 | A2 "Only": the cleanup Job and Pod also carry the tenant label (`window.sh:265`) | Not taken: `window.sh:265` sets `app.kubernetes.io/name: rag-cleanup` and `rag.zero-drift.io/cleanup-of`, not `rag.zero-drift.io/tenant`. A2 now names the cleanup label so the claim is explicit |
 | §10 puts the window measurement before sizing D3/D7, but P5-T1 fixes decisions first | Fixed: the measurement confirms the configuration fixed in P5-T1 |
 
-These two edits came after the APPROVE and have not been reviewed by Codex. No
-owner approval yet (D1–D12 open).
+These two edits came after the APPROVE and have not been reviewed by Codex.
+
+**Owner approval 22/11:** D1–D10 as proposed, D11 rebaseline (P5 on 23/11), D12
+deferred. Status `OWNER_APPROVED_20261122`.
 
 ## 9.4. Linear tracking (proposal)
 
