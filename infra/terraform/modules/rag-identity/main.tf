@@ -111,14 +111,28 @@ locals {
       crossplane-s3 = {
         rag-crossplane-s3 = [
           {
-            # Same bucket-level list as P3, plus ListBucketVersions for forceDestroy.
+            # Bucket-level only, no wildcard (ADR-0008 rule 3). One action per S3
+            # read in the provider's aws_s3_bucket Read (upbound fork d7cd6f2fe022,
+            # used by provider-aws-s3 v2.8.1): AccessDenied on any of them fails
+            # the observe. ListBucket covers HeadBucket. GetBucketTagging (tags) and
+            # GetBucketLocation (region) are kept from the P3 set. ListBucketVersions
+            # and the object deletes below are for forceDestroy.
             Sid    = "RagBuckets"
             Effect = "Allow"
             Action = [
               "s3:CreateBucket",
               "s3:DeleteBucket",
               "s3:GetAccelerateConfiguration",
-              "s3:GetBucket*",
+              "s3:GetBucketAcl",
+              "s3:GetBucketCORS",
+              "s3:GetBucketLocation",
+              "s3:GetBucketLogging",
+              "s3:GetBucketObjectLockConfiguration",
+              "s3:GetBucketPolicy",
+              "s3:GetBucketRequestPayment",
+              "s3:GetBucketTagging",
+              "s3:GetBucketVersioning",
+              "s3:GetBucketWebsite",
               "s3:GetEncryptionConfiguration",
               "s3:GetLifecycleConfiguration",
               "s3:GetReplicationConfiguration",

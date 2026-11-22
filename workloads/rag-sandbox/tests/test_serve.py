@@ -63,6 +63,8 @@ class Conn:
             raise self.server.error
         if self.server.broken:
             raise psycopg.OperationalError("server closed the connection unexpectedly")
+        if text.startswith("SELECT current_user"):
+            return Result([self.server.identity])
         if "information_schema.columns" in text:
             return Result([("rag_tenant_a__s1", self.server.vector_columns)])
         if text.startswith("SELECT id, title"):
@@ -85,6 +87,7 @@ class Server:
         self.connect_error = None
         self.options = None
         self.vector_columns = 1
+        self.identity = ("rag_tenant_a__s1", "rag_tenant_a__s1")
         self.rows = [(1, "kro builds the sandbox graph", 0.0), (5, "kro waits", 0.1414)]
         self.statements = []
         self.logins = []
@@ -151,6 +154,27 @@ def test_seed_runs_on_connect_under_a_lock():
     assert server.statements[1].startswith('CREATE TABLE IF NOT EXISTS "documents"')
     inserts = [s for s in server.statements if s.startswith("INSERT")]
     assert len(inserts) == len(sv.SEED) and all("ON CONFLICT (id) DO NOTHING" in s for s in inserts)
+
+
+IDENT_A = ("rag_tenant_a__s1", "rag_tenant_a__s1")
+
+
+def test_identity_checked_before_seed():
+    server = Server()
+    make_db(Store(GOOD), server, expect=IDENT_A).run(sv.check_schema)
+    assert server.statements[0] == "SELECT current_user, current_schema()"
+    assert server.statements[1].startswith("SELECT pg_advisory_xact_lock")
+
+
+def test_not_ready_with_another_sandboxs_credential():
+    # Codex C4: valid login, wrong sandbox. No seed, no 200, even with the bucket fine.
+    server = Server()
+    server.identity = ("rag_tenant_b__s1", "rag_tenant_b__s1")
+    app = sv.App(make_db(Store(GOOD), server, expect=IDENT_A), sv.Bucket("zero-drift-rag-tenant-a-s1", S3()))
+    status, body = app.readyz()
+    assert status == 503 and not body["ready"]
+    assert "expected role and schema" in body["db"]
+    assert not any(s.startswith(("CREATE", "INSERT", "SELECT pg_advisory")) for s in server.statements)
 
 
 def test_not_ready_without_secret():
@@ -449,6 +473,25 @@ BASE = {"DB_HOST": "h", "DB_SSLMODE": "disable", "SECRET_BACKEND": "file", "SECR
 def test_config_needs_secret_id():
     with pytest.raises(sv.ConfigError, match="DB_SECRET_ID"):
         sv.app_from_env({**BASE, "S3_BUCKET": "b"})
+
+
+def test_config_derives_expected_identity():
+    app = sv.app_from_env({**BASE, "DB_SECRET_ID": SECRET, "BUCKET_CHECK": "off"})
+    assert app.db.expect == IDENT_A
+    app = sv.app_from_env({**BASE, "DB_SECRET_ID": SECRET, "BUCKET_CHECK": "off",
+                           "SANDBOX_TENANT": "tenant-a", "SANDBOX_NAME": "s1"})
+    assert app.db.expect == IDENT_A
+
+
+@pytest.mark.parametrize("extra", [
+    {"DB_SECRET_ID": "zero-drift/rag/platform/bootstrap"},
+    {"DB_SECRET_ID": "other/tenant-a/s1"},
+    {"DB_SECRET_ID": SECRET, "SANDBOX_TENANT": "tenant-b", "SANDBOX_NAME": "s1"},
+    {"DB_SECRET_ID": SECRET, "SANDBOX_TENANT": "tenant-a"},
+])
+def test_config_rejects_secret_of_another_sandbox(extra):
+    with pytest.raises(sv.ConfigError):
+        sv.app_from_env({**BASE, "BUCKET_CHECK": "off", **extra})
 
 
 def test_config_needs_bucket_unless_lab_turns_it_off():

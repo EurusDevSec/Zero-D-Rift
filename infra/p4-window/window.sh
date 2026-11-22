@@ -239,13 +239,25 @@ cmd_cleanup() {
   need_run_vars
   local t=$1 n=$2 job="cleanup-$1-$2" env labels
   [[ "$t" =~ ^tenant-(a|b)$ && "$n" =~ ^[a-z]([a-z0-9-]{0,30}[a-z0-9])?$ && "$n" != *--* ]] || die "bad tenant or name"
-  kubectl -n "$t" get ragsandbox "$n" >/dev/null 2>&1 && die "request $t/$n still exists: remove it from Git first"
+  # Destructive: go on only when the read itself succeeded and the server said NotFound.
+  # Forbidden, a timeout or a missing CRD must stop here, not look like "gone" (Codex C1).
+  local out
+  if out="$(kubectl -n "$t" get ragsandbox "$n" -o name 2>&1)"; then
+    die "request $t/$n still exists: remove it from Git first"
+  fi
+  grep -q '(NotFound)' <<<"$out" || die "cannot confirm request $t/$n is gone, the read failed: $(head -1 <<<"$out")"
   env="$(concat "$(db_env)" "$(jq -n --arg t "$t" --arg n "$n" '[{name:"SANDBOX_TENANT",value:$t},{name:"SANDBOX_NAME",value:$n}]')")"
   labels="$(jq -n --arg t "$t" --arg n "$n" '{"app.kubernetes.io/name":"rag-cleanup","rag.zero-drift.io/cleanup-of":($t+"."+$n)}')"
   kubectl -n "$PLATFORM_NS" delete job "$job" --ignore-not-found >/dev/null
   job_manifest "$job" rag-bootstrap "$env" '["cleanup"]' "$labels" | kubectl apply -f - >/dev/null
   echo "OK    job/$job created $(date -u +%T)Z"
   wait_job "$job" || die "cleanup failed"
+  # The read above and the Job are not atomic, and the Job has no Kubernetes token
+  # to re-check by design. So detect a request recreated meanwhile (Git merge +
+  # Argo sync) and say how to recover; only an approved window runs cleanup.
+  if kubectl -n "$t" get ragsandbox "$n" -o name >/dev/null 2>&1; then
+    die "request $t/$n reappeared during cleanup: its schema, role and secret may be gone; bump bootstrapAttempt in Git to rebuild them"
+  fi
   # kro deletes bootstrap Jobs but leaves their Pods without owner (spike 14/11, D9).
   kubectl -n "$PLATFORM_NS" delete pods -l "rag.zero-drift.io/tenant=$t,rag.zero-drift.io/sandbox=$n" --ignore-not-found
 }

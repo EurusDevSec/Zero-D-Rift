@@ -76,6 +76,17 @@ case_ "image by tag" "not pinned by digest" "$RGD" 'node("app")["template"]["spe
 case_ "kro may read Secrets" "no wildcard, no secrets/pods" platform/kro-rbac/clusterrole-p4.yaml 'docs[0]["rules"].append({"apiGroups": [""], "resources": ["secrets"], "verbs": ["get"]})'
 case_ "kro may write ConfigMaps" "configmaps read only" platform/kro-rbac/clusterrole-p4.yaml 'docs[0]["rules"][0]["verbs"].append("patch")'
 case_ "extra provider package" "provider packages = allowlist" platform/providers/providers.yaml 'docs.append({"apiVersion": "pkg.crossplane.io/v1", "kind": "Provider", "metadata": {"name": "provider-aws-iam"}, "spec": {"package": "xpkg.crossplane.io/crossplane-contrib/provider-aws-iam@sha256:" + "0" * 64}})'
+# Codex C5: Argo also syncs .yml and .json; requests/ must hold only RAGSandbox.
+case_ "bad name in a .yml request" "breaks the sandbox name contract" "+requests/bad.yml" "$(sed 's/name: docs-qa/name: docs--qa/' "$src/$REQ")"
+case_ "no-tenant request as .json" "has no tenant role" "+requests/bad.json" '{"apiVersion": "kro.run/v1alpha1", "kind": "RAGSandbox", "metadata": {"name": "json-qa", "namespace": "zdr-requests"}, "spec": {"bootstrapAttempt": 0}}'
+case_ "ConfigMap in requests" "requests/ holds only RAGSandbox" "+requests/extra.yaml" 'apiVersion: v1
+kind: ConfigMap
+metadata: {name: extra, namespace: tenant-a}
+data: {a: b}'
+case_ "platform-config in Git" "no platform-config ConfigMap" "+platform/tenants/platform-config.yaml" 'apiVersion: v1
+kind: ConfigMap
+metadata: {name: platform-config, namespace: zdr-platform}
+data: {dbPort: "5432"}'
 
 echo
 if (( failed )); then echo "RESULT: FAIL"; exit 1; fi

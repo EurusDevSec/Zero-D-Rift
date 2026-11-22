@@ -162,3 +162,19 @@ def test_tls_defaults_to_verify_full():
     assert (ep.sslmode, ep.port) == ("verify-full", 5432)
     with pytest.raises(RuntimeError):
         endpoint_from_env({"DB_HOST": "h", "DB_SSLMODE": "prefer"})
+
+
+def test_db_init_error_does_not_print_master_secret_id(tmp_path):
+    # Codex C3: the real MASTER_SECRET_ID is an ARN with the account ID.
+    secret_id = "arn:aws:secretsmanager:us-east-1:000000000000:secret:rds!db-fake"
+    env = dict(ENV, MASTER_SECRET_ID=secret_id)
+    with pytest.raises(RuntimeError) as info:
+        commands.db_init(env, _NoSecretStore(), connect_fn=None)
+    assert secret_id not in str(info.value)
+    assert "000000000000" not in str(info.value)
+    assert "master secret" in str(info.value)
+
+
+class _NoSecretStore:
+    def get(self, name):
+        return None

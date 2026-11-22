@@ -144,3 +144,14 @@ def test_store_from_env(tmp_path):
         store_from_env({"SECRET_BACKEND": "file"})
     with pytest.raises(RuntimeError):
         store_from_env({"SECRET_BACKEND": "k8s"})
+
+
+def test_require_label_hides_the_name(tmp_path):
+    # Codex C3: db-init passes the master secret as its ARN; errors must not echo it.
+    store = FileSecretStore(tmp_path)
+    store.create("lab/arn-like-id", {"username": "u"})
+    for name in ("lab/arn-like-id", "lab/missing-id"):
+        with pytest.raises(RuntimeError) as info:
+            require(store, name, label="master secret")
+        assert name not in str(info.value)
+        assert "master secret" in str(info.value)

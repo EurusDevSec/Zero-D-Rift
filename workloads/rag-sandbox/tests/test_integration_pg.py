@@ -192,6 +192,25 @@ def test_6_bootstrap_cannot_escalate(endpoint, store, statement):
             c.execute(statement)
 
 
+def test_4c_serve_refuses_another_sandboxs_credential(endpoint, store):
+    """Codex C4: tenant-a's valid credential, but the request is tenant-b's sandbox."""
+    db = sv.Database(endpoint, store, "zero-drift/rag/tenant-a/s1", reload_seconds=0,
+                     expect=("rag_tenant_b__s2", "rag_tenant_b__s2"))
+    with pytest.raises(sv.NotReady, match="expected role and schema"):
+        db.run(sv.check_schema)
+
+
+def test_6b_bootstrap_cannot_pass_on_create_database(endpoint, store):
+    """Codex C9: bootstrap keeps CREATE for its own schemas but cannot hand it on."""
+    with as_role(endpoint, store, BOOT) as c:
+        row = c.execute(
+            "SELECT has_database_privilege(current_user, 'rag', 'CREATE'),"
+            " has_database_privilege(current_user, 'rag', 'CREATE WITH GRANT OPTION'),"
+            " has_database_privilege(current_user, 'rag', 'CONNECT WITH GRANT OPTION')"
+        ).fetchone()
+    assert row == (True, False, True)
+
+
 def test_7_unlisted_role_cannot_connect_to_rag(endpoint, store):
     with connect(endpoint, store.get("lab/master"), "postgres", autocommit=True) as c:
         c.execute("DROP ROLE IF EXISTS outsider")
