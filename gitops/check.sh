@@ -15,6 +15,11 @@ fail() { echo "FAIL  $1"; failed=1; }
 # Argo's directory source reads .yaml, .yml and .json, so CI reads the same set (Codex C5).
 files="$(find bootstrap platform requests \( -name '*.yaml' -o -name '*.yml' -o -name '*.json' \) | sort)"
 
+# 1a. Argo CD v3.5.7 also renders .jsonnet/.libsonnet in a directory source; CI cannot
+#     check rendered output, and P4 uses none, so refuse them (Codex re-review 22/11).
+jsonnet="$(find bootstrap platform requests \( -name '*.jsonnet' -o -name '*.libsonnet' \) | sort)"
+[[ -z "$jsonnet" ]] && pass "no jsonnet in synced sources" || fail "jsonnet (not checkable): $jsonnet"
+
 # 1. Every file is valid YAML.
 bad="$(for f in $files; do python -I -c 'import sys,yaml; list(yaml.safe_load_all(open(sys.argv[1])))' "$f" 2>/dev/null || echo "$f"; done)"
 [[ -z "$bad" ]] && pass "YAML parses ($(wc -w <<< "$files") files)" || fail "invalid YAML: $bad"
@@ -44,6 +49,12 @@ def res(good, msg):
     global ok
     print(("PASS  " if good else "FAIL  ") + msg)
     ok = ok and good
+
+# 0. No Kubernetes List: Argo syncs each object in "items", but every rule below
+#    reads only the outer kind. P4 uses none, so refuse them (Codex re-review 22/11).
+lists = [f"{f}: {d.get('kind')}" for f, d in docs
+         if isinstance(d, dict) and (isinstance(d.get("items"), list) or str(d.get("kind", "")).endswith("List"))]
+res(not lists, "no Kubernetes List objects" + (f": {lists}" if lists else ""))
 
 # 4. Provider packages: exactly the allowlist (family + S3), by approved digest.
 allow = {

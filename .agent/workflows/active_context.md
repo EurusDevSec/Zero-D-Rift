@@ -1,8 +1,8 @@
 ---
 project: Zero D-Rift
-status: P4_T4_2_CONFIRM_WINDOW_DONE
+status: P4_T4_2_REREVIEW_FIXES
 active_phase: P4
-active_task: P4-T4.2 (DRF-57) confirm window done 22/11; Codex re-review, Bills, close P4
+active_task: P4-T4.2 (DRF-57) Codex re-review 22/11 fixes (R1 R2); Codex check, Bills, close P4
 active_feature: RAGSandbox (SPEC-P4)
 active_spec: .agent/specs/SPEC-P4_RAG_SANDBOX.md
 current_learning: .agent/learning/CURRENT_STATUS.md
@@ -79,8 +79,10 @@ DRF-57: audit `docs/evidence/p4/P4_ACCEPTANCE_AUDIT_20261121.md`. Codex REQUEST
 CHANGES (10 findings) fixed with negative tests, PR #55 merged. New image pinned.
 Confirm window P4-L3-20261122-01 (02:56-04:00Z): V1-V6 PASS, sts line kept,
 65 destroyed, inventory CLEAN, est. 0.37 USD (`P4-T4.2_L3_CONFIRM_20261122.md`).
-Next: Codex re-review; owner reads Bills gross for both windows; inventory next
-day (tag lag); learning update. Re-ask 4 explanation questions + orphan Pod.
+Codex re-review 22/11: REQUEST CHANGES, 2 MEDIUM 2 LOW (audit 5.2). R1 cleanup
+read after Job, R2 CI rejects jsonnet/List, R4 R5 wording fixed with tests;
+R3 GetBucketLocation kept as accepted limit (audit 5.3). Next: Codex checks
+R1 R2; owner reads Bills gross both windows; inventory next day; learning. Re-ask 4 explanation questions + orphan Pod.
 
 ## Context expansion
 

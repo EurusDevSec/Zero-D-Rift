@@ -234,18 +234,30 @@ cmd_probe() {
   esac
 }
 
+# State of request $1/$2: "exists", "gone" (the read itself succeeded in reaching the
+# server and it said NotFound) or "unknown: <first error line>" (Forbidden, timeout,
+# missing CRD...). Only "gone" may be treated as absent (Codex C1, re-review 22/11).
+request_state() {
+  local out
+  if out="$(kubectl -n "$1" get ragsandbox "$2" -o name 2>&1)"; then echo exists
+  elif grep -q '(NotFound)' <<<"$out"; then echo gone
+  else echo "unknown: $(head -1 <<<"$out")"; fi
+}
+
 cmd_cleanup() {
   [[ $# -eq 2 ]] || die "usage: window.sh cleanup TENANT NAME"
   need_run_vars
   local t=$1 n=$2 job="cleanup-$1-$2" env labels
   [[ "$t" =~ ^tenant-(a|b)$ && "$n" =~ ^[a-z]([a-z0-9-]{0,30}[a-z0-9])?$ && "$n" != *--* ]] || die "bad tenant or name"
-  # Destructive: go on only when the read itself succeeded and the server said NotFound.
+  # Destructive: go on only when the server said NotFound.
   # Forbidden, a timeout or a missing CRD must stop here, not look like "gone" (Codex C1).
-  local out
-  if out="$(kubectl -n "$t" get ragsandbox "$n" -o name 2>&1)"; then
-    die "request $t/$n still exists: remove it from Git first"
-  fi
-  grep -q '(NotFound)' <<<"$out" || die "cannot confirm request $t/$n is gone, the read failed: $(head -1 <<<"$out")"
+  local state
+  state="$(request_state "$t" "$n")"
+  case "$state" in
+    gone) ;;
+    exists) die "request $t/$n still exists: remove it from Git first" ;;
+    *) die "cannot confirm request $t/$n is gone, the read failed: ${state#unknown: }" ;;
+  esac
   env="$(concat "$(db_env)" "$(jq -n --arg t "$t" --arg n "$n" '[{name:"SANDBOX_TENANT",value:$t},{name:"SANDBOX_NAME",value:$n}]')")"
   labels="$(jq -n --arg t "$t" --arg n "$n" '{"app.kubernetes.io/name":"rag-cleanup","rag.zero-drift.io/cleanup-of":($t+"."+$n)}')"
   kubectl -n "$PLATFORM_NS" delete job "$job" --ignore-not-found >/dev/null
@@ -255,9 +267,13 @@ cmd_cleanup() {
   # The read above and the Job are not atomic, and the Job has no Kubernetes token
   # to re-check by design. So detect a request recreated meanwhile (Git merge +
   # Argo sync) and say how to recover; only an approved window runs cleanup.
-  if kubectl -n "$t" get ragsandbox "$n" -o name >/dev/null 2>&1; then
-    die "request $t/$n reappeared during cleanup: its schema, role and secret may be gone; bump bootstrapAttempt in Git to rebuild them"
-  fi
+  # Same rule as before the Job: a failed read is not "still gone" (Codex re-review).
+  state="$(request_state "$t" "$n")"
+  case "$state" in
+    gone) ;;
+    exists) die "request $t/$n reappeared during cleanup: its schema, role and secret may be gone; bump bootstrapAttempt in Git to rebuild them" ;;
+    *) die "cleanup ran, but cannot confirm request $t/$n is still gone, the read failed: ${state#unknown: }; check it before trusting the result" ;;
+  esac
   # kro deletes bootstrap Jobs but leaves their Pods without owner (spike 14/11, D9).
   kubectl -n "$PLATFORM_NS" delete pods -l "rag.zero-drift.io/tenant=$t,rag.zero-drift.io/sandbox=$n" --ignore-not-found
 }

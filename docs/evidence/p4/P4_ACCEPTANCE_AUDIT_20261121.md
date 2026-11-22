@@ -4,8 +4,9 @@
 - Window: `P4-L3-20261121-01`.
 - Revision ứng viên: `main` = `5e5067f` (merge PR #54).
 - Đã che: account ID, ARN, IP, endpoint RDS, tên bucket state.
-- Codex đã review bản nháp theo mục 4: REQUEST CHANGES (mục 5). Các sửa ở mục 5.1 nằm trên nhánh
-  `hoang/drf-57-review-fixes` và chờ Codex kiểm lại. Mục 6 (inventory trễ, Bills) điền ngày 22/11.
+- Codex đã review bản nháp theo mục 4: REQUEST CHANGES (mục 5). Các sửa ở mục 5.1 đã merge (PR #55–#57).
+  Codex review lại ngày 22/11: REQUEST CHANGES, 2 MEDIUM, 2 LOW (mục 5.2); xử lý ở mục 5.3.
+  Mục 6 (inventory trễ, Bills) điền ngày 22/11.
 
 ## 1. Quy tắc hoàn thành P4 (SPEC §8)
 
@@ -15,7 +16,7 @@
 | Teardown sạch | **Đạt** 21/11 và 22/11: mỗi lần `65 destroyed`, state 0, `inventory.sh` `RESULT: CLEAN` |
 | Inventory trễ sạch | **Đạt** 22/11 02:44Z: owner chạy với MFA, `RESULT: CLEAN`. Chỉ mục tag đã hết lệch (mục 6) |
 | Đã đọc billing | **Một phần**: owner đọc trang Credits ngày 22/11 (ước tính, dùng 0,55 USD cả tài khoản). Window xác nhận ước tính thêm khoảng 0,37 USD. Bills gross chưa đọc: đọc một lần cho cả hai window, khi số ước tính đã cập nhật (mục 6) |
-| Review độc lập ghi findings và giới hạn | **Đang làm**: Codex đã review (REQUEST CHANGES: 1 HIGH, 6 MEDIUM, 3 LOW, mục 5). Đã sửa cả 10, kèm test âm (mục 5.1). Còn chờ Codex kiểm lại |
+| Review độc lập ghi findings và giới hạn | **Đang làm**: Codex review lần 1 (1 HIGH, 6 MEDIUM, 3 LOW, mục 5); đã sửa cả 10 (mục 5.1). Review lại 22/11: 7 mục Đã sửa, C1, C5, C6 sửa một phần; 2 MEDIUM, 2 LOW mới (mục 5.2). Đã sửa 2 MEDIUM và 1 LOW kèm test âm; giữ `GetBucketLocation` làm giới hạn (mục 5.3). Còn chờ Codex kiểm lại bản sửa R1, R2 |
 | Owner `PRACTICED` + `EXPLAINED`: IRSA workload, luồng secret, tầng credential PostgreSQL | **Đạt có giới hạn**: IRSA đạt đầy đủ; hai mục kia có giới hạn nguồn gốc (`P4-T4.2_TEACHBACK_20261121.md`) |
 
 ## 2. Kịch bản §4 → evidence
@@ -151,10 +152,74 @@ Ngoài phạm vi C6: role P3 `zero-drift-p3-crossplane-s3` vẫn dùng `s3:GetBu
 - C9: V1 `create_grant_option=False` PASS;
 - C6: V2 bucket `SYNCED/READY`, không `AccessDenied` sau 16 phút; V5 xoá được;
 - C4: V3 app image mới Ready, probe 6/6 ×2, đường đúng. Ca từ chối chỉ có ở L2;
-- C1: V5 cleanup kiểm lại sau Job, không báo `reappeared`;
+- C1: V5 cleanup không báo `reappeared`. Lần đọc sau Job của bản chạy hôm đó bỏ stderr, nên `rc=0` không chứng minh nó thấy `NotFound` (mục 5.3, R1);
 - C3: chỉ ở L2.
 
 Ghi chú lịch sử, trước window xác nhận: C3, C4 và C9 nằm trong code app: chúng chỉ có hiệu lực khi RGD pin image build từ commit có bản sửa. Image `512e982a…` của window 21/11 bỏ qua `SANDBOX_TENANT`/`SANDBOX_NAME`. Image `850c77c2…` (build từ `e0c8319`, đã pin ngày 22/11) có đủ ba bản sửa và `smoke.sh` PASS. Window xác nhận `P4-L3-20261122-01` sẽ kiểm chúng trên EKS. C1, C2, C5, C8 chỉ đổi script, test hoặc tài liệu.
+
+### 5.2. Review lại (22/11)
+
+Owner chạy Codex theo câu hỏi Claude soạn (phạm vi `5e5067f..50ddefd`, PR #55–#57), rồi dán kết quả vào chat ngày 22/11/2026.
+- Claude ghi nguyên văn bên dưới. Chỉ đổi các link tuyệt đối trên máy thành đường dẫn trong repo `path:dòng`.
+- Số dòng theo revision `50ddefd`; các sửa ở mục 5.3 làm lệch số dòng.
+
+> **Verdict — REQUEST CHANGES.** Lỗi HIGH cũ đã được chặn **trước khi tạo cleanup Job**. Còn hai điểm MEDIUM ảnh hưởng trực tiếp đến nghiệm thu: lần đọc **sau Job** có thể báo thành công giả, và CI vẫn bỏ sót một số manifest mà Argo CD sẽ đồng bộ.
+>
+> **Reviewer:** Codex, độc lập.\
+> **Revision:** `5e5067f2ba255a94b9d65df385e663cae6978bf9..50ddefd2c4463a759ac38df6760bfa4ab57fa048` · 34 file · PR #55–#57.
+>
+> ### Findings
+>
+> | Mức | Vị trí | Phát hiện và cách sửa |
+> |---|---|---|
+> | **MEDIUM** | `infra/p4-window/window.sh:258` · `docs/evidence/p4/P4-T4.2_L3_CONFIRM_20261122.md:108` | Sau Job, `kubectl get` bỏ stderr và coi mọi lần đọc lỗi như request đã mất. Mình tái hiện bằng stub: trước Job `NotFound`, sau Job `Forbidden`, **cleanup vẫn trả 0**. Vì vậy V5 chứng minh hai Job hoàn tất, nhưng `rc=0` chưa chứng minh lần đọc cuối thấy `NotFound`. Dùng lại quy tắc trước Job cho lần đọc cuối và thêm đúng ca test này. |
+> | **MEDIUM** | `gitops/check.sh:16` · `gitops/check.sh:162` | C5 đã chặn bốn ca được báo lần trước. Tuy nhiên Argo CD v3.5.7 còn đọc `.jsonnet` và bung từng object trong Kubernetes `List`. CI bỏ qua `.jsonnet` và chỉ xét `kind` ngoài cùng, nên vẫn có thể bỏ sót `platform-config` trong nguồn platform. Cách sửa nhỏ nhất là từ chối hai dạng này trong các thư mục đang sync nếu P4 không dùng chúng. [Mã đọc manifest của Argo CD v3.5.7](https://github.com/argoproj/argo-cd/blob/v3.5.7/reposerver/repository/repository.go#L1825) · [Xử lý List](https://github.com/argoproj/argo-cd/blob/v3.5.7/reposerver/repository/repository.go#L1660) |
+> | **LOW** | `infra/terraform/modules/rag-identity/main.tf:128` | Allowlist đủ cho đường tạo, observe và xoá đã chạy ở V2/V5. Còn một quyền đọc thừa trên đường này: provider lấy region qua `GetBucketRegion`, SDK gọi `HeadBucket`, và role đã có `s3:ListBucket`. Bỏ `s3:GetBucketLocation` khỏi policy và danh sách kỳ vọng tương ứng. [Provider đã pin](https://github.com/upbound/terraform-provider-aws/blob/d7cd6f2fe022/internal/service/s3/bucket.go#L1695) · [SDK gọi HeadBucket](https://github.com/aws/aws-sdk-go-v2/blob/feature/s3/manager/v1.23.6/feature/s3/manager/bucket_region.go#L78) · [Quyền của HeadBucket](https://docs.aws.amazon.com/AmazonS3/latest/API/API_HeadBucket.html) |
+> | **LOW** | `docs/evidence/p4/P4-T4.2_L3_CONFIRM_20261122.md:23` | Dòng “P4 đã tiêu trước window ≤ 0,55 USD” biến số Credits ước tính thành cận trên. Phần chi phí cuối file và audit §6 đã ghi đúng. Chỉ cần sửa dòng 23 thành “Credits ước tính 0,55 USD cho cả tài khoản; gross P4 chưa xác minh”. |
+>
+> ### Đối chiếu C1–C10
+>
+> | Mục | Kết quả | Test âm và kết quả trên code cũ `5e5067f` |
+> |---|---|---|
+> | C1 | **Sửa một phần** | Sáu ca hiện có đều qua ở head. Trên base, `Forbidden`, timeout và thiếu CRD vẫn cho tạo Job; request xuất hiện lại cũng không làm script trả lỗi. Ca còn thiếu là lỗi đọc sau Job như finding trên. `infra/p4-window/tests/cleanup_guard.sh:50` |
+> | C2 | **Đã sửa** | Probe từ chối credential rỗng hoặc thiếu trường; nhánh IMDS chỉ nhận timeout. Trên base, 8 ca credential và 7 ca IMDS đều đỏ. Riêng 7 ca IMDS gọi trực tiếp hàm phân loại mới, nên trên base chúng đỏ vì thiếu hàm. `infra/p4-window/tests/test_probe.py:34` · `infra/p4-window/probe.py:244` |
+> | C3 | **Đã sửa** | `db-init` truyền nhãn `master secret`; lỗi thiếu secret hoặc thiếu trường dùng nhãn này. Hai test đỏ trên base, xanh trên head. EKS ngày 22/11 chỉ chạy đường thành công. `workloads/rag-sandbox/src/ragsandbox/commands.py:44` · `workloads/rag-sandbox/tests/test_commands.py:167` |
+> | C4 | **Đã sửa** | App đối chiếu role **và** schema của request trước khi seed. Test đơn vị kiểm sai danh tính trả 503 và chưa chạy `CREATE`/`INSERT`; test cấu hình và danh tính đỏ trên base. Ca credential chéo chạy qua trên pgvector thật ở head. EKS V3 xác nhận đường đúng của hai tenant. `workloads/rag-sandbox/src/ragsandbox/serve.py:256` · `workloads/rag-sandbox/tests/test_serve.py:169` · `workloads/rag-sandbox/tests/test_integration_pg.py:195` |
+> | C5 | **Sửa một phần** | Đã chạy lại cả bốn ca mới: `check.sh` cũ cho qua cả bốn, head chặn đúng cả bốn. Phần còn thiếu là `.jsonnet` và `List` nêu trên. `gitops/tests/check_guards.sh:80` |
+> | C6 | **Sửa một phần** | Wildcard đã sửa đúng. Check 16 bắt `*` ở mọi vị trí trong action của policy đã biết lúc plan. Cùng ca `s3:GetBucket*`, base báo PASS sai, head báo FAIL đúng. Chỉ còn quyền đọc thừa nêu trên. `infra/terraform/scripts/plan_assert.sh:275` · `infra/terraform/tests/plan_assert_guards.sh:90` |
+> | C7 | **Đã sửa phần ghi evidence** | Audit ghi đúng: khôi phục identity bằng `kubectl`, tăng attempt qua Git. Scenario 6 vẫn **một phần**. Đây là sửa kết luận tài liệu, không áp dụng test âm. `docs/evidence/p4/P4_ACCEPTANCE_AUDIT_20261121.md:44` · `docs/evidence/p4/P4-T4.1_L3_WINDOW_20261121.md:157` |
+> | C8 | **Đã sửa** | Đã thêm hai ca `implicitDeny` cho tenant-b đọc secret bootstrap và master. Hai ca này **cũng sẽ qua với policy cũ** vì quyền cũ đã từ chối đúng; lỗi ban đầu là thiếu ca kiểm. `infra/terraform/tests/rag_iam_matrix.json:46` |
+> | C9 | **Đã sửa** | Chỉ `CONNECT` còn grant option. `REVOKE GRANT OPTION FOR CREATE` xử lý cả DB từng nhận grant cũ. Test SQL đỏ trên base; integration ở head và V1 đều xác nhận bootstrap có `CREATE` nhưng không cấp tiếp được. `workloads/rag-sandbox/src/ragsandbox/statements.py:105` · `workloads/rag-sandbox/tests/test_integration_pg.py:203` |
+> | C10 | **Đã sửa** | Audit đã tách evidence secret và bucket, ghi đúng hai tenant PASS trước G1 và chỉ `tenant-b/docs-qa` có kết quả sau cleanup. Sửa tài liệu, không áp dụng test âm. `docs/evidence/p4/P4_ACCEPTANCE_AUDIT_20261121.md:38` · `docs/evidence/p4/P4_ACCEPTANCE_AUDIT_20261121.md:43` |
+>
+> **Evidence và image.** V1, V2, V3 và V4 có kết quả đúng loại kiểm tra đã mô tả. V5 có hai bucket trả 404 và hai cleanup Job hoàn tất, với giới hạn lần đọc cuối nêu trên. V6 ghi `65 destroyed`, state 0 và inventory sạch ngay sau teardown. Inventory trễ lúc 02:44Z ngày 22/11 thuộc **window 21/11**. Digest `850c77c2…` khớp giữa RGD, manifest lab, registry probe và version matrix. C3 và ca từ chối của C4 chỉ có bằng chứng cục bộ/L2. `docs/evidence/p4/P4-T4.2_L3_CONFIRM_20261122.md:66` · `docs/evidence/p4/P4_ACCEPTANCE_AUDIT_20261121.md:165` · `docs/VERSION_MATRIX.md:182`
+>
+> **Lộ thông tin.** Trong 34 file, mình không phát hiện account ID thật, ARN role đầy đủ, endpoint/IP hạ tầng thật, tên bucket state thật hay credential. Có **một ARN S3 nguyên văn của bucket sandbox** trong output V4. ARN đó chứa tên bucket workload đã dùng trong bài thử; không chứa account ID. Vì vậy câu “đã che ARN” ở đầu evidence rộng hơn dữ liệu thực tế. `docs/evidence/p4/P4-T4.2_L3_CONFIRM_20261122.md:101`
+>
+> **Lệnh đã chạy**
+>
+> | Lệnh trên head | Kết quả |
+> |---|---|
+> | `bash gitops/check.sh` · `bash gitops/tests/check_guards.sh` | PASS · 33/33 ca guard |
+> | `bash infra/terraform/tests/plan_assert_guards.sh` | PASS trên plan giả lập |
+> | `bash infra/p4-window/tests/cleanup_guard.sh` | PASS 6/6 ca có sẵn |
+> | `bash infra/p4-window/tests/run_probe_tests.sh` | 20 passed |
+> | `bash workloads/rag-sandbox/test.sh --integration` | 138 passed, có PostgreSQL/pgvector thật trong Docker |
+> | `git rev-parse`, `git status --short`, `git diff --stat`, `git diff --check`, `git show`, `git log`, `rg`, Python | Xác nhận revision và phạm vi, quét định danh, chạy đối chứng trên base trong thư mục tạm và tái hiện ca sau Job trả `Forbidden` |
+>
+> **Giới hạn.** Mình kiểm độc lập bằng mã nguồn, test cục bộ và evidence đã lưu. Kết quả EKS và chi phí dựa trên hồ sơ của window; Bills gross vẫn chưa được xác minh. Mình không chạy lệnh AWS, sửa file trong repo hay commit.
+
+### 5.3. Xử lý review lại
+
+| # | Mức | Finding | Xử lý | Test âm |
+|---|---|---|---|---|
+| R1 | MEDIUM | `cleanup` coi lần đọc lỗi **sau Job** là request đã mất | `window.sh`: hàm `request_state` trả `exists`, `gone` (server báo `NotFound`) hoặc `unknown`. Trước và sau Job dùng cùng quy tắc. Sau Job, `unknown` dừng với "cleanup ran, but cannot confirm … still gone". Evidence V5 thu hẹp: `rc=0` hôm đó không chứng minh lần đọc cuối thấy `NotFound` | `cleanup_guard.sh` thêm `after-forbidden`, `after-timeout` (8 ca). `window.sh` cũ: 2 ca mới FAIL (`exit 0`) |
+| R2 | MEDIUM | CI bỏ sót `.jsonnet` và object trong Kubernetes `List` | `gitops/check.sh`: rule 1a từ chối `.jsonnet`/`.libsonnet` trong `bootstrap/ platform/ requests/`; rule 0 từ chối mọi document có `items` dạng list hoặc `kind` kết thúc bằng `List`. P4 không dùng cả hai | `check_guards.sh` thêm 2 ca (35 ca): `platform-config` trong `.jsonnet` và trong `List`. `check.sh` cũ cho qua cả 2 |
+| R3 | LOW | `s3:GetBucketLocation` thừa | **Giữ, không sửa trong P4.** Danh sách hiện tại là danh sách đã chạy trên EKS ở V2/V5. Bỏ thêm một action sẽ lại làm bản nghiệm thu khác bản đã chạy, và cần thêm một window để kiểm. Quyền này chỉ đọc region, giới hạn trong prefix bucket sandbox. Ghi là giới hạn đã chấp nhận; bỏ khi có window tiếp theo đụng tới role Crossplane | — |
+| R4 | LOW | Evidence dòng 23 coi Credits là cận trên | Sửa thành "Credits ước tính 0,55 USD cho cả tài khoản; gross P4 chưa xác minh" | — |
+| R5 | (lộ thông tin) | Câu "đã che ARN" rộng hơn dữ liệu: V4 giữ ARN S3 của bucket sandbox | Evidence ghi rõ: che ARN role đầy đủ; giữ ARN S3 `zero-drift-rag-tenant-b-docs-qa` vì tên dẫn xuất từ tenant/name theo RGD và không có account ID | — |
+
+R1 và R2 chỉ đổi script và CI, không đổi gì đã chạy trên AWS; bản sửa R1 chỉ được kiểm bằng stub.
 
 ## 6. Inventory trễ và billing (22/11)
 
