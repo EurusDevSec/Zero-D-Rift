@@ -87,6 +87,15 @@ case_ "platform-config in Git" "no platform-config ConfigMap" "+platform/tenants
 kind: ConfigMap
 metadata: {name: platform-config, namespace: zdr-platform}
 data: {dbPort: "5432"}'
+# Codex re-review 22/11: Argo also renders .jsonnet and expands List items.
+case_ "jsonnet in platform" "jsonnet (not checkable)" "+platform/tenants/extra.jsonnet" '{ apiVersion: "v1", kind: "ConfigMap", metadata: { name: "platform-config", namespace: "zdr-platform" } }'
+case_ "platform-config inside a List" "no Kubernetes List objects" "+platform/tenants/list.yaml" 'apiVersion: v1
+kind: List
+items:
+- apiVersion: v1
+  kind: ConfigMap
+  metadata: {name: platform-config, namespace: zdr-platform}
+  data: {dbPort: "5432"}'
 
 echo
 if (( failed )); then echo "RESULT: FAIL"; exit 1; fi
