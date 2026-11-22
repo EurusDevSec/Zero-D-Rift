@@ -441,8 +441,21 @@ Lệnh cho V2, chạy sau khi hai sandbox `ACTIVE` khoảng 5 phút (provider đ
 
 ```bash
 kubectl get bucket.s3.aws.m.upbound.io -A
-kubectl get events -A --field-selector involvedObject.kind=Bucket | grep -iE 'denied|forbidden' || echo "no AccessDenied"
+# A failed read must stop here, not look like "no AccessDenied" (PR #56 review).
+denied() { # what, kubectl args...
+  local what=$1 out; shift
+  if out="$(kubectl "$@" 2>&1)"; then
+    grep -iE 'denied|forbidden' <<<"$out" || echo "OK    no AccessDenied in $what"
+  else
+    echo "STOP  cannot read $what: $(head -1 <<<"$out")"
+  fi
+}
+denied "Bucket events" get events -A --field-selector involvedObject.kind=Bucket
+denied "Bucket conditions" get bucket.s3.aws.m.upbound.io -A \
+  -o jsonpath='{range .items[*]}{.metadata.name}{range .status.conditions[*]}{" "}{.message}{end}{"\n"}{end}'
 ```
+
+**Phải thấy:** hai dòng `OK`. Có dòng `STOP` thì V2 chưa được tính: đọc lại cho tới khi được.
 
 Điều kiện dừng riêng (thêm vào B):
 
