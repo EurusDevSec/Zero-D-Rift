@@ -321,3 +321,37 @@ Status meanings:
   introduced by Claude and has not been explained back.
 - Status: EXPLAINED (version/digest pinning, TLS encryption vs CA verification),
   provenance limit noted; PRACTICED only for read-only CLI, not for a TLS connection
+
+### 2026-11-22 — P4 RAGSandbox: graph, IRSA, secrets and PostgreSQL credentials (DRF-51, DRF-56, DRF-57)
+
+- Phase/task: P4 / P4-T3.2 (kind graph lab), P4-T4.1 (L3 window 21/11), P4-T4.2 (teach-back, confirm window 22/11)
+- Learning objective: SPEC-P4 §7/§8: explain IRSA for the workload, the secret flow, and the
+  three PostgreSQL credential tiers. Also close the open graph and retry questions from DRF-51
+  and the `db-init` idempotency question from DRF-45.
+- Source(s) consulted: runbook `docs/runbooks/P4_RAG_SANDBOX.md`, the L2 and L3 evidence, Claude's explanations in chat.
+- Prediction before lab: kind lab G1–G11 predictions recorded in
+  `docs/evidence/p4/P4-T3.2_L2_KIND_GRAPH_20261119.md` (most matched; G5 and G11 partly wrong); micro-lab prediction 21/11.
+- Micro-lab/change performed: owner ran the kind graph lab and both EKS micro-labs (21/11 and 22/11).
+  On 22/11 the owner kept the line `sts get-caller-identity` → `assumed-role/zero-drift-rag-tenant-a/…`, `OWN_OK`, `OTHER_DENIED`.
+- Expected vs actual: own bucket readable, other tenant `AccessDenied`, as predicted.
+- Evidence path: `docs/evidence/p4/P4-T4.2_TEACHBACK_20261121.md`, audit §1.
+- Explain in my own words (22/11, typed, no hints): see the teach-back file.
+  - The four DRF-51/45 questions:
+    - the bucket waits for bootstrap because of a graph reference, and no AWS resource is created before the request is checked;
+    - retry goes through Git, because a hand delete re-creates the same Job;
+    - the orphan Pod is cleaned by label or by teardown;
+    - `db-init` must not rotate the key, because two stores would drift.
+  - Two transfer cases not in the docs. The owner derived both:
+    - a leaked sandbox password: scope, network path, rotation via a new secret plus `bootstrapAttempt`;
+    - a Kubernetes Secret committed to GitOps: CI rules, who can read it, rotate first.
+- Failure I can now diagnose: Synced + Running but not Ready (instance → Job → children).
+  Also `42501` versus an IAM denial, and why a deleted request leaves schema, role and secret behind.
+- Remaining gap:
+  - details the owner missed:
+    - RDS ingress is the node security group, not the whole VPC;
+    - Secrets Manager needs a force delete to recreate the same name;
+    - `ALTER ROLE` keeps sessions that are already open;
+    - without branch protection, a red CI does not block a merge;
+  - the `propagationPolicy` cause of the orphan Pod is still a hypothesis;
+  - Q3 and 6c of 21/11 were summaries close to prior wording, now superseded by the transfer cases.
+- Status: PRACTICED + EXPLAINED (IRSA workload, secret flow, PostgreSQL credential tiers, kro graph and retry)
