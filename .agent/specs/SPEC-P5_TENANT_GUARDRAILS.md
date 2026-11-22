@@ -121,7 +121,7 @@ task list, not the acceptance.
 | # | Assumption (16/11) | Source then | Recheck | Result 22/11 |
 |---|---|---|---|---|
 | A1 | P4 is complete on EKS: two `RAGSandbox` instances Ready, P4 negative suite passed, teardown clean | SPEC-P4 §8; nothing built yet | P4 acceptance audit in `docs/evidence/p4/` | **True, with limits.** P4 audit: 7/7 scenarios with L3 evidence (scenario 6 partial, C7). Both sandboxes ACTIVE in windows `P4-L3-20261121-01` and `-20261122-01`. `probe sandbox` (allowed paths) and `probe cross` (denied paths, IMDS included) passed. Teardown `65 destroyed`, inventory CLEAN. Open: delayed inventory of 22/11 and Bills gross |
-| A2 | Namespaces `tenant-a`, `tenant-b`, `zdr-platform` and the P4 ServiceAccounts exist under `gitops/platform/tenants/` | SPEC-P4 P4-T3.2 A (planned) | `git ls-files gitops/platform/tenants` | **True.** `namespaces.yaml`, `serviceaccounts.yaml`. Labels today: Pod Security `enforce: restricted` only (no `audit`/`warn`). Tenant namespaces carry `rag.zero-drift.io/tenant: "true"`. Only the bootstrap Job and its Pod carry `rag.zero-drift.io/tenant: <tenant>` (RGD); the app Pod template and the window probe Pods carry no tenant label, and probe Pods declare no resources. Both must change before the D6 rules are enforced (P5-T2.2, P5-T4.1). The draft's `zdr.io/tenant` label does not exist; P5 reuses the `rag.zero-drift.io/` prefix (P5-T2.1 A). Sandbox ServiceAccounts `rag-<name>` are created by the RGD, not listed in Git |
+| A2 | Namespaces `tenant-a`, `tenant-b`, `zdr-platform` and the P4 ServiceAccounts exist under `gitops/platform/tenants/` | SPEC-P4 P4-T3.2 A (planned) | `git ls-files gitops/platform/tenants` | **True.** `namespaces.yaml`, `serviceaccounts.yaml`. Labels today: Pod Security `enforce: restricted` only (no `audit`/`warn`). Tenant namespaces carry `rag.zero-drift.io/tenant: "true"`. Only the bootstrap Job and its Pod carry `rag.zero-drift.io/tenant: <tenant>` (RGD); the cleanup Job carries `rag.zero-drift.io/cleanup-of: <tenant>.<name>` instead (`window.sh`), and the app Pod template and the window probe Pods carry no tenant label, and probe Pods declare no resources. Both must change before the D6 rules are enforced (P5-T2.2, P5-T4.1). The draft's `zdr.io/tenant` label does not exist; P5 reuses the `rag.zero-drift.io/` prefix (P5-T2.1 A). Sandbox ServiceAccounts `rag-<name>` are created by the RGD, not listed in Git |
 | A3 | The reference image runs as non-root and tolerates a read-only root filesystem | SPEC-P4 P4-T3.1 B (planned) | image config and a `restricted` dry-run on kind | **True.** RGD containers: `runAsNonRoot`, `readOnlyRootFilesystem: true`, `allowPrivilegeEscalation: false`, `capabilities.drop: [ALL]`. Pods ran under `restricted` on EKS |
 | A4 | kro v0.9.4 behaviour seen in the spike holds on EKS: child Job in `zdr-platform`, `readyWhen` on a Job, orphaned Job pods | spike on `origin/hoang/drf-40-kro-spike` (kind only, PR #35 not merged) | P4-T3.2 and P4-T4.1 evidence | **True on EKS.** Job in `zdr-platform`, `readyWhen` on `Complete`, orphaned `boot-0` Pod seen in window 21/11 part H. PR #35 is merged. `propagationPolicy` as the cause is still unverified |
 | A5 | The VPC CNI add-on has no configuration values, so NetworkPolicy is **not** enabled today | `infra/terraform/modules/cluster/main.tf` at `df275e4`; add-on `v1.22.4-eksbuild.10` | read the module again; `aws eks describe-addon` in the window | **True.** `modules/cluster/main.tf` has no `configuration_values`; pin still `v1.22.4-eksbuild.10` |
@@ -475,7 +475,17 @@ The 22/11 recheck was done by Claude (Opus 5.5); it is not a second-agent review
 | 0.35 USD/h, 0.37 and 0.92 USD called measured or upper bounds | LOW | Fixed: A15 and D10 call them estimates; gross unverified |
 | A1 lists `probe sandbox` as a negative test | LOW | Fixed: allowed paths vs denied paths |
 
-Not yet re-reviewed. No owner approval.
+**Codex review 2 (22/11), `c248e20..26d3481`: APPROVE.** PR #61 had already been
+merged at `c248e20`, so `26d3481` reached `main` through a follow-up PR. Two LOW
+points, not blocking:
+
+| Point | Handling |
+|---|---|
+| A2 "Only": the cleanup Job and Pod also carry the tenant label (`window.sh:265`) | Not taken: `window.sh:265` sets `app.kubernetes.io/name: rag-cleanup` and `rag.zero-drift.io/cleanup-of`, not `rag.zero-drift.io/tenant`. A2 now names the cleanup label so the claim is explicit |
+| §10 puts the window measurement before sizing D3/D7, but P5-T1 fixes decisions first | Fixed: the measurement confirms the configuration fixed in P5-T1 |
+
+These two edits came after the APPROVE and have not been reviewed by Codex. No
+owner approval yet (D1–D12 open).
 
 ## 9.4. Linear tracking (proposal)
 
@@ -502,8 +512,9 @@ Created after the owner approves the SPEC, parents just before their sub-tasks
   workloads run on one node, but P4 recorded no Pod count or allocatable memory
   (A6). Kyverno adds three Pods, the suite adds probe Pods. P5 may need the
   second system node (4 of the 8 Standard On-Demand vCPUs in the quota seen
-  22/11; recheck before the window). Measure first thing in the P5 window, before
-  sizing D3 and D7.
+  22/11; recheck before the window). The owner fixes D3 and D7 in P5-T1 from the
+  P4 requests; the measurement at the start of the P5 window confirms that
+  configuration and stops the window if it does not fit.
 - **Standard mode start-up gap.** A new Pod is default-allow until its policies
   are programmed (AWS documentation, §11 row S3). Short-lived probe Pods may
   finish inside that gap; the suite must wait before it tests a deny.
