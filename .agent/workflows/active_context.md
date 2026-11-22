@@ -1,8 +1,8 @@
 ---
 project: Zero D-Rift
-status: P4_T4_2_CONFIRM_WINDOW_PLANNED
+status: P4_T4_2_CONFIRM_WINDOW_DONE
 active_phase: P4
-active_task: P4-T4.2 (DRF-57) fixes merged (PR #55); confirm window P4-L3-20261122-01 planned
+active_task: P4-T4.2 (DRF-57) confirm window done 22/11; Codex re-review, Bills, close P4
 active_feature: RAGSandbox (SPEC-P4)
 active_spec: .agent/specs/SPEC-P4_RAG_SANDBOX.md
 current_learning: .agent/learning/CURRENT_STATUS.md
@@ -77,11 +77,10 @@ Follow [context governance](../references/context-governance.md).
 
 DRF-57: audit `docs/evidence/p4/P4_ACCEPTANCE_AUDIT_20261121.md`. Codex REQUEST
 CHANGES (10 findings) fixed with negative tests, PR #55 merged. New image pinned.
-Owner chose a short confirm window (runbook §L, V1-V6) for C4/C6/C9 + sts; then
-Codex re-review.
-Next day: inventory again (tag index lag) and owner reads Bills (DRF-57 A).
-Open from DRF-56 C: owner's `sts get-caller-identity` output was lost; rerun in
-the next window. Re-ask the 4 explanation questions + orphan boot-0 Pod question.
+Confirm window P4-L3-20261122-01 (02:56-04:00Z): V1-V6 PASS, sts line kept,
+65 destroyed, inventory CLEAN, est. 0.37 USD (`P4-T4.2_L3_CONFIRM_20261122.md`).
+Next: Codex re-review; owner reads Bills gross for both windows; inventory next
+day (tag lag); learning update. Re-ask 4 explanation questions + orphan Pod.
 
 ## Context expansion
 
