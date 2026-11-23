@@ -3,6 +3,9 @@
 # zdr-platform holds the platform Jobs and their ServiceAccounts, never a tenant.
 # All three enforce the Pod Security "restricted" profile: the bootstrap Job and
 # the app are built to it, and a tenant cannot start a privileged Pod.
+# P5 (DRF-66, SPEC-P5 P5-T2.1 A): tenant namespaces also audit and warn at
+# "restricted", and the tenant label carries the tenant name (it was "true"),
+# the same value Pods and Jobs carry, so Kyverno (D6) can compare the two.
 apiVersion: v1
 kind: Namespace
 metadata:
@@ -16,15 +19,23 @@ kind: Namespace
 metadata:
   name: tenant-a
   labels:
-    rag.zero-drift.io/tenant: "true"
+    rag.zero-drift.io/tenant: tenant-a
     pod-security.kubernetes.io/enforce: restricted
     pod-security.kubernetes.io/enforce-version: v1.35
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/audit-version: v1.35
+    pod-security.kubernetes.io/warn: restricted
+    pod-security.kubernetes.io/warn-version: v1.35
 ---
 apiVersion: v1
 kind: Namespace
 metadata:
   name: tenant-b
   labels:
-    rag.zero-drift.io/tenant: "true"
+    rag.zero-drift.io/tenant: tenant-b
     pod-security.kubernetes.io/enforce: restricted
     pod-security.kubernetes.io/enforce-version: v1.35
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/audit-version: v1.35
+    pod-security.kubernetes.io/warn: restricted
+    pod-security.kubernetes.io/warn-version: v1.35

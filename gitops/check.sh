@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Static gate for gitops/ (SPEC-P3 Task 3, DRF-35; SPEC-P4 P4-T3.2 B, DRF-51). Touches no cluster and no AWS.
+# Static gate for gitops/ (SPEC-P3 Task 3, DRF-35; SPEC-P4 P4-T3.2 B, DRF-51; SPEC-P5 P5-T2.1 A, DRF-66). Touches no cluster and no AWS.
 # Usage: gitops/check.sh   (from anywhere in the repo)
 # Exit 0 only when every check passes. Needs python with PyYAML (YAML parsing only).
 set -euo pipefail
@@ -213,8 +213,9 @@ res(not bad, "platform ServiceAccounts and Jobs only in zdr-platform; namespaces
     + (f": {bad}" if bad else ""))
 nss = {d["metadata"]["name"] for f, d in docs if d.get("kind") == "Namespace"}
 sas = {(d["metadata"].get("namespace"), d["metadata"]["name"]) for f, d in docs if d.get("kind") == "ServiceAccount"}
-res(TENANTS | {PLATFORM_NS} <= nss and sas == {(PLATFORM_NS, s) for s in PLATFORM_SA},
-    "Git has tenant-a, tenant-b, zdr-platform and exactly the two platform ServiceAccounts")
+res(TENANTS | {PLATFORM_NS} <= nss
+    and sas == {(PLATFORM_NS, s) for s in PLATFORM_SA} | {(t, "default") for t in TENANTS},
+    "Git has tenant-a, tenant-b, zdr-platform, the two platform ServiceAccounts and the tenant default ones")
 
 # 11. RAGSandbox RGD contract (part A): graph, readiness, retry, status.
 g = rgd.get("rag-sandbox")
@@ -270,6 +271,81 @@ for f, d in docs:
             or {"secrets", "pods"} & set(r.get("resources", []))
             or ("configmaps" in r.get("resources", []) and set(r.get("verbs", [])) - {"get", "list", "watch"})]
     res(not wide, f"{d['metadata']['name']}: no wildcard, no secrets/pods, configmaps read only")
+
+# --- P5 (DRF-66, SPEC-P5 P5-T2.1 A) ----------------------------------------
+def objs_of(kind, ns=None):
+    return [(f, d) for f, d in docs if d.get("kind") == kind
+            and (ns is None or d.get("metadata", {}).get("namespace") == ns)]
+
+# 13. Tenant namespaces: the tenant label carries the tenant name, and Pod
+#     Security enforces, audits and warns at "restricted", pinned to v1.35.
+PSS = {f"pod-security.kubernetes.io/{m}": "restricted" for m in ("enforce", "audit", "warn")}
+PSS |= {f"pod-security.kubernetes.io/{m}-version": "v1.35" for m in ("enforce", "audit", "warn")}
+for t in sorted(TENANTS):
+    lab = next((d["metadata"].get("labels", {}) for f, d in objs_of("Namespace") if d["metadata"]["name"] == t), {})
+    res(lab.get("rag.zero-drift.io/tenant") == t and all(lab.get(k) == v for k, v in PSS.items()),
+        f"namespace {t}: tenant label = name; Pod Security enforce/audit/warn restricted v1.35")
+
+# 14. Tenant RBAC (D1): in each tenant namespace one Role tenant-viewer, read
+#     verbs only, no Secrets, no wildcard, bound only to zdr:<tenant>:developers;
+#     no ClusterRoleBinding names a tenant group, and no RBAC object of a tenant
+#     lives outside platform/tenants/.
+READ = {"get", "list", "watch"}
+for t in sorted(TENANTS):
+    roles = [d for f, d in objs_of("Role", t)]
+    rules = [r for d in roles for r in d.get("rules", [])]
+    wide = [r for r in rules if "*" in r.get("verbs", []) + r.get("resources", []) + r.get("apiGroups", [])
+            or set(r.get("verbs", [])) - READ or "secrets" in r.get("resources", [])]
+    res([d["metadata"]["name"] for d in roles] == ["tenant-viewer"] and rules and not wide,
+        f"{t}: only Role tenant-viewer, read verbs, no secrets, no wildcard")
+    binds = [d for f, d in objs_of("RoleBinding", t)]
+    good = [d for d in binds if d.get("roleRef", {}).get("name") == "tenant-viewer"
+            and d.get("roleRef", {}).get("kind") == "Role"
+            and d.get("subjects") == [{"kind": "Group", "apiGroup": "rbac.authorization.k8s.io",
+                                        "name": f"zdr:{t}:developers"}]]
+    res(len(binds) == 1 and len(good) == 1, f"{t}: one RoleBinding, Group zdr:{t}:developers -> tenant-viewer")
+crb = [f"{f}: {d['metadata']['name']}" for f, d in objs_of("ClusterRoleBinding")
+       if any(str(s.get("name", "")).startswith("zdr:") for s in d.get("subjects", []) or [])]
+res(not crb, "no ClusterRoleBinding for a tenant group" + (f": {crb}" if crb else ""))
+stray = [f for f, d in docs if d.get("kind") in ("Role", "RoleBinding")
+         and d.get("metadata", {}).get("namespace") in TENANTS
+         and not f.replace("\\", "/").startswith("platform/tenants/")]
+res(not stray, "tenant RBAC only in platform/tenants/" + (f": {stray}" if stray else ""))
+
+# 15. Default ServiceAccount (D2), quota and LimitRange (D3) per tenant.
+for t in sorted(TENANTS):
+    sa = [d for f, d in objs_of("ServiceAccount", t) if d["metadata"]["name"] == "default"]
+    res(len(sa) == 1 and sa[0].get("automountServiceAccountToken") is False,
+        f"{t}: default ServiceAccount mounts no API token")
+    q = [d for f, d in objs_of("ResourceQuota", t)]
+    hard = q[0].get("spec", {}).get("hard", {}) if len(q) == 1 else {}
+    need = {"pods", "requests.cpu", "requests.memory", "limits.memory", "services", "count/jobs.batch"}
+    res(need <= set(hard) and str(hard.get("requests.nvidia.com/gpu")) == "0"
+        and str(hard.get("services.loadbalancers")) == "0" and str(hard.get("services.nodeports")) == "0",
+        f"{t}: one ResourceQuota with pods/cpu/memory/services/jobs, GPU 0, no LoadBalancer or NodePort")
+    lr = [d for f, d in objs_of("LimitRange", t)]
+    c = next((l for d in lr for l in d.get("spec", {}).get("limits", []) if l.get("type") == "Container"), {})
+    res(len(lr) == 1 and {"cpu", "memory"} <= set(c.get("defaultRequest", {}))
+        and "memory" in c.get("default", {}) and "memory" in c.get("max", {}),
+        f"{t}: one LimitRange with default requests, default and max memory limit")
+
+# 16. Request path (D4): AppProject zdr-requests allows only this repository,
+#     only tenant-a/tenant-b, nothing cluster-scoped, only RAGSandbox; the
+#     requests Application uses it, and no other Application does.
+REPO = "https://github.com/EurusDevSec/Zero-D-Rift.git"
+proj = [d for f, d in objs_of("AppProject") if d["metadata"]["name"] == "zdr-requests"]
+ps = proj[0].get("spec", {}) if len(proj) == 1 else {}
+dest = sorted((x.get("server"), x.get("namespace")) for x in ps.get("destinations", []))
+res(len(proj) == 1 and ps.get("sourceRepos") == [REPO]
+    and dest == [("https://kubernetes.default.svc", t) for t in sorted(TENANTS)]
+    and ps.get("clusterResourceWhitelist") == []
+    and ps.get("namespaceResourceWhitelist") == [{"group": "kro.run", "kind": "RAGSandbox"}],
+    "AppProject zdr-requests: this repo, tenant-a/b, nothing cluster-scoped, only RAGSandbox")
+in_proj = sorted(d["metadata"]["name"] for f, d in apps if d["spec"].get("project") == "zdr-requests")
+req = next((d for f, d in apps if d["metadata"]["name"] == "zdr-requests"), {})
+res(in_proj == ["zdr-requests"] and req.get("spec", {}).get("destination", {}).get("namespace") in TENANTS
+    and "CreateNamespace=true" not in req.get("spec", {}).get("syncPolicy", {}).get("syncOptions", []),
+    "zdr-requests app: project zdr-requests, tenant destination, no CreateNamespace")
 sys.exit(0 if ok else 1)
 EOF
 

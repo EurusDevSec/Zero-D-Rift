@@ -3,6 +3,11 @@
 # allowEmpty lets the last instance be removed. Only files directly in
 # gitops/requests are synced; gitops/requests/disabled/ is ignored until a file
 # is moved up (negative test, Task 5).
+# P5 (DRF-66, SPEC-P5 D4): project zdr-requests (85-project-requests.yaml) limits
+# this app to RAGSandbox in tenant-a/tenant-b. Every request names its own
+# namespace, so the destination namespace is only the default; it must be one
+# the project allows. No CreateNamespace: the project allows no Namespace, and
+# the tenant namespaces come from zdr-tenants (wave 2).
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
@@ -11,7 +16,7 @@ metadata:
   annotations:
     argocd.argoproj.io/sync-wave: "9"
 spec:
-  project: default
+  project: zdr-requests
   source:
     repoURL: https://github.com/EurusDevSec/Zero-D-Rift.git
     targetRevision: main
@@ -21,14 +26,13 @@ spec:
     # default value when it stores the Application (L3 window 05/11).
   destination:
     server: https://kubernetes.default.svc
-    namespace: zdr-requests
+    namespace: tenant-a
   syncPolicy:
     automated:
       prune: true
       selfHeal: true
       allowEmpty: true
     syncOptions:
-      - CreateNamespace=true
       - SkipDryRunOnMissingResource=true
     retry:
       limit: 10

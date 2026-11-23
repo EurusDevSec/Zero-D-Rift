@@ -97,6 +97,36 @@ items:
   metadata: {name: platform-config, namespace: zdr-platform}
   data: {dbPort: "5432"}'
 
+# P5 (DRF-66): baseline rules 13-16.
+NS=platform/tenants/namespaces.yaml
+RB=platform/tenants/rbac.yaml
+QT=platform/tenants/quota.yaml
+PRJ=platform/apps/85-project-requests.yaml
+case_ "tenant label still true" "tenant label = name" "$NS" 'docs[1]["metadata"]["labels"]["rag.zero-drift.io/tenant"] = "true"'
+case_ "no Pod Security warn" "enforce/audit/warn restricted" "$NS" 'del docs[2]["metadata"]["labels"]["pod-security.kubernetes.io/warn"]'
+case_ "tenant may read Secrets" "no secrets, no wildcard" "$RB" 'docs[0]["rules"][0]["resources"].append("secrets")'
+case_ "tenant may create" "read verbs" "$RB" 'docs[2]["rules"][1]["verbs"].append("create")'
+case_ "wildcard resource" "no wildcard" "$RB" 'docs[0]["rules"][2]["resources"] = ["*"]'
+case_ "binding to the other tenant group" "Group zdr:tenant-a:developers" "$RB" 'docs[1]["subjects"][0]["name"] = "zdr:tenant-b:developers"'
+case_ "ClusterRoleBinding for a tenant" "no ClusterRoleBinding for a tenant group" "+platform/tenants/crb.yaml" 'apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata: {name: tenant-a-view}
+subjects: [{kind: Group, apiGroup: rbac.authorization.k8s.io, name: "zdr:tenant-a:developers"}]
+roleRef: {kind: ClusterRole, apiGroup: rbac.authorization.k8s.io, name: view}'
+case_ "tenant Role from another path" "tenant RBAC only in platform/tenants/" "+platform/kro-rbac/extra-role.yaml" 'apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata: {name: extra, namespace: tenant-a}
+rules: [{apiGroups: [""], resources: [pods], verbs: [get]}]'
+case_ "default SA mounts a token" "default ServiceAccount mounts no API token" platform/tenants/serviceaccounts.yaml 'docs[2]["automountServiceAccountToken"] = True'
+case_ "GPU quota above 0" "GPU 0" "$QT" 'docs[0]["spec"]["hard"]["requests.nvidia.com/gpu"] = "1"'
+case_ "NodePort allowed" "no LoadBalancer or NodePort" "$QT" 'del docs[2]["spec"]["hard"]["services.nodeports"]'
+case_ "LimitRange without max" "default and max memory limit" "$QT" 'del docs[1]["spec"]["limits"][0]["max"]'
+case_ "project allows Namespace" "nothing cluster-scoped" "$PRJ" 'docs[0]["spec"]["clusterResourceWhitelist"] = [{"group": "", "kind": "Namespace"}]'
+case_ "project allows ConfigMap" "only RAGSandbox" "$PRJ" 'docs[0]["spec"]["namespaceResourceWhitelist"].append({"group": "", "kind": "ConfigMap"})'
+case_ "project allows zdr-platform" "tenant-a/b" "$PRJ" 'docs[0]["spec"]["destinations"].append({"server": "https://kubernetes.default.svc", "namespace": "zdr-platform"})'
+case_ "requests app back on default" "project zdr-requests, tenant destination" platform/apps/90-requests.yaml 'docs[0]["spec"]["project"] = "default"'
+case_ "requests app creates namespaces" "no CreateNamespace" platform/apps/90-requests.yaml 'docs[0]["spec"]["syncPolicy"]["syncOptions"].append("CreateNamespace=true")'
+
 echo
 if (( failed )); then echo "RESULT: FAIL"; exit 1; fi
 echo "RESULT: PASS ($n guard cases, each made check.sh fail on its rule)"
