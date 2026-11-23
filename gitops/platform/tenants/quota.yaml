@@ -1,0 +1,70 @@
+# P5 (DRF-66, SPEC-P5 D3, threat T11). Per tenant: room for two sandboxes and the
+# probe Pods of the isolation suite, nothing more. Numbers come from the P4 app
+# container (requests 50m / 96Mi, memory limit 192Mi, no CPU limit):
+#   2 sandboxes x 2 app Pods during a rolling update = 4 x 50m / 96Mi / 192Mi
+#   + up to 4 probe Pods at the LimitRange default   = 4 x 50m / 96Mi / 192Mi
+#   -> 8 Pods, 400m CPU and 768Mi memory requested, 1536Mi memory limit.
+# The bootstrap and cleanup Jobs run in zdr-platform, so they are not counted here.
+# requests.nvidia.com/gpu stays 0 for the whole project (ADR-0009, P6 on CPU).
+# No CPU limit quota: the app has none by design (P4), and limits.cpu here would
+# force one on every Pod.
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: tenant-quota
+  namespace: tenant-a
+spec:
+  hard:
+    pods: "8"
+    requests.cpu: 400m
+    requests.memory: 768Mi
+    limits.memory: 1536Mi
+    requests.nvidia.com/gpu: "0"
+    services: "4"
+    services.loadbalancers: "0"
+    services.nodeports: "0"
+    count/jobs.batch: "4"
+---
+# A container without requests or a memory limit gets these defaults, so a Pod
+# that forgets them is counted instead of rejected; one that asks for more than
+# 512Mi is rejected. Kyverno (P5-T2.2, D6) sees the Pod after these defaults.
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: tenant-defaults
+  namespace: tenant-a
+spec:
+  limits:
+    - type: Container
+      defaultRequest: {cpu: 50m, memory: 96Mi}
+      default: {memory: 192Mi}
+      max: {memory: 512Mi}
+---
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: tenant-quota
+  namespace: tenant-b
+spec:
+  hard:
+    pods: "8"
+    requests.cpu: 400m
+    requests.memory: 768Mi
+    limits.memory: 1536Mi
+    requests.nvidia.com/gpu: "0"
+    services: "4"
+    services.loadbalancers: "0"
+    services.nodeports: "0"
+    count/jobs.batch: "4"
+---
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: tenant-defaults
+  namespace: tenant-b
+spec:
+  limits:
+    - type: Container
+      defaultRequest: {cpu: 50m, memory: 96Mi}
+      default: {memory: 192Mi}
+      max: {memory: 512Mi}

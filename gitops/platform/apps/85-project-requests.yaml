@@ -1,0 +1,27 @@
+# Wave 8 (P5, DRF-66, SPEC-P5 D4, threat T03). The runtime backstop of the
+# request path: the zdr-requests Application (wave 9) may only create RAGSandbox
+# objects in tenant-a and tenant-b from this repository, and nothing
+# cluster-scoped. CI (check.sh rule 8b) refuses anything else first; this
+# project still refuses it if a bad file reaches main. BatchTrainingJob joins
+# the list in P6. The root app syncs this file itself, so the project exists
+# before the Application that names it.
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: zdr-requests
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "8"
+spec:
+  description: Tenant requests only (RAGSandbox in tenant-a, tenant-b)
+  sourceRepos:
+    - https://github.com/EurusDevSec/Zero-D-Rift.git
+  destinations:
+    - server: https://kubernetes.default.svc
+      namespace: tenant-a
+    - server: https://kubernetes.default.svc
+      namespace: tenant-b
+  clusterResourceWhitelist: []
+  namespaceResourceWhitelist:
+    - group: kro.run
+      kind: RAGSandbox

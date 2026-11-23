@@ -258,19 +258,19 @@ Gate: no manifest, policy or Terraform change before part A is approved.
 
 **A. Manifests (2 h)**
 
-- [ ] Namespace labels: keep `rag.zero-drift.io/tenant` (decide whether the
+- [x] Namespace labels: keep `rag.zero-drift.io/tenant` (decide whether the
       namespace value becomes the tenant name instead of `"true"`, since Pods and
       Jobs already carry the name); add Pod Security `audit` and `warn` =
       `restricted` next to the existing `enforce`, version pinned to the cluster minor.
-- [ ] RBAC per D1: Role `tenant-viewer` and RoleBinding to group
+- [x] RBAC per D1: Role `tenant-viewer` and RoleBinding to group
       `zdr:<tenant>:developers`; no ClusterRoleBinding for tenants; no `secrets`
       verb; no wildcard.
-- [ ] `default` ServiceAccount and every tenant workload Pod:
+- [x] `default` ServiceAccount and every tenant workload Pod:
       `automountServiceAccountToken: false` (D2). The IRSA token is a separate
       projected volume and must still be present.
-- [ ] ResourceQuota and LimitRange per D3.
-- [ ] AppProject `zdr-requests` per D4; the requests Application moves into it.
-- [ ] `gitops/check.sh`: request kinds allowlist, tenant namespaces, no RBAC or
+- [x] ResourceQuota and LimitRange per D3.
+- [x] AppProject `zdr-requests` per D4; the requests Application moves into it.
+- [x] `gitops/check.sh`: request kinds allowlist, tenant namespaces, no RBAC or
       cluster-scoped object under `gitops/requests/`.
 
 **B. L2 kind lab: break one control at a time (2 h)** — owner predicts the layer

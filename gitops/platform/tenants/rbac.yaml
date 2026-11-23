@@ -1,0 +1,77 @@
+# P5 (DRF-66, SPEC-P5 D1, scenario 2). A tenant developer only reads its own
+# namespace. Tenants change things through Git (a RAGSandbox request), never by
+# writing to the API, so the Role has get/list/watch only and no Secrets.
+# The subject is a group name, tested by impersonation from the admin session
+# (kubectl --as-group); there is no EKS access entry or IAM role for it (D1).
+# No ClusterRoleBinding for a tenant; check.sh rule 14 refuses one.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: tenant-viewer
+  namespace: tenant-a
+rules:
+  - apiGroups: [""]
+    resources: [pods, pods/log, services, configmaps, events, resourcequotas, limitranges]
+    verbs: [get, list, watch]
+  - apiGroups: [apps]
+    resources: [deployments, replicasets]
+    verbs: [get, list, watch]
+  - apiGroups: [batch]
+    resources: [jobs]
+    verbs: [get, list, watch]
+  - apiGroups: [kro.run]
+    resources: [ragsandboxes]
+    verbs: [get, list, watch]
+  - apiGroups: [networking.k8s.io]
+    resources: [networkpolicies]
+    verbs: [get, list, watch]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: tenant-viewer
+  namespace: tenant-a
+subjects:
+  - kind: Group
+    apiGroup: rbac.authorization.k8s.io
+    name: zdr:tenant-a:developers
+roleRef:
+  kind: Role
+  apiGroup: rbac.authorization.k8s.io
+  name: tenant-viewer
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: tenant-viewer
+  namespace: tenant-b
+rules:
+  - apiGroups: [""]
+    resources: [pods, pods/log, services, configmaps, events, resourcequotas, limitranges]
+    verbs: [get, list, watch]
+  - apiGroups: [apps]
+    resources: [deployments, replicasets]
+    verbs: [get, list, watch]
+  - apiGroups: [batch]
+    resources: [jobs]
+    verbs: [get, list, watch]
+  - apiGroups: [kro.run]
+    resources: [ragsandboxes]
+    verbs: [get, list, watch]
+  - apiGroups: [networking.k8s.io]
+    resources: [networkpolicies]
+    verbs: [get, list, watch]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: tenant-viewer
+  namespace: tenant-b
+subjects:
+  - kind: Group
+    apiGroup: rbac.authorization.k8s.io
+    name: zdr:tenant-b:developers
+roleRef:
+  kind: Role
+  apiGroup: rbac.authorization.k8s.io
+  name: tenant-viewer

@@ -2,7 +2,7 @@
 project: Zero D-Rift
 status: P5_SPEC_OWNER_APPROVED
 active_phase: P5 (P4 closing items open)
-active_task: P5-T1 B (DRF-64) pins and sources, 23/11
+active_task: P5-T2.1 (DRF-66) baseline A done; owner kind lab B next, 23/11
 active_feature: Tenant guardrails (SPEC-P5)
 active_spec: .agent/specs/SPEC-P5_TENANT_GUARDRAILS.md
 current_learning: .agent/learning/CURRENT_STATUS.md
@@ -72,9 +72,13 @@ Follow [context governance](../references/context-governance.md).
 
 ## Next safe action
 
-P5-T1 B (DRF-64): pin Kyverno and its policy API, confirm VPC CNI version and
-schema (read-only AWS in the owner's MFA session), VERSION_MATRIX "P5 pins".
-Then P5-T2/T3 code on kind. P4 closing items run in parallel on 23/11.
+P5-T1 B (DRF-64) is Done (pins in VERSION_MATRIX §9). P5-T2.1 A (DRF-66):
+baseline manifests, AppProject `zdr-requests` and check.sh rules 13-16 are on
+branch `hoang/drf-66-p5-baseline`; Claude ran the runbook
+`docs/runbooks/P5_L2_KIND_BASELINE.md` on kind once (all steps as expected).
+Next: owner runs the lab with own predictions (P5-T2.1 B, evidence
+`docs/evidence/p5/P5-T2.1_L2_KIND_BASELINE_<date>.md`), then P5-T2.2 Kyverno
+(DRF-67). P4 closing items run in parallel on 23/11.
 
 ## Context expansion
 
