@@ -7,7 +7,7 @@
 - Codex đã review bản nháp theo mục 4: REQUEST CHANGES (mục 5). Các sửa ở mục 5.1 đã merge (PR #55–#57).
   Codex review lại ngày 22/11: REQUEST CHANGES, 2 MEDIUM, 2 LOW (mục 5.2); xử lý ở mục 5.3.
   Codex kiểm bản sửa ở `70ad8d8`: APPROVE, không finding mới (mục 5.4).
-  Mục 6 (inventory trễ, Bills) điền ngày 22/11.
+  Mục 6 (inventory trễ, Bills) điền ngày 22/11; mục 6.1 (Bills gross tháng 11) điền ngày 23/11.
 
 ## 1. Quy tắc hoàn thành P4 (SPEC §8)
 
@@ -16,7 +16,7 @@
 | Mọi kịch bản §4 có evidence L3 trên EKS | **Đạt có giới hạn**: 7/7 kịch bản có evidence L3. Dòng `sts` do owner tự gõ (DRF-56 C) đã có ở window xác nhận 22/11 (`P4-T4.2_L3_CONFIRM_20261122.md`, V4). Còn một giới hạn: kịch bản 6 chỉ đạt một phần, vì nguyên nhân lỗi retry được gỡ bằng `kubectl`, không qua Git (C7) |
 | Teardown sạch | **Đạt** 21/11 và 22/11: mỗi lần `65 destroyed`, state 0, `inventory.sh` `RESULT: CLEAN` |
 | Inventory trễ sạch | **Đạt** 22/11 02:44Z: owner chạy với MFA, `RESULT: CLEAN`. Chỉ mục tag đã hết lệch (mục 6) |
-| Đã đọc billing | **Một phần**: owner đọc trang Credits ngày 22/11 (ước tính, dùng 0,55 USD cả tài khoản). Window xác nhận ước tính thêm khoảng 0,37 USD. Bills gross chưa đọc: đọc một lần cho cả hai window, khi số ước tính đã cập nhật (mục 6) |
+| Đã đọc billing | **Đạt (số ước tính)** 23/11: Bills tháng 11 gross **0,73 USD** cho cả tài khoản, gồm P3 window 05/11 và hai window P4, nên P4 ≤ 0,73 USD, dưới trần 5 USD (D10). Hoá đơn còn `Pending`; số chốt có khi hoá đơn tháng được phát hành (mục 6.1) |
 | Review độc lập ghi findings và giới hạn | **Đạt**: Codex review lần 1 (1 HIGH, 6 MEDIUM, 3 LOW, mục 5); đã sửa cả 10 (mục 5.1). Review lại 22/11: C1, C5, C6 sửa một phần; 2 MEDIUM, 2 LOW mới (mục 5.2), xử lý ở mục 5.3. Codex kiểm bản sửa `70ad8d8`: **APPROVE**, không finding mới; đồng ý giữ `GetBucketLocation` làm giới hạn LOW (mục 5.4). Sau đó `fec7847` siết thêm `cleanup` theo review Copilot, Codex chưa kiểm (mục 5.4) |
 | Owner `PRACTICED` + `EXPLAINED`: IRSA workload, luồng secret, tầng credential PostgreSQL | **Đạt** 22/11: IRSA đạt từ 21/11 (dòng `sts` có ở window 22/11). Luồng secret và tầng credential được kiểm bằng hai câu chuyển giao trên ca mới (câu A, B), owner tự gõ, không gợi ý. Bốn câu còn nợ của DRF-51/45 cũng đã trả lời (`P4-T4.2_TEACHBACK_20261121.md`) |
 
@@ -265,3 +265,44 @@ Owner chạy trên máy mình, với MFA, profile `zdr-tf`, rồi dán output v�
 - Chênh lệch **≈ 0,26 USD**. Đó là ước tính cho window 21/11, thấp hơn ước tính D10 là 0,50 USD. Lúc đọc, window mới kết thúc khoảng 17 giờ, nên số này có thể chưa đủ.
 - Đây là credit ước tính, không phải Bills gross, nên không chặn trên được chi phí gross. Số còn lại dưới trần 5 USD (D10, gross) **chưa xác minh** cho tới khi đọc Bills. Theo ước tính, coi cả 0,55 USD là của P4, P4 còn khoảng 4,45 USD.
 - Bills gross: owner đọc một lần sau window xác nhận `P4-L3-20261122-01`, cho cả hai window.
+
+### 6.1 Bills gross tháng 11 (23/11)
+
+Owner mở **Billing and Cost Management → Bills** trên máy mình. Claude chỉ xem màn hình, không bấm gì,
+lúc khoảng 05:46Z ngày 23/11. Đã che account ID.
+
+**Đầu trang:** kỳ `November 1 - November 30, 2026`, trạng thái `Pending`. `Total in USD`, `Estimated grand total`
+và `Total pre-tax service charges` đều **USD 0,00**. Đây là số **net**: credit được trừ ngay trên từng dòng dịch vụ,
+nên trang Bills không có ô gross. 13 dịch vụ có mặt trong kỳ, dòng nào cũng USD 0,00 sau credit.
+
+**Tab Savings:** 1 loại tiết kiệm (credit), tổng **(USD 0,73)**. Gross = net + credit = **0,73 USD**.
+
+| Dịch vụ | Credit đã trừ = gross (USD) |
+|---|---|
+| Elastic Container Service for Kubernetes | 0,31 |
+| Elastic Compute Cloud | 0,28 |
+| Relational Database Service | 0,12 |
+| Virtual Private Cloud | 0,02 |
+| Simple Storage Service, Secrets Manager, Data Transfer | 0,00 |
+| **Tổng** | **0,73** |
+
+`Highest AWS Region spend` = 0,73 USD, `US East (N. Virginia)`, khớp tổng. Cùng ngày, owner đọc trang **Credits**:
+dùng ước tính 0,71 USD, còn 199,29 USD. Chênh 0,02 USD vì hai trang cập nhật vào lúc khác nhau; lấy Bills làm chuẩn.
+
+**Kết luận:**
+- Tháng 11 có ba window: P3 (05/11), P4 (21/11) và P4 xác nhận (22/11, destroy xong 04:00Z). Bills đọc sau đó
+  khoảng 26 giờ. Vì vậy chi phí gross của P4 **≤ 0,73 USD**, dưới trần 5 USD (D10), kể cả nếu cả 0,37 USD ước tính
+  của window 22/11 còn chưa vào: 0,73 + 0,37 = 1,10 < 5.
+- Toàn dự án tính tới nay: tháng 10 (P2, khoảng 0,07 USD theo SPEC-P3) + tháng 11 0,73 ≈ **0,80 USD** trên envelope
+  100 USD. Số tháng 10 lấy từ hồ sơ P2, không đọc lại hôm nay.
+- Thực trả 0,00 USD: credit trừ hết.
+
+**Hai điểm cần xem, không chặn P4:**
+- **RDS 0,12 USD** cao hơn mức D2 dự kiến. `db.t4g.micro` 0,016 USD/h × khoảng 2,5 giờ sống ≈ 0,04 USD; lưu trữ
+  20 GB gp3 trong vài giờ gần như 0. Lần sau, bấm `+` ở dòng RDS trong Charges by service (trước khi trừ credit)
+  để xem loại phí (instance, storage, hay phí khác) rồi ghi tiếp ở đây.
+- **Glue** có trong 13 dịch vụ với 0,00 USD, không có credit nào. P1–P4 không chủ động dùng Glue. Không tốn tiền;
+  đưa vào lượt rà inventory tiếp theo để biết nguồn.
+
+**Giới hạn:** số ước tính, hoá đơn `Pending`. Số chốt có khi hoá đơn tháng 11 được phát hành (đầu tháng 12).
+Inventory trễ cho window 22/11 vẫn là việc riêng: lần chạy ở mục 6 (02:44Z) diễn ra **trước** window đó (02:51Z).
