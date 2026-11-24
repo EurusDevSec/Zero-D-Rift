@@ -321,13 +321,12 @@ Evidence: `docs/evidence/p5/P5-T2.1_L2_KIND_BASELINE_<date>.md`.
       reports clean (3 `pass`) before the switch. The RAG graph lab variant was
       not used; the Audit gate on running RAGSandboxes moves to the L3 window
       (§1 boundary 5).
-- [ ] Enforce stage: each forbidden Pod of §4 scenario 3 is rejected; record the
-      message. **Partial (owner 24/11):** observed `zdr-image-digest` on
-      `busybox:1.37` (tag and outside registry in one image) and
-      `zdr-tenant-label` on a missing and a spoofed label. Not yet observed by
-      the owner: tag only, outside registry with digest, and no requests reaching
-      Kyverno (LimitRange fills them first). All three are step 2b of the
-      Kyverno runbook; Claude's kind run 24/11 got the expected denial for each.
+- [x] Enforce stage: each forbidden Pod of §4 scenario 3 is rejected; record the
+      message. Owner 24/11: `zdr-image-digest` on `busybox:1.37`, on a project
+      image by tag only, and on an outside registry with a digest;
+      `zdr-tenant-label` on a missing and a spoofed label; `zdr-require-resources`
+      on a Pod without requests once the tenant LimitRange was removed (step 2b;
+      with the LimitRange in place the defaults are filled before Kyverno).
 - [x] Outage (as run 24/11): (3a) admission controller scaled to zero, a
       compliant and a non-compliant Pod in `tenant-a` both admitted (webhooks
       removed, fail open); (3b) Service unreachable, a compliant Pod in
@@ -338,8 +337,8 @@ Evidence: `docs/evidence/p5/P5-T2.1_L2_KIND_BASELINE_<date>.md`.
 
 (24/11: owner ran the runbook end to end, all observations match, no
 predictions; evidence `docs/evidence/p5/P5-T2.2_L2_KIND_KYVERNO_20261124.md`.
-The Audit and Outage rows above state what was run; Enforce stays open until
-the owner runs step 2b (Codex review of PR #71). Owner answer to the after-lab question covers the
+The Audit and Outage rows above state what was run; Enforce was closed by the
+owner's step 2b run on 24/11 (Codex review of PR #71 asked for it). Owner answer to the after-lab question covers the
 LimitRange half only.)
 
 Evidence: `docs/evidence/p5/P5-T2.2_L2_KIND_KYVERNO_<date>.md`. kind proves

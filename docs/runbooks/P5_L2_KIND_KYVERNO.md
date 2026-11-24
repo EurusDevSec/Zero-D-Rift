@@ -147,7 +147,7 @@ $K apply -f gitops/platform/tenants/quota.yaml | grep limitrange
 
 **Dự đoán trước:** khi gỡ "cầu chì" LimitRange, ai chặn Pod `noreq2`?
 
-**Phải thấy** (Claude chạy thử 24/11):
+**Phải thấy** (Claude chạy thử 24/11, owner chạy 24/11 khớp):
 - `tagonly` (đúng registry, chỉ có tag) → `Policy zdr-image-digest failed: …`.
 - `otherreg` (có digest, sai registry) → cùng policy `zdr-image-digest`.
 - `limitrange "tenant-defaults" deleted`, rồi `noreq2` → `Policy zdr-require-resources failed: every container needs
