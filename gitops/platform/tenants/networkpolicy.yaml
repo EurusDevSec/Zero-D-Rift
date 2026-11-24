@@ -1,4 +1,4 @@
-# P5 (DRF-68, SPEC-P5 P5-T3 B, D5, threats T04, T06, T07). Enforced by the
+# P5 (DRF-68, SPEC-P5 P5-T3 B, D5, threats T10, T06). Enforced by the
 # VPC CNI node agent in standard mode (infra/terraform, vpc-cni
 # configuration_values); on a cluster without it these objects do nothing.
 # Per tenant namespace: deny all, then allow only

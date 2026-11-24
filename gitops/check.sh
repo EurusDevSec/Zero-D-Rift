@@ -6,6 +6,9 @@ set -euo pipefail
 
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$here"
+# Terraform's vpc_cidr (rule 18 cross-check). The guard tests copy only gitops/,
+# so they pass the real file in TF_VARIABLES.
+export TF_VARIABLES="${TF_VARIABLES:-$here/../infra/terraform/variables.tf}"
 
 failed=0
 pass() { echo "PASS  $1"; }
@@ -38,7 +41,7 @@ unpinned="$(grep -h -E '^\s*-?\s*(image|package):\s*\S' $files | grep -v '@sha25
 
 # 4-7 need structure: read every document once.
 python -I - $files <<'EOF' || failed=1
-import sys, yaml, re
+import sys, yaml, re, os, ipaddress
 docs = []
 for f in sys.argv[1:]:
     for d in yaml.safe_load_all(open(f)):
@@ -78,24 +81,32 @@ res(charts == {"crossplane": "2.4.3", "kro": "0.9.4", "kyverno": "3.10.0"}, f"He
 # Chart images: the values must carry a digest (Crossplane: repository@sha256 +
 # ignoreTag; kro and Kyverno: tag v...@sha256), otherwise the chart default tag
 # is used. Every "image" block in the values counts; Kyverno has eight.
-def image_blocks(node):
+# The digest must sit in the key the chart template reads (Codex PR #71
+# review): a digest moved to an unused key would leave the real image on a tag.
+def image_blocks(node, path=()):
     if isinstance(node, dict):
         for k, v in node.items():
             if k == "image" and isinstance(v, dict):
-                yield v
-            yield from image_blocks(v)
+                yield path, v
+            yield from image_blocks(v, path + (k,))
     elif isinstance(node, list):
         for x in node:
-            yield from image_blocks(x)
-NEED_IMAGES = {"crossplane": 1, "kro": 1, "kyverno": 8}
+            yield from image_blocks(x, path)
+IMAGE_KEYS = {  # chart -> {path of the image block: field the template reads}
+    "crossplane": {(): "repository"},
+    "kro": {(): "tag"},
+    "kyverno": {p: "tag" for p in [("admissionController", "initContainer"), ("admissionController", "container"),
+                                   ("backgroundController",), ("reportsController",), ("upgrade", "legacyPolicyCheck"),
+                                   ("crds", "migration"), ("webhooksCleanup",), ("test",)]},
+}
 for f, d in apps:
     s = d["spec"]["source"]
     if "chart" in s:
-        blocks = list(image_blocks(s.get("helm", {}).get("valuesObject", {})))
-        refs = [b.get("repository", "") + ":" + str(b.get("tag", "")) for b in blocks]
-        res(len(refs) == NEED_IMAGES.get(s["chart"], -1)
-            and all(re.search(r"@sha256:[0-9a-f]{64}", r) for r in refs),
-            f"{d['metadata']['name']}: chart image pinned by digest ({len(refs)} image blocks)")
+        blocks = dict(image_blocks(s.get("helm", {}).get("valuesObject", {})))
+        want = IMAGE_KEYS.get(s["chart"], {})
+        res(want and set(blocks) == set(want)
+            and all(re.search(r"@sha256:[0-9a-f]{64}$", str(blocks[p].get(k, ""))) for p, k in want.items()),
+            f"{d['metadata']['name']}: chart image pinned by digest at the chart's keys ({len(blocks)} image blocks)")
 for f, d in apps:
     a = d["spec"].get("syncPolicy", {}).get("automated", {})
     name = d["metadata"]["name"]
@@ -300,6 +311,11 @@ for t in sorted(TENANTS):
     res(lab.get("rag.zero-drift.io/tenant") == t and all(lab.get(k) == v for k, v in PSS.items()),
         f"namespace {t}: tenant label = name; Pod Security enforce/audit/warn restricted v1.35")
 
+others = [d["metadata"]["name"] for f, d in objs_of("Namespace")
+          if d["metadata"]["name"] not in TENANTS and "rag.zero-drift.io/tenant" in d["metadata"].get("labels", {})]
+res(not others, "tenant label only on tenant namespaces (Kyverno and NetworkPolicy select it)"
+    + (f": {others}" if others else ""))
+
 # 14. Tenant RBAC (D1): in each tenant namespace one Role tenant-viewer, read
 #     verbs only, no Secrets, no wildcard, bound only to zdr:<tenant>:developers;
 #     no ClusterRoleBinding names a tenant group, and no RBAC object of a tenant
@@ -321,6 +337,10 @@ for t in sorted(TENANTS):
 crb = [f"{f}: {d['metadata']['name']}" for f, d in objs_of("ClusterRoleBinding")
        if any(str(s.get("name", "")).startswith("zdr:") for s in d.get("subjects", []) or [])]
 res(not crb, "no ClusterRoleBinding for a tenant group" + (f": {crb}" if crb else ""))
+foreign = [f"{d['metadata'].get('namespace')}/{d['metadata']['name']}" for f, d in objs_of("RoleBinding")
+           for s in d.get("subjects", []) or [] if str(s.get("name", "")).startswith("zdr:")
+           and s.get("name") != f"zdr:{d['metadata'].get('namespace')}:developers"]
+res(not foreign, "a tenant group is bound only in its own namespace" + (f": {foreign}" if foreign else ""))
 stray = [f for f, d in docs if d.get("kind") in ("Role", "RoleBinding")
          and d.get("metadata", {}).get("namespace") in TENANTS
          and not f.replace("\\", "/").startswith("platform/tenants/")]
@@ -410,6 +430,31 @@ for f, d in objs_of("NetworkPolicy"):
                     or not {"10.0.0.0/16", "169.254.0.0/16"} <= set(b.get("except", []))):
                 wide.append(f"{d['metadata'].get('namespace')}/{d['metadata']['name']}")
 res(not wide, "no NetworkPolicy opens 0.0.0.0/0 on all ports or into the VPC/metadata" + (f": {wide}" if wide else ""))
+# Every egress rule names its peers and its ports (an empty rule, a rule without
+# "to" or without "ports" allows everything); a namespaceSelector peer is only
+# the DNS path to kube-system on port 53.
+DNS_NS = {"matchLabels": {"kubernetes.io/metadata.name": "kube-system"}}
+loose = []
+for f, d in objs_of("NetworkPolicy"):
+    for r in d.get("spec", {}).get("egress", []) or []:
+        peers, ports = r.get("to") or [], r.get("ports") or []
+        if (not peers or not ports or any(p == {} for p in peers)
+                or any("namespaceSelector" in p and (p["namespaceSelector"] != DNS_NS
+                       or any(str(q.get("port")) != "53" for q in ports)) for p in peers)):
+            loose.append(f"{d['metadata'].get('namespace')}/{d['metadata']['name']}")
+res(not loose, "every egress rule names peers and ports; other namespaces only for DNS" + (f": {loose}" if loose else ""))
+# The DB and VPC addresses in the policies follow Terraform's vpc_cidr default
+# (locals.tf: cidrsubnet(vpc_cidr, 8, 10 + i)); a VPC override must change both.
+tf = open(os.environ["TF_VARIABLES"], encoding="utf-8").read() if os.path.exists(os.environ["TF_VARIABLES"]) else ""
+m = re.search(r'variable "vpc_cidr"[^}]*?default\s*=\s*"([0-9./]+)"', tf, re.S)
+vpc = ipaddress.ip_network(m.group(1)) if m else None
+dbs = {str(n) for n in list(vpc.subnets(new_prefix=24))[10:12]} if vpc else set()
+cidrs = {p["ipBlock"]["cidr"] for f, d in objs_of("NetworkPolicy") for r in d.get("spec", {}).get("egress", []) or []
+         for p in r.get("to") or [] if "ipBlock" in p and p["ipBlock"]["cidr"] != "0.0.0.0/0"}
+vexc = {e for f, d in objs_of("NetworkPolicy") for r in d.get("spec", {}).get("egress", []) or []
+        for p in r.get("to") or [] for e in p.get("ipBlock", {}).get("except", []) if e != "169.254.0.0/16"}
+res(vpc is not None and cidrs == dbs and vexc == {str(vpc)},
+    f"NetworkPolicy DB subnets {sorted(cidrs)} and VPC except {sorted(vexc)} match Terraform vpc_cidr {vpc}")
 sys.exit(0 if ok else 1)
 EOF
 

@@ -1,17 +1,25 @@
 #!/usr/bin/env bash
 # P5 isolation suite (DRF-70, SPEC-P5 P5-T4.1). Runs every case, writes
 # acceptance.json (case, threat, expected layer and result, observed result,
-# UTC time, evidence line) and exits 0 only when every case that ran matched.
+# UTC time, sanitized evidence) and exits 0 only when every case that ran matched.
 #
-#   MODE=kind CTX=kind-zdr-p5-kyv tests/isolation/run.sh   # dry run, no AWS
-#   MODE=eks  CTX=<eks context> RUN_ID=P5-L3-... tests/isolation/run.sh
+#   MODE=kind CTX=kind-zdr-p5-iso tests/isolation/run.sh                    # dry run, no AWS
+#   MODE=eks  CTX=<eks context> NET_PHASE=control  RUN_ID=... OUT=control.json tests/isolation/run.sh
+#   MODE=eks  CTX=<eks context> NET_PHASE=enforced RUN_ID=... CONTROL=control.json tests/isolation/run.sh
 #
 # kind: cases that need EKS (VPC CNI NetworkPolicy, IMDS, IRSA, RDS, S3) are
-# written as SKIPPED_NEEDS_EKS, never PASS. eks: nothing may be skipped; the
-# P4 negatives run unchanged through infra/p4-window/window.sh probe, which
-# uses the current kubectl context, so CTX must be the current context.
-# Each Pod case is a server dry run, except the network cases (real Pods,
-# deleted afterwards). The context name is never written to the output.
+# written as SKIPPED_NEEDS_EKS, never PASS. eks: nothing may be skipped.
+# eks NET_PHASE=control runs only the network paths, with no NetworkPolicy in
+# the tenant namespaces: every path must be open, so a later deny is the policy's
+# doing. NET_PHASE=enforced runs everything; it needs the control file, the Git
+# NetworkPolicies present and programmed (PolicyEndpoints), and Kyverno in Deny.
+# The P4 negatives run through infra/p4-window/window.sh probe, which uses the
+# current kubectl context, so CTX must be the current context.
+# Admission cases are server dry runs. Network and IAM cases run as Jobs: the
+# VPC CNI does not enforce NetworkPolicy on a Pod without an owner. Everything
+# the suite creates carries app.kubernetes.io/name=zdr-isolation and is removed
+# and checked from an exit trap. The context name, account IDs and ARNs are
+# scrubbed from every line written.
 set -euo pipefail
 # "pod ... | case_admit" must record in this shell, not in a pipeline subshell,
 # or its result (and a FAIL) would be lost.
@@ -20,25 +28,51 @@ cd "$(dirname "$0")/../.."
 
 MODE="${MODE:?MODE=kind|eks}"; CTX="${CTX:?CTX=<kubectl context>}"
 OUT="${OUT:-acceptance.json}"; RUN_ID="${RUN_ID:-dry-run}"; SANDBOX="${SANDBOX:-docs-qa}"
+NET_PHASE="${NET_PHASE:-}"; CONTROL="${CONTROL:-}"
 K="kubectl --context $CTX"
+LBL=app.kubernetes.io/name=zdr-isolation
 IMG="$(grep -m1 -o 'ghcr.io/eurusdevsec/zero-d-rift/rag-sandbox@sha256:[0-9a-f]\{64\}' gitops/platform/rgd/rag-sandbox.yaml)"
 cases='[]'; bad=0
-# window.sh probe uses the current context: refuse to mix two clusters (no name printed).
-if [[ "$MODE" == eks && "$(kubectl config current-context)" != "$CTX" ]]; then
-    echo "FAIL  CTX is not the current kubectl context"; exit 1
+if [[ "$MODE" == eks ]]; then
+    # window.sh probe uses the current context: refuse to mix two clusters (no name printed).
+    [[ "$(kubectl config current-context)" == "$CTX" ]] || { echo "FAIL  CTX is not the current kubectl context"; exit 1; }
+    [[ "$NET_PHASE" == control || "$NET_PHASE" == enforced ]] || { echo "FAIL  eks needs NET_PHASE=control|enforced"; exit 1; }
+    [[ "$NET_PHASE" == control || -s "$CONTROL" ]] || { echo "FAIL  NET_PHASE=enforced needs CONTROL=<control run json>"; exit 1; }
 fi
+
+# Remove the context name, AWS account IDs, ARNs and EKS endpoints from a line.
+scrub() {
+    local s="${1//"$CTX"/<ctx>}"
+    sed -E -e 's/arn:aws[a-z-]*:[^ "]*/<arn>/g' -e 's/(^|[^0-9])[0-9]{12}([^0-9]|$)/\1<acct>\2/g' \
+           -e 's/[A-Za-z0-9.-]+\.eks\.amazonaws\.com/<eks-endpoint>/g' <<< "$s" | tr '\n' ' '
+}
 
 # record ID THREAT LAYER EXPECTED OBSERVED EVIDENCE
 record() {
-    local res
+    local res ev; ev="$(scrub "$6")"
     if [[ "$5" == SKIPPED_* ]]; then res="$5"
     elif [[ "$4" == "$5" ]]; then res=PASS
     else res=FAIL; bad=1; fi
-    printf '%-18s %-6s %-12s expected=%-22s observed=%-22s %s\n' "$res" "$2" "$1" "$4" "$5" "${6:0:110}"
+    printf '%-18s %-6s %-26s expected=%-30s observed=%-30s %s\n' "$res" "$2" "$1" "$4" "$5" "${ev:0:110}"
     cases="$(jq -c --arg id "$1" --arg t "$2" --arg l "$3" --arg e "$4" --arg o "$5" --arg r "$res" \
-        --arg ev "${6:0:300}" --arg at "$(date -u +%FT%TZ)" \
+        --arg ev "${ev:0:300}" --arg at "$(date -u +%FT%TZ)" \
         '. + [{id:$id, threat:$t, layer:$l, expected:$e, observed:$o, result:$r, utc:$at, evidence:$ev}]' <<< "$cases")"
 }
+
+# Exit trap: delete what the suite created, then prove it is gone.
+cleanup() {
+    local left
+    for ns in tenant-a tenant-b; do
+        $K -n "$ns" delete jobs,pods,serviceaccounts -l "$LBL" --wait=true --timeout=120s >/dev/null 2>&1 || true
+    done
+    $K get ns argocd >/dev/null 2>&1 && { $K -n argocd delete applications.argoproj.io -l "$LBL" --wait=true --timeout=60s >/dev/null 2>&1 || true; }
+    left="$( { for ns in tenant-a tenant-b; do $K -n "$ns" get jobs,pods,serviceaccounts -l "$LBL" -o name 2>/dev/null; done
+              $K get ns argocd >/dev/null 2>&1 && $K -n argocd get applications.argoproj.io -l "$LBL" -o name 2>/dev/null; true; } | wc -l)"
+    if (( left )); then echo "FAIL  cleanup: $left suite objects still present (label $LBL)"; return 1; fi
+    echo "cleanup: no suite object left"
+}
+on_exit() { local rc=$?; cleanup || rc=1; exit "$rc"; }
+trap on_exit EXIT
 
 # A restricted-compliant Pod that passes every guardrail; patches change one thing.
 pod() { # NAME NS [CONTAINER_PATCH] [SPEC_PATCH] [LABEL_PATCH]
@@ -53,154 +87,277 @@ pod() { # NAME NS [CONTAINER_PATCH] [SPEC_PATCH] [LABEL_PATCH]
                resources:{requests:{cpu:"50m",memory:"96Mi"},limits:{memory:"192Mi"}}} * $c)]} * $s)}'
 }
 
-# Which layer answered an admission attempt: allow, or deny:<layer>.
+# job NS NAME PYTHON_CODE [SPEC_PATCH] [ARGS...] -> prints the last "RESULT ..." line,
+# or "RESULT ERROR job-<state>" / "RESULT ERROR no-output". The Job owns its Pod.
+job() {
+    local ns=$1 n=$2 code=$3 spec="${4:-}" state="" i line
+    shift 4 || shift $#
+    pod "$n" "$ns" "$(jq -nc --arg c "$code" '{command:(["python","-c",$c] + $ARGS.positional)}' --args "$@")" "$spec" \
+        | jq '{apiVersion:"batch/v1",kind:"Job",metadata:{name:.metadata.name,namespace:.metadata.namespace,labels:.metadata.labels},
+               spec:{backoffLimit:0,activeDeadlineSeconds:150,template:{metadata:{labels:.metadata.labels},spec:.spec}}}' \
+        | $K apply -f - >/dev/null
+    for i in $(seq 1 85); do
+        state="$($K -n "$ns" get job "$n" -o jsonpath='{.status.succeeded}/{.status.failed}' 2>/dev/null || true)"
+        [[ "$state" == 1/* || "$state" == */1 ]] && break
+        sleep 2
+    done
+    line="$($K -n "$ns" logs "job/$n" 2>/dev/null | grep '^RESULT ' | tail -1 || true)"
+    $K -n "$ns" delete job "$n" --cascade=foreground --wait=true --timeout=60s >/dev/null 2>&1 || true
+    if [[ -n "$line" ]]; then echo "$line"
+    elif [[ "$state" == 1/* ]]; then echo "RESULT ERROR no-output"
+    else echo "RESULT ERROR job-${state:-missing}"; fi
+}
+
+# Which layer answered an admission attempt. A webhook that could not be called
+# is an error, not a policy decision.
 admit() { # manifest on stdin -> prints "OBSERVED|evidence"
-    local out
+    local out p
     if out="$($K create --dry-run=server -f - 2>&1)"; then echo "allow|$out"; return; fi
     case "$out" in
-        *PodSecurity*)                 echo "deny:pod-security|$out" ;;
-        *vpol.validate.kyverno*)       echo "deny:kyverno|$out" ;;
-        *"maximum memory usage"*)      echo "deny:limitrange|$out" ;;
+        *"failed calling webhook"*)    echo "error:webhook|$out" ;;
+        *"violates PodSecurity"*)      echo "deny:pod-security|$out" ;;
+        *'vpol.validate.kyverno.svc-fail" denied the request'*)
+            p="$(grep -o 'Policy zdr-[a-z-]* failed' <<< "$out" | head -1 | cut -d' ' -f2)"
+            echo "deny:kyverno:${p:-unknown}|$out" ;;
+        *"maximum memory usage per Container"*) echo "deny:limitrange|$out" ;;
         *"exceeded quota"*)            echo "deny:quota|$out" ;;
-        *)                             echo "deny:other|$out" ;;
+        *)                             echo "error:other|$out" ;;
     esac
 }
 case_admit() { # ID THREAT EXPECTED  (manifest on stdin)
-    local r; r="$(admit)"; record "$1" "$2" admission "$3" "${r%%|*}" "$(tr '\n' ' ' <<< "${r#*|}")"
+    local r; r="$(admit)"; record "$1" "$2" admission "$3" "${r%%|*}" "${r#*|}"
 }
-case_rbac() { # ID THREAT EXPECTED VERB RESOURCE NS-or-- AS GROUP
-    local ns=() ans; [[ "$6" != - ]] && ns=(-n "$6")
+# can-i prints "yes" or "no" on stdout (warnings go to stderr); anything else,
+# or nothing (the API server unreachable), is not a denial.
+case_rbac() { # ID THREAT EXPECTED VERB RESOURCE NS-or-- AS [GROUP]
+    local ns=() ans obs; [[ "$6" != - ]] && ns=(-n "$6")
     ans="$($K auth can-i "$4" "$5" "${ns[@]}" --as="$7" ${8:+--as-group="$8"} 2>/dev/null || true)"
-    record "$1" "$2" rbac "$3" "$([[ "$ans" == yes* ]] && echo allow || echo deny:rbac)" "can-i $4 $5 ${6} as $7: ${ans:-no}"
+    case "$(head -1 <<< "$ans")" in
+        yes*) obs=allow ;; no|"no "*) obs=deny:rbac ;; *) obs=error:rbac ;;
+    esac
+    record "$1" "$2" rbac "$3" "$obs" "can-i $4 $5 ${6} as $7: $(head -1 <<< "$ans")"
 }
 
-echo "isolation suite mode=$MODE run=$RUN_ID $(date -u +%FT%TZ)"
+echo "isolation suite mode=$MODE phase=${NET_PHASE:-n/a} run=$RUN_ID $(date -u +%FT%TZ)"
 
-# --- T04: Kubernetes RBAC (D1, D2) --------------------------------------------
+# --- T10, T06: network paths (D5), needs VPC CNI NetworkPolicy ------------------
+# connect: a Job in TENANT opens TCP to HOST:PORT. Only a timeout counts as a
+# NetworkPolicy deny (the node agent drops); refused, DNS and other errors fail.
+NETCODE='import socket, sys, time
+host, port = sys.argv[1], int(sys.argv[2])
+time.sleep(20)  # standard mode: a new Pod is default-allow until its policies are programmed
+try:
+    addr = socket.getaddrinfo(host, port, socket.AF_INET, socket.SOCK_STREAM)[0][4]
+except Exception as e:
+    print("RESULT ERROR dns", type(e).__name__); sys.exit(0)
+s = socket.socket(); s.settimeout(5)
+try:
+    s.connect(addr); print("RESULT OPEN")
+except socket.timeout:
+    print("RESULT TIMEOUT")
+except ConnectionRefusedError:
+    print("RESULT ERROR refused")
+except Exception as e:
+    print("RESULT ERROR", type(e).__name__)'
+net_case() { # ID THREAT EXPECTED TENANT HOST PORT
+    local r obs; r="$(job "$4" "zdr-iso-net-$RANDOM" "$NETCODE" '' "$5" "$6")"
+    case "$r" in
+        "RESULT OPEN") obs=allow ;; "RESULT TIMEOUT") obs=deny:network ;;
+        *) obs="error:$(cut -d' ' -f3 <<< "$r")" ;;
+    esac
+    record "$1" "$2" networkpolicy "$3" "$obs" "$4 -> $5:$6: ${r#RESULT }"
+}
+# NetworkPolicies of TENANT in Git, by name.
+git_np() { python -I -c 'import sys,yaml; print("\n".join(d["metadata"]["name"] for d in yaml.safe_load_all(open(sys.argv[1])) if d and d["metadata"]["namespace"] == sys.argv[2]))' gitops/platform/tenants/networkpolicy.yaml "$1" | LC_ALL=C sort -u; }
+NETS=("T10-own-app T10 tenant-a rag-$SANDBOX.tenant-a.svc 8080"
+      "T10-a-to-b T10 tenant-a rag-$SANDBOX.tenant-b.svc 8080"
+      "T10-b-to-a T10 tenant-b rag-$SANDBOX.tenant-a.svc 8080"
+      "T06-metadata T06 tenant-a 169.254.169.254 80")
+if [[ "$MODE" != eks ]]; then
+    for c in T10-own-app T10-a-to-b T10-b-to-a T06-metadata; do
+        record "$c" "${c%%-*}" networkpolicy see-eks SKIPPED_NEEDS_EKS "kind has no VPC CNI NetworkPolicy"
+    done
+elif [[ "$NET_PHASE" == control ]]; then
+    for t in tenant-a tenant-b; do
+        nps="$($K -n "$t" get networkpolicies -o name 2>&1 | grep -c networkpolicy || true)"
+        record "net-control-$t" T10 networkpolicy none "$([[ "$nps" == 0 ]] && echo none || echo "present:$nps")" "$t NetworkPolicies before the control run"
+    done
+    for c in "${NETS[@]}"; do set -- $c; net_case "$1" "$2" allow "$3" "$4" "$5"; done
+else
+    # The control run must have opened the same paths before the policies existed.
+    for c in "${NETS[@]}"; do set -- $c
+        o="$(jq -r --arg id "$1" 'if .mode == "eks" and .net_phase == "control" then ([.cases[] | select(.id == $id) | .observed][0] // "missing") else "not-a-control-run" end' "$CONTROL" 2>/dev/null || echo unreadable)"
+        record "$1-control" "$2" networkpolicy allow "$o" "same path in the control run ($(jq -r .run_id "$CONTROL" 2>/dev/null))"
+    done
+    # Every Git NetworkPolicy exists and the node agent has programmed it.
+    for t in tenant-a tenant-b; do
+        want="$(git_np "$t")"; got=""
+        for i in $(seq 1 24); do
+            got="$($K -n "$t" get policyendpoints.networking.k8s.aws -o jsonpath='{range .items[*]}{.spec.policyRef.name}{"\n"}{end}' 2>/dev/null | LC_ALL=C sort -u || true)"
+            [[ "$got" == "$want" ]] && break; sleep 5
+        done
+        record "net-programmed-$t" T10 networkpolicy programmed "$([[ "$got" == "$want" ]] && echo programmed || echo missing)" \
+            "$t PolicyEndpoints for: $(tr '\n' ' ' <<< "$want")"
+    done
+    net_case T10-own-app  T10 allow        tenant-a "rag-$SANDBOX.tenant-a.svc" 8080
+    net_case T10-a-to-b   T10 deny:network tenant-a "rag-$SANDBOX.tenant-b.svc" 8080
+    net_case T10-b-to-a   T10 deny:network tenant-b "rag-$SANDBOX.tenant-a.svc" 8080
+    net_case T06-metadata T06 deny:network tenant-a 169.254.169.254 80
+fi
+
+if [[ "$NET_PHASE" == control ]]; then
+    jq -n --arg run "$RUN_ID" --arg mode "$MODE" --argjson c "$cases" \
+        '{run_id:$run, mode:$mode, net_phase:"control", cases:$c,
+          summary:{total:($c|length), pass:([$c[]|select(.result=="PASS")]|length), fail:([$c[]|select(.result=="FAIL")]|length)}}' > "$OUT"
+    if (( bad )); then echo "RESULT: FAIL (control run, $OUT)"; exit 1; fi
+    echo "RESULT: PASS (control run, $OUT)"; exit 0
+fi
+
+# --- T04: Kubernetes RBAC (D1, D2) ----------------------------------------------
 DEV=dev-a; GRP=zdr:tenant-a:developers; SA=system:serviceaccount:tenant-a:default
-case_rbac T04-own-pods     T04 allow     get  pods                tenant-a "$DEV" "$GRP"
-case_rbac T04-b-pods       T04 deny:rbac list pods                tenant-b "$DEV" "$GRP"
-case_rbac T04-b-sandboxes  T04 deny:rbac get  ragsandboxes.kro.run tenant-b "$DEV" "$GRP"
-case_rbac T04-own-services T04 allow     get  services            tenant-a "$DEV" "$GRP"
-case_rbac T04-b-services   T04 deny:rbac get  services            tenant-b "$DEV" "$GRP"
-case_rbac T04-own-secrets  T04 deny:rbac get  secrets             tenant-a "$DEV" "$GRP"
-case_rbac T04-b-secrets    T04 deny:rbac get  secrets             tenant-b "$DEV" "$GRP"
-case_rbac T04-cluster      T04 deny:rbac list namespaces          -        "$DEV" "$GRP"
-case_rbac T04-create       T04 deny:rbac create pods              tenant-a "$DEV" "$GRP"
-case_rbac T04-sa-b-pods    T04 deny:rbac list pods                tenant-b "$SA"
-case_rbac T04-sa-secrets   T04 deny:rbac get  secrets             tenant-a "$SA"
+WSA=system:serviceaccount:tenant-a:rag-$SANDBOX   # the sandbox workload identity
+case_rbac T04-own-pods       T04 allow     get    pods                 tenant-a "$DEV" "$GRP"
+case_rbac T04-b-pods         T04 deny:rbac list   pods                 tenant-b "$DEV" "$GRP"
+case_rbac T04-b-sandboxes    T04 deny:rbac get    ragsandboxes.kro.run tenant-b "$DEV" "$GRP"
+case_rbac T04-b-sas          T04 deny:rbac list   serviceaccounts      tenant-b "$DEV" "$GRP"
+case_rbac T04-own-services   T04 allow     get    services             tenant-a "$DEV" "$GRP"
+case_rbac T04-b-services     T04 deny:rbac get    services             tenant-b "$DEV" "$GRP"
+case_rbac T04-own-secrets    T04 deny:rbac get    secrets              tenant-a "$DEV" "$GRP"
+case_rbac T04-b-secrets      T04 deny:rbac get    secrets              tenant-b "$DEV" "$GRP"
+case_rbac T04-cluster        T04 deny:rbac list   namespaces           -        "$DEV" "$GRP"
+case_rbac T04-create         T04 deny:rbac create pods                 tenant-a "$DEV" "$GRP"
+case_rbac T04-sa-b-pods      T04 deny:rbac list   pods                 tenant-b "$SA"
+case_rbac T04-sa-secrets     T04 deny:rbac get    secrets              tenant-a "$SA"
+case_rbac T04-wsa-b-pods     T04 deny:rbac list   pods                 tenant-b "$WSA"
+case_rbac T04-wsa-secrets    T04 deny:rbac get    secrets              tenant-a "$WSA"
+case_rbac T04-wsa-b-secrets  T04 deny:rbac get    secrets              tenant-b "$WSA"
+case_rbac T04-wsa-b-sandbox  T04 deny:rbac get    ragsandboxes.kro.run tenant-b "$WSA"
+case_rbac T04-wsa-cluster    T04 deny:rbac list   namespaces           -        "$WSA"
 
-# --- T05: Pod Security restricted --------------------------------------------
+# --- T05: Pod Security restricted -----------------------------------------------
 pod ok tenant-a | case_admit T05-compliant T05 allow
 pod priv tenant-a '{"securityContext":{"privileged":true,"allowPrivilegeEscalation":true}}' | case_admit T05-privileged T05 deny:pod-security
 pod hostnet tenant-a '{}' '{"hostNetwork":true}' | case_admit T05-hostnetwork T05 deny:pod-security
 pod hostpath tenant-a '{"volumeMounts":[{"name":"h","mountPath":"/h"}]}' '{"volumes":[{"name":"h","hostPath":{"path":"/"}}]}' | case_admit T05-hostpath T05 deny:pod-security
 pod root tenant-a '{}' '{"securityContext":{"runAsNonRoot":false,"runAsUser":0}}' | case_admit T05-root T05 deny:pod-security
 
-# --- T14, T10 label, T15 health: Kyverno (D6, D8) ----------------------------
-pod tag tenant-b '{"image":"ghcr.io/eurusdevsec/zero-d-rift/rag-sandbox:latest"}' | case_admit T14-tag T14 deny:kyverno
-pod reg tenant-b "{\"image\":\"docker.io/library/python@sha256:$(printf 'a%.0s' {1..64})\"}" | case_admit T14-registry T14 deny:kyverno
-pod spoof tenant-a '{}' '{}' '{"rag.zero-drift.io/tenant":"tenant-b"}' | case_admit T10-label-spoof T10 deny:kyverno
+# --- T14, T10 label, T15 health: Kyverno (D6, D8) -------------------------------
+pod tag tenant-b '{"image":"ghcr.io/eurusdevsec/zero-d-rift/rag-sandbox:latest"}' | case_admit T14-tag T14 deny:kyverno:zdr-image-digest
+pod reg tenant-b "{\"image\":\"docker.io/library/python@sha256:$(printf 'a%.0s' {1..64})\"}" | case_admit T14-registry T14 deny:kyverno:zdr-image-digest
+pod spoof tenant-a '{}' '{}' '{"rag.zero-drift.io/tenant":"tenant-b"}' | case_admit T10-label-spoof T10 deny:kyverno:zdr-tenant-label
 pod plat zdr-platform '{"image":"busybox:1.37"}' '{}' '{"rag.zero-drift.io/tenant":"x"}' | case_admit T15-platform-out-of-scope T15 allow
 health="$($K get validatingpolicies.policies.kyverno.io -o json 2>/dev/null \
     | jq -r '[.items[] | select(.metadata.name | startswith("zdr-"))] | if length == 3 and all(.spec.validationActions == ["Deny"] and .spec.failurePolicy == "Fail" and (.status.conditionStatus.ready == true)) then "ready-deny" else "not-ready-or-audit" end' || echo missing)"
 record T15-policies-enforced T15 kyverno ready-deny "$health" "3 zdr- ValidatingPolicies: Deny, Fail, Ready"
 
-# --- T11: quota and LimitRange (D3) ------------------------------------------
+# --- T11: quota and LimitRange (D3) ---------------------------------------------
 pod gpu tenant-a '{"resources":{"limits":{"memory":"192Mi","nvidia.com/gpu":"1"}}}' | case_admit T11-gpu T11 deny:quota
 pod big tenant-a '{"resources":{"limits":{"memory":"1Gi"}}}' | case_admit T11-big T11 deny:limitrange
 pod noreq tenant-a | jq 'del(.spec.containers[0].resources)' | case_admit T11-defaults T11 allow
 
-# --- T03: request path (D4), needs Argo CD -----------------------------------
+# --- T03: request path (D4), needs Argo CD --------------------------------------
+# app NAME PATH NAMESPACE: an Application in project zdr-requests, auto-synced.
+app() {
+    jq -n --arg n "$1" --arg p "$2" --arg ns "$3" '{apiVersion:"argoproj.io/v1alpha1",kind:"Application",
+      metadata:{name:$n,namespace:"argocd",labels:{"app.kubernetes.io/name":"zdr-isolation"}},
+      spec:{project:"zdr-requests",source:{repoURL:"https://github.com/EurusDevSec/Zero-D-Rift.git",targetRevision:"main",path:$p},
+            destination:{server:"https://kubernetes.default.svc",namespace:$ns},syncPolicy:{automated:{}}}}' | $K apply -f - >/dev/null
+}
+# wait_msg APP TEXT: poll conditions and the operation message for TEXT (90 s).
+wait_msg() {
+    local m="" i
+    for i in $(seq 1 18); do
+        m="$($K -n argocd get app "$1" -o jsonpath='{range .status.conditions[*]}{.type}: {.message} {end}{.status.operationState.message}' 2>&1 || true)"
+        [[ "$m" == *"$2"* ]] && break; sleep 5
+    done
+    echo "$m"
+}
 if $K get ns argocd >/dev/null 2>&1; then
-    app="zdr-iso-badns-$RANDOM"
-    jq -n --arg n "$app" '{apiVersion:"argoproj.io/v1alpha1",kind:"Application",metadata:{name:$n,namespace:"argocd"},
-      spec:{project:"zdr-requests",source:{repoURL:"https://github.com/EurusDevSec/Zero-D-Rift.git",targetRevision:"main",path:"gitops/requests"},
-            destination:{server:"https://kubernetes.default.svc",namespace:"zdr-platform"}}}' | $K apply -f - >/dev/null
-    sleep 20
-    msg="$($K -n argocd get app "$app" -o jsonpath='{range .status.conditions[*]}{.type}: {.message}{end}' 2>&1)"
-    $K -n argocd delete app "$app" --wait=false >/dev/null 2>&1 || true
-    record T03-foreign-namespace T03 argocd deny:argocd "$([[ "$msg" == *InvalidSpecError* ]] && echo deny:argocd || echo allow)" "$msg"
+    a="zdr-iso-badns-$RANDOM"; app "$a" gitops/requests zdr-platform
+    want="do not match any of the allowed destinations in project 'zdr-requests'"
+    m="$(wait_msg "$a" "$want")"
+    record T03-foreign-namespace T03 argocd deny:argocd "$([[ "$m" == *"$want"* ]] && echo deny:argocd || echo other)" "$m"
+    a="zdr-iso-badkind-$RANDOM"; app "$a" gitops/lab tenant-a
+    want="resource apps:Deployment is not permitted in project zdr-requests"
+    m="$(wait_msg "$a" "$want")"
+    made="$($K get deploy -A -o name 2>/dev/null | grep -c zdr-lab-pause || true)"
+    record T03-foreign-kind T03 argocd deny:argocd "$([[ "$m" == *"$want"* && "$made" == 0 ]] && echo deny:argocd || echo "other:deployments=$made")" "$m"
 else
     record T03-foreign-namespace T03 argocd deny:argocd SKIPPED_NEEDS_EKS "no argocd namespace in this cluster"
+    record T03-foreign-kind      T03 argocd deny:argocd SKIPPED_NEEDS_EKS "no argocd namespace in this cluster"
 fi
 
-# --- T10, T06: network (D5), needs VPC CNI NetworkPolicy ---------------------
-# connect TENANT HOST PORT -> OPEN or CLOSED, from a real Pod of TENANT.
-connect() {
-    local n="zdr-iso-net-$RANDOM" code
-    # Standard mode leaves a new Pod default-allow until its policies are
-    # programmed (SPEC-P5 §10): wait first, so a deny is not tested in the gap.
-    code="import socket,sys,time
-time.sleep(20)
-s=socket.socket(); s.settimeout(5)
-try: s.connect((sys.argv[1], int(sys.argv[2]))); print('OPEN')
-except Exception as e: print('CLOSED', type(e).__name__)"
-    pod "$n" "$1" "$(jq -nc --arg c "$code" --arg h "$2" --arg p "$3" '{command:["python","-c",$c,$h,$p]}')" \
-        | $K apply -f - >/dev/null
-    $K -n "$1" wait --for=jsonpath='{.status.phase}'=Succeeded pod "$n" --timeout=90s >/dev/null 2>&1 || true
-    $K -n "$1" logs "$n" 2>/dev/null | tail -1
-    $K -n "$1" delete pod "$n" --wait=false >/dev/null 2>&1 || true
-}
-net_case() { # ID THREAT EXPECTED TENANT HOST PORT
-    local r; r="$(connect "$4" "$5" "$6")"
-    record "$1" "$2" networkpolicy "$3" "$([[ "$r" == OPEN* ]] && echo allow || echo deny:network)" "$4 -> $5:$6: ${r:-no output}"
-}
+# --- T07: a ServiceAccount outside the trust pattern rag-* (A10) -----------------
+# It carries the tenant role annotation (copied, never printed). STS must answer
+# AssumeRoleWithWebIdentity with AccessDenied; an empty annotation, a missing
+# IRSA environment or an unreachable STS is an error, not a denial.
+T07CODE='import os, sys, boto3, botocore
+arn, tf = os.environ.get("AWS_ROLE_ARN"), os.environ.get("AWS_WEB_IDENTITY_TOKEN_FILE")
+if not arn or not tf:
+    print("RESULT ERROR no-irsa-env"); sys.exit(0)
+region = os.environ.get("AWS_REGION") or os.environ.get("AWS_DEFAULT_REGION") or "us-east-1"
+try:
+    boto3.client("sts", region_name=region).assume_role_with_web_identity(
+        RoleArn=arn, RoleSessionName="zdr-iso-t07", WebIdentityToken=open(tf).read())
+    print("RESULT ASSUMED")
+except botocore.exceptions.ClientError as e:
+    c = e.response.get("Error", {}).get("Code", "unknown")
+    print("RESULT", "DENIED" if c == "AccessDenied" else "ERROR", c)
+except Exception as e:
+    print("RESULT ERROR", type(e).__name__)'
 if [[ "$MODE" == eks ]]; then
-    net_case T10-own-app       T10 allow        tenant-a "rag-$SANDBOX.tenant-a.svc" 8080
-    net_case T10-a-to-b        T10 deny:network tenant-a "rag-$SANDBOX.tenant-b.svc" 8080
-    net_case T10-b-to-a        T10 deny:network tenant-b "rag-$SANDBOX.tenant-a.svc" 8080
-    net_case T06-metadata      T06 deny:network tenant-a 169.254.169.254 80
-else
-    for c in T10-own-app T10-a-to-b T10-b-to-a T06-metadata; do
-        record "$c" "${c%%-*}" networkpolicy see-eks SKIPPED_NEEDS_EKS "kind has no VPC CNI NetworkPolicy"
-    done
-fi
-
-# --- T07: a ServiceAccount outside the trust pattern rag-* (A10) ---------------
-# It carries the tenant role annotation (copied, never printed); STS must refuse.
-if [[ "$MODE" == eks ]]; then
-    role="$($K -n tenant-a get sa "rag-$SANDBOX" -o jsonpath='{.metadata.annotations.eks\.amazonaws\.com/role-arn}')"
-    $K -n tenant-a create serviceaccount zdr-iso-other --dry-run=client -o json \
-        | jq --arg r "$role" '.metadata.annotations["eks.amazonaws.com/role-arn"] = $r | .automountServiceAccountToken = false' \
-        | $K apply -f - >/dev/null
-    unset role
-    n="zdr-iso-t07-$RANDOM"
-    code="import boto3
-try: boto3.client('sts', region_name='us-east-1').get_caller_identity(); print('ASSUMED')
-except Exception as e: print('DENIED', getattr(e, 'response', {}).get('Error', {}).get('Code', type(e).__name__))"
-    pod "$n" tenant-a "$(jq -nc --arg c "$code" '{command:["python","-c",$c]}')" '{"serviceAccountName":"zdr-iso-other"}' \
-        | $K apply -f - >/dev/null
-    $K -n tenant-a wait --for=jsonpath='{.status.phase}'=Succeeded pod "$n" --timeout=120s >/dev/null 2>&1 || true
-    r="$($K -n tenant-a logs "$n" 2>/dev/null | tail -1)"
-    $K -n tenant-a delete pod "$n" --wait=true >/dev/null 2>&1 || true
-    $K -n tenant-a delete serviceaccount zdr-iso-other >/dev/null 2>&1 || true
-    record T07-other-sa T07 iam deny:iam "$([[ "$r" == DENIED* ]] && echo deny:iam || echo allow)" "zdr-iso-other assumes tenant-a role: ${r:-no output}"
+    role="$($K -n tenant-a get sa "rag-$SANDBOX" -o jsonpath='{.metadata.annotations.eks\.amazonaws\.com/role-arn}' 2>/dev/null || true)"
+    if [[ -z "$role" ]]; then
+        record T07-other-sa T07 iam deny:iam error:no-annotation "rag-$SANDBOX in tenant-a has no role annotation to copy"
+    else
+        $K -n tenant-a create serviceaccount zdr-iso-other --dry-run=client -o json \
+            | jq --arg r "$role" '.metadata.annotations["eks.amazonaws.com/role-arn"] = $r
+                 | .metadata.labels["app.kubernetes.io/name"] = "zdr-isolation" | .automountServiceAccountToken = false' \
+            | $K apply -f - >/dev/null
+        unset role
+        r="$(job tenant-a "zdr-iso-t07-$RANDOM" "$T07CODE" '{"serviceAccountName":"zdr-iso-other"}')"
+        case "$r" in "RESULT DENIED AccessDenied") obs=deny:iam ;; "RESULT ASSUMED") obs=allow ;; *) obs="error:$(cut -d' ' -f3 <<< "$r")" ;; esac
+        record T07-other-sa T07 iam deny:iam "$obs" "zdr-iso-other AssumeRoleWithWebIdentity on the tenant-a role: ${r#RESULT }"
+    fi
 else
     record T07-other-sa T07 iam deny:iam SKIPPED_NEEDS_EKS "needs IRSA"
 fi
 
-# --- T08, T13, T06: P4 probes unchanged (window.sh probe), positives included --
+# --- T08, T13, T06: P4 probes (window.sh probe), positives included -------------
+# Each probe must exit 0 and print exactly its expected case set; a missing
+# case, a SKIP or an early stop is a FAIL.
+p4() { # LABEL "case name"... -- window.sh probe args...
+    local label=$1 want=() seen=() out rc=0 line st what t c; shift
+    while [[ "$1" != -- ]]; do want+=("$1"); shift; done; shift
+    out="$(bash infra/p4-window/window.sh probe "$@" 2>&1)" || rc=$?
+    while IFS= read -r line; do
+        line="${line%$'\r'}"
+        [[ "$line" =~ ^(PASS|FAIL|SKIP)\ \ ([^:]*):(.*)$ ]] || continue
+        st="${BASH_REMATCH[1]}"; what="${BASH_REMATCH[2]}"; seen+=("$what")
+        case "$what" in *IMDS*) t=T06 ;; *schema*|*ROLE*|*rag_bootstrap*|*pgvector*|*TLS*) t=T13 ;; *) t=T08 ;; esac
+        record "P4 $label: $what" "$t" iam-or-db pass "${st,,}" "$what:${BASH_REMATCH[3]}"
+    done <<< "$out"
+    for c in "${want[@]}"; do
+        printf '%s\n' "${seen[@]}" | grep -qxF "$c" || record "P4 $label: $c" T08 iam-or-db pass missing "case not printed by window.sh probe $*"
+    done
+    record "P4 $label: exit" T08 iam-or-db exit-0 "exit-$rc" "window.sh probe $* exit status"
+}
 if [[ "$MODE" == eks ]]; then
-    for args in "sandbox tenant-a $SANDBOX" "sandbox tenant-b $SANDBOX" \
-                "cross tenant-a $SANDBOX tenant-b" "cross tenant-b $SANDBOX tenant-a"; do
-        set -- $args; got=0
-        while IFS= read -r line; do
-            line="${line%$'\r'}"
-            [[ "$line" =~ ^(PASS|FAIL|SKIP)\ \ (.*)$ ]] || continue
-            st="${BASH_REMATCH[1]}"; what="${BASH_REMATCH[2]}"; got=$((got + 1))
-            case "$what" in *IMDS*) t=T06 ;; *schema*|*ROLE*) t=T13 ;; *) t=T08 ;; esac
-            record "P4: ${what%%:*}" "$t" iam-or-db pass "$( [[ $st == PASS ]] && echo pass || echo "${st,,}")" "$what"
-        done < <(bash infra/p4-window/window.sh probe "$@" 2>&1 || true)
-        # A probe that printed no case at all is a failure, never a silent pass.
-        (( got )) || record "P4: probe $1 $2" T08 iam-or-db pass no-output "window.sh probe $* printed no PASS/FAIL line"
+    p4 platform "bootstrap secret readable" "TLS on the connection" "pgvector installed by db-init" \
+        "rag_bootstrap attributes" "rag_bootstrap database grants" "bootstrap identity cannot read the master secret" -- platform
+    for t in tenant-a tenant-b; do
+        o=$([[ $t == tenant-a ]] && echo tenant-b || echo tenant-a)
+        p4 "sandbox $t" "own secret readable" "own schema queried" "vector query in own schema" \
+            "own bucket reachable (HeadBucket)" "app /readyz through the Service" "app /query through the Service" -- sandbox "$t" "$SANDBOX"
+        p4 "cross $t" "$t reads $o's secret" "$t reads the bootstrap secret" "$t reaches $o's bucket" "$t reads $o's schema" \
+            "$t sandbox role runs CREATE ROLE" "$t sandbox role creates a schema" "$t Pod gets an IMDS token" -- cross "$t" "$SANDBOX" "$o"
     done
 else
     record P4-probes T08 iam-or-db pass SKIPPED_NEEDS_EKS "needs RDS, Secrets Manager, S3 and IRSA"
 fi
 
-jq -n --arg run "$RUN_ID" --arg mode "$MODE" --arg img "$IMG" --argjson c "$cases" \
-    '{run_id:$run, mode:$mode, image:$img, cases:$c,
+jq -n --arg run "$RUN_ID" --arg mode "$MODE" --arg ph "${NET_PHASE:-none}" --arg img "$IMG" --argjson c "$cases" \
+    '{run_id:$run, mode:$mode, net_phase:$ph, image:$img, cases:$c,
       summary:{total:($c|length), pass:([$c[]|select(.result=="PASS")]|length),
                fail:([$c[]|select(.result=="FAIL")]|length),
                skipped:([$c[]|select(.result|startswith("SKIPPED"))]|length)}}' > "$OUT"
