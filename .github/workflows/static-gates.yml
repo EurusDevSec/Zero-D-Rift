@@ -1,5 +1,6 @@
 # Static gates on pull requests (SPEC-P4 P4-T3.2 B, D12; ver3 §9.1 step 2).
-# gitops/check.sh with its guard tests, and the Terraform static gate
+# gitops/check.sh with its guard tests, kyverno test for the Kyverno policies,
+# and the Terraform static gate
 # (fmt, validate, mocked contract tests, plan_assert guards, pins, leak scan).
 # No cloud or cluster credential: no secret is referenced, the token is read-only,
 # Terraform runs with -backend=false and mock providers only.
@@ -46,6 +47,18 @@ jobs:
         run: bash gitops/check.sh
       - name: Guard tests (each rule must be able to fail)
         run: bash gitops/tests/check_guards.sh
+
+  kyverno:
+    # L1 for the Kyverno policies (SPEC-P5 P5-T2.2 A): kyverno test in the pinned
+    # kyverno-cli image by digest, no network in the container, plus a self-test.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: kyverno test (kyverno-cli v1.20.0 by digest)
+        run: bash gitops/tests/kyverno_test.sh
 
   terraform:
     runs-on: ubuntu-24.04
