@@ -290,16 +290,21 @@ Evidence: `docs/evidence/p5/P5-T2.1_L2_KIND_BASELINE_<date>.md`.
 
 **A. Install and policies (2 h)**
 
-- [ ] Argo CD Application for the pinned chart; images by digest; server-side
+- [x] Argo CD Application for the pinned chart; images by digest; server-side
       apply for the CRDs; components per D7; replica counts stated.
-- [ ] Policies per D6, each with `match` limited to namespaces labelled
+- [x] Policies per D6, each with `match` limited to namespaces labelled
       `rag.zero-drift.io/tenant`, each starting in `Audit`.
-- [ ] RGD app Pod template gains `rag.zero-drift.io/tenant: <tenant>` (A2), labels
+- [x] RGD app Pod template gains `rag.zero-drift.io/tenant: <tenant>` (A2), labels
       only, before the tenant-label rule leaves `Audit`.
-- [ ] `kyverno test` cases (L1) for every rule: one resource that passes, one that
+- [x] `kyverno test` cases (L1) for every rule: one resource that passes, one that
       fails.
-- [ ] Webhook scope and `failurePolicy` per D8; verified in the rendered
+- [x] Webhook scope and `failurePolicy` per D8; verified in the rendered
       `ValidatingWebhookConfiguration`, not only in values.
+      (24/11: `gitops/platform/apps/45-kyverno.yaml`, `47-kyverno-policies.yaml`,
+      `gitops/platform/policies/`; `kyverno test` 14/14; `check.sh` rule 17 with
+      guards; on kind the rendered webhook `vpol.validate.kyverno.svc-fail` is
+      `Fail` and selects only namespaces with the tenant label. Findings F1–F6
+      in §10.)
 
 **B. L2 kind lab (2 h)**
 
@@ -319,45 +324,56 @@ nothing about VPC CNI enforcement or IRSA.
 
 **A. Terraform (1.5 h)**
 
-- [ ] Cluster module: `configuration_values` for `vpc-cni` with
+- [x] Cluster module: `configuration_values` for `vpc-cni` with
       `enableNetworkPolicy = "true"`; enforcing mode per D5.
-- [ ] `terraform test` asserts the value; `plan_assert.sh` fails when it is
+- [x] `terraform test` asserts the value; `plan_assert.sh` fails when it is
       missing in a P5+ window; guard test with a synthetic plan.
 - [ ] Runbook note: enabling the feature restarts `aws-node`; do it at cluster
       creation, not on a cluster that carries trials.
 
 **B. Policies (2 h)**
 
-- [ ] Per tenant namespace: `default-deny` for ingress and egress; allow DNS to
+- [x] Per tenant namespace: `default-deny` for ingress and egress; allow DNS to
       CoreDNS; allow 5432 to the DB subnets; allow 443 to addresses outside the
       VPC (AWS APIs and the S3 gateway endpoint), excluding the VPC range and the
       link-local metadata address; allow ingress to the app port 8080 only from
       the same tenant namespace, where the window probes run (A8, false on 22/11);
       allow egress to the app port 8080 inside the same tenant namespace, so the
       probe reaches the app Service (`/readyz`, `/query`) under default-deny egress.
-- [ ] `zdr-platform`: policies for the bootstrap and cleanup Jobs if D5 says so.
-- [ ] Static check: every tenant namespace has a default-deny policy; no policy
+- [x] `zdr-platform`: policies for the bootstrap and cleanup Jobs if D5 says so.
+- [x] Static check: every tenant namespace has a default-deny policy; no policy
       allows `0.0.0.0/0` on all ports.
-- [ ] Written limit: Kubernetes NetworkPolicy matches addresses and ports, not
+- [x] Written limit: Kubernetes NetworkPolicy matches addresses and ports, not
       AWS service names, so "443 to anywhere outside the VPC" is the tightest
       egress rule available here. Which AWS API a Pod may call is decided by IAM.
+      (24/11: `gitops/platform/tenants/networkpolicy.yaml`, `check.sh` rule 18
+      with guards; `zdr-platform` gets none, D5 scopes policies to tenant
+      namespaces; `cluster.tftest.hcl` run `vpc_cni_enforces_network_policy`;
+      `plan_assert.sh` check 18 under `P5_WINDOW=1` with four guard cases. The
+      `aws-node` restart note waits for the P5 L3 runbook, P5-T4.2.)
 
 ## P5-T4 — Isolation suite, L3 window and acceptance (9 h)
 
 ### P5-T4.1 — Suite (3 h)
 
-- [ ] `tests/isolation/run.sh`: runs every case, writes `acceptance.json` with
+- [x] `tests/isolation/run.sh`: runs every case, writes `acceptance.json` with
       case ID, threat ID, expected layer, expected result, observed result,
       UTC time and evidence reference; exit 0 only when all match.
-- [ ] Cases cover T03, T04, T05, T06, T07, T08, T10, T11, T13, T14, T15 and the
+- [x] Cases cover T03, T04, T05, T06, T07, T08, T10, T11, T13, T14, T15 and the
       positive path of each. The P4 negatives (schema, secret, bucket, bootstrap
       identity, metadata) move into this suite unchanged.
-- [ ] Probe Pods use the reference image and their manifest carries the tenant
+- [x] Probe Pods use the reference image and their manifest carries the tenant
       label `rag.zero-drift.io/tenant: <tenant>` and the requests and memory limit
       chosen for D6, so they pass the same policies (A2). The same image alone is
       not enough.
-- [ ] A dry run on kind for the cases that do not need AWS; AWS and network
+- [x] A dry run on kind for the cases that do not need AWS; AWS and network
       cases are marked `SKIPPED_NEEDS_EKS`, never `PASS`.
+      (24/11: kind with Kyverno in `Deny`: 31 cases, 24 PASS, 0 FAIL, 7
+      `SKIPPED_NEEDS_EKS` (T03 needs Argo CD; T10 and T06 network, T07, P4
+      probes need EKS); with one policy back in `Audit` the suite exits 1.
+      eks mode allows no skip. Probe Pods: `window.sh run_probe` adds the tenant
+      label in tenant namespaces and the app requests and memory limit.
+      Runbook `docs/runbooks/P5_ISOLATION_SUITE.md`.)
 
 ### P5-T4.2 — L3 window on EKS (4 h)
 
@@ -530,6 +546,25 @@ Created after the owner approves the SPEC, parents just before their sub-tasks
 - **Kubelet probes under default-deny.** Whether the node's own address is
   allowed by the VPC CNI agent is `UNVERIFIED`; if readiness probes fail, an
   explicit rule for the node range is needed.
+- **Kyverno failure modes seen on kind (24/11, P5-T2.2).**
+  F1: scaling the admission controller to zero makes Kyverno remove its own
+  webhook configurations, so admission is open (a forbidden Pod is admitted).
+  F2: when the controller runs but cannot be reached (Service with no
+  endpoint), tenant Pods are rejected (`connection refused`) and `kube-system`
+  Pods are admitted: D8 holds for crash and network loss, not for a graceful
+  scale-down, which needs platform-admin rights on `kyverno` (tenants have
+  none, D1). F3: deleting Kyverno without scaling to zero first leaves eight
+  webhook configurations (five validating, three mutating); teardown is
+  policies, scale to zero, delete, then check. F4: LimitRange fills in
+  defaults before Kyverno runs, so `zdr-require-resources` is a backstop.
+  F5: autogen is off, so a Deployment with a forbidden image is admitted and
+  its Pods are rejected. F6: the internal webhook `protect-generation-labels`
+  is `Fail` in all namespaces but only matches objects with the label
+  `generate.kyverno.io/policy-name`; P5 has no generate policy.
+  **Proposed, owner decides:** §4 "Admission failure is understood" splits into
+  "controller unreachable → tenant Pods rejected, platform Pods admitted" and
+  "controller scaled to zero → webhooks removed, admission open; recorded as an
+  admin-only bypass for T15".
 - **Fail-closed webhook and teardown.** If Kyverno is removed while its webhook
   configuration remains, tenant namespaces cannot be cleaned. The runbook removes
   requests first and checks for leftover webhook configurations.

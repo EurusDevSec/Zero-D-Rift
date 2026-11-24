@@ -1,14 +1,14 @@
 ---
 project: Zero D-Rift
 status: P5_SPEC_OWNER_APPROVED
-active_phase: P5 (P4 closing items open)
-active_task: P5-T2.1 (DRF-66) baseline A done; owner kind lab B next, 23/11
+active_phase: P5 (P4 closed 24/11)
+active_task: P5-T2.2 A (DRF-67), T3 (DRF-68), T4.1 (DRF-70) on branch; owner labs T2.1 B and T2.2 B next
 active_feature: Tenant guardrails (SPEC-P5)
 active_spec: .agent/specs/SPEC-P5_TENANT_GUARDRAILS.md
 current_learning: .agent/learning/CURRENT_STATUS.md
 mode: Coach
 authority: NO_INSTALL_NO_AWS_APPLY_UNTIL_TASK_GATES
-last_reviewed: 2026-11-22
+last_reviewed: 2026-11-24
 ---
 
 # Active Context
@@ -60,9 +60,12 @@ Follow [context governance](../references/context-governance.md).
 1. Owner rebaselines P6–P11 before the P6 gate (D11); ver3 §12.1 forbids
    cutting trials, acceptance, learning gate or teardown. D12 (branch
    protection) deferred by the owner, so T01 stays an open limit.
-2. P4 closing items: billing closed (Bills gross 0.73 USD, audit §6.1) and
-   delayed inventory CLEAN 24/11 06:20Z (audit §6.2). RDS 0.12 and Glue to
-   inspect, not gating. Still open: Linear DRF-55/56/57 Done (owner agreement).
+2. P4 closed: billing (Bills gross 0.73 USD, audit §6.1), delayed inventory
+   CLEAN 24/11 06:20Z (audit §6.2), Linear P4 issues Done 24/11. RDS 0.12 and
+   Glue to inspect, not gating.
+6. Kyverno findings F1–F6 (SPEC-P5 §10): a graceful scale-down removes the
+   webhooks (admission open); only "unreachable" fails closed. The owner
+   decides the proposed split of §4 "Admission failure is understood".
 3. Carried from P3 (not gates): re-ask teach-back Q3–Q5 at P11; endpoint check 7
    only type-checks `aws:ResourceAccount` (fix with R1).
 4. ADR-0005 still PROPOSED (owner review).
@@ -71,13 +74,15 @@ Follow [context governance](../references/context-governance.md).
 
 ## Next safe action
 
-P5-T1 B (DRF-64) is Done (pins in VERSION_MATRIX §9). P5-T2.1 A (DRF-66):
-baseline manifests, AppProject `zdr-requests` and check.sh rules 13-16 are on
-branch `hoang/drf-66-p5-baseline`; Claude ran the runbook
-`docs/runbooks/P5_L2_KIND_BASELINE.md` on kind once (all steps as expected).
-Next: owner runs the lab with own predictions (P5-T2.1 B, evidence
-`docs/evidence/p5/P5-T2.1_L2_KIND_BASELINE_<date>.md`), then P5-T2.2 Kyverno
-(DRF-67). P4 closing items run in parallel on 23/11.
+P5-T2.1 A merged (PR #66). Branch `hoang/drf-67-p5-kyverno` (uncommitted
+24/11): Kyverno Application and three ValidatingPolicies in `Audit`
+(check.sh rule 17), tenant NetworkPolicies (rule 18), vpc-cni NetworkPolicy
+in Terraform (test and plan_assert check 18), probe Pods Kyverno-compliant,
+isolation suite `tests/isolation/run.sh` (kind dry run). Runbooks
+`P5_L2_KIND_BASELINE.md` and `P5_L2_KIND_KYVERNO.md` ran end to end on kind.
+Next: owner labs T2.1 B and T2.2 B with own predictions (evidence in
+`docs/evidence/p5/`), Codex review of the candidate, then the P5 L3 window
+(P5-T4.2) on its own approval. Overflow moves to 25/11 (D11).
 
 ## Context expansion
 

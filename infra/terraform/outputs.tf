@@ -87,3 +87,8 @@ output "rag_platform_config" {
     role_arns         = module.rag_identity[0].role_arns
   } : null
 }
+
+output "vpc_cni_configuration" {
+  description = "vpc-cni add-on configuration: NetworkPolicy on, standard mode (SPEC-P5 D5)."
+  value       = module.cluster.vpc_cni_configuration
+}

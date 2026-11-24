@@ -1,0 +1,44 @@
+# P5 (DRF-67, SPEC-P5 D6, D8, D9). Validate only, Pods in namespaces that
+# carry rag.zero-drift.io/tenant. Starts in Audit; the switch to Deny is a
+# pull request after the policy reports are clean. failurePolicy Fail (D8):
+# if Kyverno is down, tenant Pods are refused; platform namespaces are outside
+# the selector, so teardown still works. No PolicyException (D9).
+# Autogen is off: kro-created Deployments are judged by their Pods.
+# Threat T05. LimitRange tenant-defaults fills missing values first (it is a
+# mutating step that runs before validating webhooks), so on a normal tenant
+# namespace this rule is the backstop for a missing or edited LimitRange.
+apiVersion: policies.kyverno.io/v1
+kind: ValidatingPolicy
+metadata:
+  name: zdr-require-resources
+spec:
+  failurePolicy: Fail
+  validationActions: [Audit]
+  autogen:
+    podControllers:
+      controllers: []
+  evaluation:
+    background:
+      enabled: true
+  matchConstraints:
+    namespaceSelector:
+      matchExpressions:
+        - key: rag.zero-drift.io/tenant
+          operator: Exists
+    resourceRules:
+      - apiGroups: [""]
+        apiVersions: [v1]
+        operations: [CREATE, UPDATE]
+        resources: [pods]
+  variables:
+    - name: containers
+      expression: >-
+        object.spec.containers
+        + (has(object.spec.initContainers) ? object.spec.initContainers : [])
+  validations:
+    - expression: >-
+        variables.containers.all(c,
+          has(c.resources) && has(c.resources.requests) && has(c.resources.limits)
+          && 'cpu' in c.resources.requests && 'memory' in c.resources.requests
+          && 'memory' in c.resources.limits)
+      message: "every container needs requests.cpu, requests.memory and limits.memory (SPEC-P5 D3, D6)"

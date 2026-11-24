@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Static gate for gitops/ (SPEC-P3 Task 3, DRF-35; SPEC-P4 P4-T3.2 B, DRF-51; SPEC-P5 P5-T2.1 A, DRF-66). Touches no cluster and no AWS.
+# Static gate for gitops/ (SPEC-P3 Task 3, DRF-35; SPEC-P4 P4-T3.2 B, DRF-51; SPEC-P5 P5-T2.1 A, DRF-66; P5-T2.2 A, DRF-67; P5-T3, DRF-68). Touches no cluster and no AWS.
 # Usage: gitops/check.sh   (from anywhere in the repo)
 # Exit 0 only when every check passes. Needs python with PyYAML (YAML parsing only).
 set -euo pipefail
@@ -74,14 +74,28 @@ for f, d in apps:
         charts[s["chart"]] = s["targetRevision"]
     else:
         res(s["targetRevision"] == "main", f"{d['metadata']['name']}: Git source on main")
-res(charts == {"crossplane": "2.4.3", "kro": "0.9.4"}, f"Helm charts pinned exactly: {charts}")
+res(charts == {"crossplane": "2.4.3", "kro": "0.9.4", "kyverno": "3.10.0"}, f"Helm charts pinned exactly: {charts}")
 # Chart images: the values must carry a digest (Crossplane: repository@sha256 +
-# ignoreTag; kro: tag v0.9.4@sha256), otherwise the chart default tag is used.
+# ignoreTag; kro and Kyverno: tag v...@sha256), otherwise the chart default tag
+# is used. Every "image" block in the values counts; Kyverno has eight.
+def image_blocks(node):
+    if isinstance(node, dict):
+        for k, v in node.items():
+            if k == "image" and isinstance(v, dict):
+                yield v
+            yield from image_blocks(v)
+    elif isinstance(node, list):
+        for x in node:
+            yield from image_blocks(x)
+NEED_IMAGES = {"crossplane": 1, "kro": 1, "kyverno": 8}
 for f, d in apps:
-    v = d["spec"]["source"].get("helm", {}).get("valuesObject", {}).get("image", {})
-    if "chart" in d["spec"]["source"]:
-        ref = v.get("repository", "") + ":" + str(v.get("tag", ""))
-        res(re.search(r"@sha256:[0-9a-f]{64}", ref) is not None, f"{d['metadata']['name']}: chart image pinned by digest")
+    s = d["spec"]["source"]
+    if "chart" in s:
+        blocks = list(image_blocks(s.get("helm", {}).get("valuesObject", {})))
+        refs = [b.get("repository", "") + ":" + str(b.get("tag", "")) for b in blocks]
+        res(len(refs) == NEED_IMAGES.get(s["chart"], -1)
+            and all(re.search(r"@sha256:[0-9a-f]{64}", r) for r in refs),
+            f"{d['metadata']['name']}: chart image pinned by digest ({len(refs)} image blocks)")
 for f, d in apps:
     a = d["spec"].get("syncPolicy", {}).get("automated", {})
     name = d["metadata"]["name"]
@@ -346,6 +360,56 @@ req = next((d for f, d in apps if d["metadata"]["name"] == "zdr-requests"), {})
 res(in_proj == ["zdr-requests"] and req.get("spec", {}).get("destination", {}).get("namespace") in TENANTS
     and "CreateNamespace=true" not in req.get("spec", {}).get("syncPolicy", {}).get("syncOptions", []),
     "zdr-requests app: project zdr-requests, tenant destination, no CreateNamespace")
+
+# 17. Kyverno (D6-D9): exactly the three validate-only policies, each Pods only,
+#     only in tenant-labelled namespaces, fail closed, Audit or Deny, autogen off;
+#     no legacy kyverno.io policy and no PolicyException; the chart keeps D7's
+#     footprint and limits Kyverno's own webhooks to tenant namespaces (D8).
+TENANT_SEL = {"matchExpressions": [{"key": "rag.zero-drift.io/tenant", "operator": "Exists"}]}
+vps = {d["metadata"]["name"]: d.get("spec", {}) for f, d in objs_of("ValidatingPolicy")}
+res(sorted(vps) == ["zdr-image-digest", "zdr-require-resources", "zdr-tenant-label"],
+    f"Kyverno: exactly the three D6 policies: {sorted(vps)}")
+for n, s in sorted(vps.items()):
+    mc = s.get("matchConstraints", {})
+    acts = s.get("validationActions", [])
+    res(s.get("failurePolicy") == "Fail" and bool(acts) and set(acts) <= {"Audit", "Deny"}
+        and mc.get("namespaceSelector") == TENANT_SEL
+        and mc.get("resourceRules") == [{"apiGroups": [""], "apiVersions": ["v1"],
+                                         "operations": ["CREATE", "UPDATE"], "resources": ["pods"]}]
+        and s.get("autogen", {}).get("podControllers", {}).get("controllers") == [],
+        f"{n}: Pods in tenant namespaces only, failurePolicy Fail, Audit/Deny, autogen off")
+legacy = [f"{f}: {d.get('kind')}" for f, d in docs
+          if str(d.get("apiVersion", "")).startswith("kyverno.io/") or d.get("kind") == "PolicyException"]
+res(not legacy, "no legacy kyverno.io policy, no PolicyException (D9)" + (f": {legacy}" if legacy else ""))
+kv = next((d["spec"]["source"].get("helm", {}).get("valuesObject", {}) for f, d in apps
+           if d["spec"]["source"].get("chart") == "kyverno"), {})
+res(kv.get("cleanupController", {}).get("enabled") is False
+    and all(kv.get(k, {}).get("replicas") == 1 for k in ("admissionController", "backgroundController", "reportsController"))
+    and kv.get("config", {}).get("webhooks", {}).get("namespaceSelector") == TENANT_SEL,
+    "zdr-kyverno: three controllers x1, cleanup off, webhooks only in tenant namespaces")
+
+# 18. NetworkPolicy (D5): each tenant namespace has a default-deny for ingress
+#     and egress; ingress only from Pods of the same namespace; no rule opens
+#     0.0.0.0/0 on every port, and a 0.0.0.0/0 block always cuts out the VPC
+#     and the link-local range (instance metadata).
+for t in sorted(TENANTS):
+    nps = [d.get("spec", {}) for f, d in objs_of("NetworkPolicy", t)]
+    deny = [s for s in nps if s.get("podSelector") == {} and sorted(s.get("policyTypes", [])) == ["Egress", "Ingress"]
+            and not s.get("ingress") and not s.get("egress")]
+    res(len(deny) == 1, f"{t}: one default-deny NetworkPolicy for ingress and egress")
+    peers_in = [p for s in nps for r in s.get("ingress", []) or [] for p in r.get("from", []) or [{}]]
+    res(all(set(p) == {"podSelector"} for p in peers_in),
+        f"{t}: ingress only from Pods of the same namespace")
+wide = []
+for f, d in objs_of("NetworkPolicy"):
+    s = d.get("spec", {})
+    for r in (s.get("ingress", []) or []) + (s.get("egress", []) or []):
+        for p in r.get("from", []) or r.get("to", []) or []:
+            b = p.get("ipBlock", {})
+            if b.get("cidr") == "0.0.0.0/0" and (not r.get("ports")
+                    or not {"10.0.0.0/16", "169.254.0.0/16"} <= set(b.get("except", []))):
+                wide.append(f"{d['metadata'].get('namespace')}/{d['metadata']['name']}")
+res(not wide, "no NetworkPolicy opens 0.0.0.0/0 on all ports or into the VPC/metadata" + (f": {wide}" if wide else ""))
 sys.exit(0 if ok else 1)
 EOF
 

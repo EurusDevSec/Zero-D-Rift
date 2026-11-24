@@ -127,6 +127,33 @@ case_ "project allows zdr-platform" "tenant-a/b" "$PRJ" 'docs[0]["spec"]["destin
 case_ "requests app back on default" "project zdr-requests, tenant destination" platform/apps/90-requests.yaml 'docs[0]["spec"]["project"] = "default"'
 case_ "requests app creates namespaces" "no CreateNamespace" platform/apps/90-requests.yaml 'docs[0]["spec"]["syncPolicy"]["syncOptions"].append("CreateNamespace=true")'
 
+# P5 (DRF-67): Kyverno rule 17 and chart pins.
+KY=platform/apps/45-kyverno.yaml
+KV='docs[0]["spec"]["source"]["helm"]["valuesObject"]'
+case_ "Kyverno image by tag" "zdr-kyverno: chart image pinned by digest" "$KY" "$KV"'["backgroundController"]["image"]["tag"] = "v1.20.0"'
+case_ "Kyverno cleanup controller on" "cleanup off" "$KY" "$KV"'["cleanupController"]["enabled"] = True'
+case_ "Kyverno webhooks see all namespaces" "webhooks only in tenant namespaces" "$KY" "del $KV"'["config"]'
+case_ "policy fails open" "failurePolicy Fail" platform/policies/zdr-image-digest.yaml 'docs[0]["spec"]["failurePolicy"] = "Ignore"'
+case_ "policy matches every namespace" "tenant namespaces only" platform/policies/zdr-tenant-label.yaml 'del docs[0]["spec"]["matchConstraints"]["namespaceSelector"]'
+case_ "policy only warns" "Audit/Deny" platform/policies/zdr-require-resources.yaml 'docs[0]["spec"]["validationActions"] = ["Warn"]'
+case_ "fourth policy" "exactly the three D6 policies" "+platform/policies/extra.yaml" 'apiVersion: policies.kyverno.io/v1
+kind: ValidatingPolicy
+metadata: {name: zdr-extra}
+spec: {validations: [{expression: "true"}]}'
+case_ "PolicyException" "no PolicyException" "+platform/policies/exc.yaml" 'apiVersion: policies.kyverno.io/v1
+kind: PolicyException
+metadata: {name: skip, namespace: tenant-a}
+spec: {policyRefs: [{name: zdr-image-digest, kind: ValidatingPolicy}]}'
+
+# P5 (DRF-68): NetworkPolicy rule 18. Documents per tenant: 0 default-deny,
+# 1 dns, 2 db, 3 https-outside-vpc, 4 app-same-tenant (tenant-b from 5).
+NP=platform/tenants/networkpolicy.yaml
+case_ "no default-deny in tenant-b" "tenant-b: one default-deny" "$NP" 'del docs[5]'
+case_ "default-deny with an allow rule" "tenant-a: one default-deny" "$NP" 'docs[0]["spec"]["egress"] = [{}]'
+case_ "ingress from another namespace" "ingress only from Pods of the same namespace" "$NP" 'docs[4]["spec"]["ingress"][0]["from"].append({"namespaceSelector": {}})'
+case_ "443 rule without ports" "0.0.0.0/0 on all ports" "$NP" 'del docs[3]["spec"]["egress"][0]["ports"]'
+case_ "443 rule reaches metadata" "into the VPC/metadata" "$NP" 'docs[8]["spec"]["egress"][0]["to"][0]["ipBlock"]["except"] = ["10.0.0.0/16"]'
+
 echo
 if (( failed )); then echo "RESULT: FAIL"; exit 1; fi
 echo "RESULT: PASS ($n guard cases, each made check.sh fail on its rule)"

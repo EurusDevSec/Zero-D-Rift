@@ -5,16 +5,18 @@
 # Usage: labs/p5-kind/pod.sh NAME NAMESPACE [CONTAINER_PATCH_JSON] [SPEC_PATCH_JSON]
 #   labs/p5-kind/pod.sh p1 tenant-a '{"securityContext":{"privileged":true}}' | kubectl create -f -
 # Image: the pinned pause image of kind node v1.35.8 (already on the node, no pull).
+# IMAGE=... overrides it (P5-T2.2 lab: the project image by digest, used with
+# --dry-run=server, so nothing is pulled).
 set -euo pipefail
 name=$1 ns=$2 cpatch=${3:-'{}'} spatch=${4:-'{}'}
-jq -n --arg name "$name" --arg ns "$ns" --argjson c "$cpatch" --argjson s "$spatch" '{
+jq -n --arg name "$name" --arg ns "$ns" --arg img "${IMAGE:-registry.k8s.io/pause:3.10}" --argjson c "$cpatch" --argjson s "$spatch" '{
   apiVersion: "v1", kind: "Pod",
   metadata: {name: $name, namespace: $ns, labels: {"rag.zero-drift.io/tenant": $ns, "app.kubernetes.io/name": "zdr-lab"}},
   spec: ({
     automountServiceAccountToken: false,
     securityContext: {runAsNonRoot: true, runAsUser: 10001, seccompProfile: {type: "RuntimeDefault"}},
     containers: [({
-      name: "c", image: "registry.k8s.io/pause:3.10",
+      name: "c", image: $img,
       securityContext: {allowPrivilegeEscalation: false, capabilities: {drop: ["ALL"]}}
     } * $c)]
   } * $s)

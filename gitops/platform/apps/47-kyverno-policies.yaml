@@ -1,0 +1,31 @@
+# Wave 47 (P5, DRF-67): the three ValidatingPolicies of SPEC-P5 D6, after the
+# Kyverno CRDs (wave 45) and before any tenant request (wave 90). No prune, like
+# every platform app: teardown removes policies first, by hand (SPEC-P5 T2.2 B).
+# The kyverno test cases live in gitops/tests/kyverno/, outside synced paths.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: zdr-kyverno-policies
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "47"
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/EurusDevSec/Zero-D-Rift.git
+    targetRevision: main
+    path: gitops/platform/policies
+  destination:
+    server: https://kubernetes.default.svc
+  syncPolicy:
+    automated:
+      prune: false
+      selfHeal: true
+    syncOptions:
+      - SkipDryRunOnMissingResource=true
+    retry:
+      limit: 10
+      backoff:
+        duration: 15s
+        factor: 2
+        maxDuration: 3m

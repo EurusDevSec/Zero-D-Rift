@@ -179,6 +179,9 @@ spec:
                 app.kubernetes.io/name: ragsandbox
                 app.kubernetes.io/component: app
                 rag.zero-drift.io/sandbox: ${schema.metadata.name}
+                # P5 (A2, D6): Kyverno zdr-tenant-label and NetworkPolicy selectors.
+                # Template only; the selector stays as it is (immutable).
+                rag.zero-drift.io/tenant: ${schema.metadata.namespace}
             spec:
               serviceAccountName: ${serviceAccount.metadata.name}
               automountServiceAccountToken: false
