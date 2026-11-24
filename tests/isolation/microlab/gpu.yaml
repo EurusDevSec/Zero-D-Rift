@@ -1,0 +1,27 @@
+# Micro-lab (SPEC-P5 P5-T4.2 D): quota layer. A Pod that passes Pod Security and
+# Kyverno, but asks for one GPU. The tenant quota allows requests.nvidia.com/gpu: 0.
+# Owner types: kubectl apply --dry-run=server -f tests/isolation/microlab/gpu.yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: microlab-gpu
+  namespace: tenant-a
+  labels:
+    rag.zero-drift.io/tenant: tenant-a
+spec:
+  restartPolicy: Never
+  automountServiceAccountToken: false
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 10001
+    seccompProfile: {type: RuntimeDefault}
+  containers:
+    - name: c
+      image: ghcr.io/eurusdevsec/zero-d-rift/rag-sandbox@sha256:850c77c200a798b5706ce56c7878164d4887fcf3661bbec91b2d8564df735263
+      command: ["sleep", "60"]
+      securityContext:
+        allowPrivilegeEscalation: false
+        capabilities: {drop: [ALL]}
+      resources:
+        requests: {cpu: 50m, memory: 96Mi}
+        limits: {memory: 192Mi, nvidia.com/gpu: "1"}

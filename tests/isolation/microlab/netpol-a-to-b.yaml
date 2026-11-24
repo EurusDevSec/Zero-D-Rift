@@ -1,0 +1,48 @@
+# Micro-lab (SPEC-P5 P5-T4.2 D): NetworkPolicy layer. A Job in tenant-a tries the
+# tenant-b app Service. A Job, not a bare Pod: the VPC CNI does not enforce
+# NetworkPolicy on a Pod without an owner. It waits 20 s first, because in
+# standard mode a new Pod is open until its policies are programmed.
+# Only "RESULT TIMEOUT" means the NetworkPolicy blocked it.
+# Owner types: kubectl apply -f tests/isolation/microlab/netpol-a-to-b.yaml
+# Then waits for the Job, reads its log, deletes it (see P5_L3_WINDOW.md).
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: microlab-a-to-b
+  namespace: tenant-a
+spec:
+  backoffLimit: 0
+  activeDeadlineSeconds: 120
+  template:
+    metadata:
+      labels:
+        rag.zero-drift.io/tenant: tenant-a
+    spec:
+      restartPolicy: Never
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        seccompProfile: {type: RuntimeDefault}
+      containers:
+        - name: c
+          image: ghcr.io/eurusdevsec/zero-d-rift/rag-sandbox@sha256:850c77c200a798b5706ce56c7878164d4887fcf3661bbec91b2d8564df735263
+          command:
+            - python
+            - -c
+            - |
+              import socket, time
+              time.sleep(20)
+              s = socket.socket(); s.settimeout(5)
+              try:
+                  s.connect(("rag-docs-qa.tenant-b.svc", 8080)); print("RESULT OPEN")
+              except socket.timeout:
+                  print("RESULT TIMEOUT")
+              except Exception as e:
+                  print("RESULT ERROR", type(e).__name__)
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: {drop: [ALL]}
+          resources:
+            requests: {cpu: 50m, memory: 96Mi}
+            limits: {memory: 192Mi}

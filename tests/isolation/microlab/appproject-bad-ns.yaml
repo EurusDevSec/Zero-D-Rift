@@ -1,0 +1,20 @@
+# Micro-lab (SPEC-P5 P5-T4.2 D): AppProject layer. An Application in project
+# zdr-requests that targets the platform namespace. The project only allows the
+# tenant namespaces, so Argo CD marks it invalid. No automated sync: nothing is
+# deployed even if the project were wrong.
+# Owner types: kubectl apply -f tests/isolation/microlab/appproject-bad-ns.yaml
+# Then reads the condition, then deletes the Application (see P5_L3_WINDOW.md).
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: zdr-microlab-badns
+  namespace: argocd
+spec:
+  project: zdr-requests
+  source:
+    repoURL: https://github.com/EurusDevSec/Zero-D-Rift.git
+    targetRevision: main
+    path: gitops/requests
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: zdr-platform
