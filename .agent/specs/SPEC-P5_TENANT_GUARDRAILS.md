@@ -310,7 +310,8 @@ Evidence: `docs/evidence/p5/P5-T2.1_L2_KIND_BASELINE_<date>.md`.
 - [x] Webhook scope and `failurePolicy` per D8; verified in the rendered
       `ValidatingWebhookConfiguration`, not only in values.
       (24/11: `gitops/platform/apps/45-kyverno.yaml`, `47-kyverno-policies.yaml`,
-      `gitops/platform/policies/`; `kyverno test` 14/14; `check.sh` rule 17 with
+      `gitops/platform/policies/`; `kyverno test` 14/14, in CI since 24/11 (job
+      `kyverno` of `static-gates`, `gitops/tests/kyverno_test.sh`); `check.sh` rule 17 with
       guards; on kind the rendered webhook `vpol.validate.kyverno.svc-fail` is
       `Fail` and selects only namespaces with the tenant label. Findings F1–F6
       in §10.)

@@ -230,3 +230,19 @@ kind delete cluster --name zdr-p5-kyv; rm -rf "$HOME/zdr-p5-kyv"; unset K POD LA
 | 4 bỏ bước scale thì sao | | | |
 
 Sau lab, trả lời một câu: **vì sao `noreq` không bị Kyverno chặn, và khi nào `zdr-require-resources` mới có tác dụng?**
+
+## Phụ lục: L1 `kyverno test` (không cần cluster)
+
+Đây là kiểm tra tĩnh, chạy trước lab: mỗi luật có một Pod phải qua và một Pod phải bị chặn
+(`gitops/tests/kyverno/`). Từ 24/11, CI `static-gates` (job `kyverno`) chạy lệnh này trên mọi PR đụng `gitops/`.
+Ví von: diễn tập bảo vệ bằng hàng mẫu trước khi mở cửa toà nhà.
+
+Chạy lại trên máy (cần Docker đang chạy, tải image `kyverno-cli` v1.20.0 theo digest, không cần AWS):
+
+```bash
+bash gitops/tests/kyverno_test.sh
+```
+
+Phải thấy: `Test Summary: 14 tests passed and 0 tests failed`, rồi dòng self-test
+`… tests failed` khác 0 (một kỳ vọng bị cố ý lật trong bản sao), cuối cùng `PASS kyverno test and self-test`.
+Không có gì để dọn: container tự xoá (`--rm`), thư mục tạm tự xoá khi script thoát.
