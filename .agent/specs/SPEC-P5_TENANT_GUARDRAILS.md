@@ -278,8 +278,9 @@ and the message before each step; Claude records prediction vs observed.
 
 - [x] RBAC: `kubectl auth can-i` matrix with `--as` / `--as-group`; one real API
       call from a Pod using a ServiceAccount token.
-- [x] Pod Security: privileged, hostNetwork, hostPath, root user, missing
-      seccomp. Then the reference image, which must pass.
+- [x] Pod Security: privileged, hostNetwork, hostPath, root user, seccomp
+      `Unconfined` (as run 24/11; restricted refuses an explicit `Unconfined`).
+      Then the reference image, which must pass.
 - [x] Quota: one Pod over the limit, one object count over the limit, one Pod
       with no requests (LimitRange default applies).
 - [x] AppProject on kind with Argo CD: a foreign kind and a foreign namespace.
@@ -316,22 +317,29 @@ Evidence: `docs/evidence/p5/P5-T2.1_L2_KIND_BASELINE_<date>.md`.
 
 **B. L2 kind lab (2 h)**
 
-- [x] Audit stage: deploy the lab variant of the RAG graph; policy reports must
-      be clean before the switch.
-- [x] Enforce stage: each forbidden Pod of §4 scenario 3 is rejected; record the
-      message.
-- [x] Outage: scale the admission controller to zero; create one compliant Pod in
-      a tenant namespace and one in `kube-system`; record both results; restore.
+- [x] Audit stage (as run 24/11): one project-image Pod in `tenant-a`; policy
+      reports clean (3 `pass`) before the switch. The RAG graph lab variant was
+      not used; the Audit gate on running RAGSandboxes moves to the L3 window
+      (§1 boundary 5).
+- [ ] Enforce stage: each forbidden Pod of §4 scenario 3 is rejected; record the
+      message. **Partial (owner 24/11):** observed `zdr-image-digest` on
+      `busybox:1.37` (tag and outside registry in one image) and
+      `zdr-tenant-label` on a missing and a spoofed label. Not yet observed by
+      the owner: tag only, outside registry with digest, and no requests reaching
+      Kyverno (LimitRange fills them first). All three are step 2b of the
+      Kyverno runbook; Claude's kind run 24/11 got the expected denial for each.
+- [x] Outage (as run 24/11): (3a) admission controller scaled to zero, a
+      compliant and a non-compliant Pod in `tenant-a` both admitted (webhooks
+      removed, fail open); (3b) Service unreachable, a compliant Pod in
+      `tenant-a` refused and one in `kube-system` admitted (fail closed for
+      tenants only); restored after each.
 - [x] Uninstall order: policies, then Kyverno; confirm no webhook configuration
       remains.
 
 (24/11: owner ran the runbook end to end, all observations match, no
 predictions; evidence `docs/evidence/p5/P5-T2.2_L2_KIND_KYVERNO_20261124.md`.
-Deviations: the Audit stage used one project Pod, not the RAG graph lab variant,
-so the real Audit gate on running RAGSandboxes stays with the L3 window (§1
-boundary 5); the outage was split into a graceful scale to zero (tenant Pods
-admitted, fail open) and an unreachable Service (tenant Pod refused,
-`kube-system` admitted). Owner answer to the after-lab question covers the
+The Audit and Outage rows above state what was run; Enforce stays open until
+the owner runs step 2b (Codex review of PR #71). Owner answer to the after-lab question covers the
 LimitRange half only.)
 
 Evidence: `docs/evidence/p5/P5-T2.2_L2_KIND_KYVERNO_<date>.md`. kind proves

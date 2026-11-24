@@ -5,7 +5,7 @@
 > (evidence `docs/evidence/p5/P5-T2.2_L2_KIND_KYVERNO_20261124.md`) ·
 > Kết luận cần tự thấy: Kyverno chỉ canh namespace tenant; "sập êm" và "không gọi được" cho hai kết quả khác nhau ·
 > Liên quan: SPEC-P5 §4 scenario 3, D6–D9; `gitops/platform/apps/45-kyverno.yaml`, `gitops/platform/policies/` ·
-> Mục lục: 0 Chuẩn bị · 0b Pod tự xin token · 1 Audit · 2 Deny · 3 Sập · 4 Gỡ · 5 Dọn
+> Mục lục: 0 Chuẩn bị · 0b Pod tự xin token · 1 Audit · 2 Deny · 2b Tách case · 3 Sập · 4 Gỡ · 5 Dọn
 
 Không AWS, không tốn tiền. Khoảng 45–60 phút. Làm sau lab baseline (`P5_L2_KIND_BASELINE.md`).
 
@@ -132,6 +132,30 @@ $K -n tenant-a create deployment badimg --image=busybox:1.37 --dry-run=server
 - `tagimg` ở `zdr-platform` → qua: ngoài phạm vi Kyverno (namespace nền tảng không có nhãn tenant).
 - `badimg` → `created`: autogen tắt, Kyverno chỉ xét Pod; Pod của nó sẽ bị chặn khi ReplicaSet tạo.
 
+## 2b. Tách ba case còn gộp hoặc thiếu ở bước 2 (§4 scenario 3)
+
+Ở bước 2, `busybox:1.37` sai **hai** điều cùng lúc: không có digest và sai registry. Còn `noreq` thì
+không tới được Kyverno, vì LimitRange điền trước. Bước này tách từng điều một:
+
+```bash
+IMAGE=ghcr.io/eurusdevsec/zero-d-rift/rag-sandbox:latest $POD tagonly tenant-a | $K create --dry-run=server -f -
+IMAGE=docker.io/eurusdevsec/rag-sandbox@${IMAGE#*@} $POD otherreg tenant-a | $K create --dry-run=server -f -
+$K -n tenant-a delete limitrange tenant-defaults
+$POD noreq2 tenant-a | $K create --dry-run=server -f -
+$K apply -f gitops/platform/tenants/quota.yaml | grep limitrange
+```
+
+**Dự đoán trước:** khi gỡ "cầu chì" LimitRange, ai chặn Pod `noreq2`?
+
+**Phải thấy** (Claude chạy thử 24/11):
+- `tagonly` (đúng registry, chỉ có tag) → `Policy zdr-image-digest failed: …`.
+- `otherreg` (có digest, sai registry) → cùng policy `zdr-image-digest`.
+- `limitrange "tenant-defaults" deleted`, rồi `noreq2` → `Policy zdr-require-resources failed: every container needs
+  requests.cpu, requests.memory and limits.memory`: không còn LimitRange điền hộ, lưới dự phòng mới bắt.
+- `limitrange/tenant-defaults created` (lắp lại cầu chì cho tenant-a) và `unchanged` (tenant-b).
+
+Làm riêng sau lab (cluster đã dọn): chạy mục 0, vòng `for … Deny` đầu mục 2, rồi mục này, rồi mục 5.
+
 ## 3. Sập: hai kiểu cho hai kết quả (D8)
 
 **3a. Sập "êm":** scale admission controller về 0.
@@ -200,6 +224,7 @@ kind delete cluster --name zdr-p5-kyv; rm -rf "$HOME/zdr-p5-kyv"; unset K POD LA
 | 0b Pod có token: gọi pods, secrets | | | |
 | 1 Audit: `tagimg`; báo cáo của `good` | | | |
 | 2 Deny: 7 dòng | | | |
+| 2b tagonly / otherreg / noreq2 khi không có LimitRange | | | |
 | 3a tắt êm: `ok`, `bad` | | | |
 | 3b không gọi được: `ok`, `sys` | | | |
 | 4 bỏ bước scale thì sao | | | |
