@@ -136,7 +136,8 @@ MODE=eks CTX="$(kubectl config current-context)" NET_PHASE=enforced CONTROL=cont
 - Probe P4 (`platform`, `sandbox`, `cross` cho cả hai tenant) phải exit 0 và in **đủ** từng case. Thiếu case
   hay có `SKIP` đều là FAIL.
 - Suite tự xóa Job, Pod, ServiceAccount và Argo app nó tạo (nhãn `app.kubernetes.io/name=zdr-isolation`),
-  cùng Pod probe của `window.sh` (nhãn `app.kubernetes.io/name=zdr-probe`), đợi chúng biến mất rồi kiểm lại.
+  cùng Pod probe của `window.sh` **của chính lần chạy này** (nhãn `zdr-probe` và `rag.zero-drift.io/probe-run`,
+  do suite đặt qua biến `PROBE_RUN`), đợi chúng biến mất rồi kiểm lại. Probe của lần chạy khác không bị đụng tới.
   Còn sót, hoặc không đọc được danh sách, thì exit 1.
 
 ## Bảng dự đoán (owner tự điền)

@@ -448,7 +448,8 @@ res(not loose, "every egress rule names peers and ports; other namespaces only f
 # missing (no DB path for one tenant) fails here too, not only a wider one.
 # A rule is keyed by the Pods it applies to (the policy podSelector) as well as
 # its peers and ports; ports must be an integer with TCP or UDP. A policy whose
-# policyTypes leave out Egress has no egress effect, so its rules do not count.
+# policyTypes leave out Egress has no egress effect, so its rules do not count;
+# with policyTypes omitted, Kubernetes adds Egress when the policy has egress rules.
 def canon_rule(r, sel):
     ports = r.get("ports") or []
     if any(set(q) != {"protocol", "port"} or type(q["port"]) is not int or q["protocol"] not in ("TCP", "UDP")
@@ -456,6 +457,9 @@ def canon_rule(r, sel):
         return ("bad-port",)
     return (json.dumps(sel, sort_keys=True), json.dumps(sorted(json.dumps(p, sort_keys=True) for p in r.get("to") or [])),
             tuple(sorted((q["protocol"], str(q["port"])) for q in ports)))
+def egress_on(spec):
+    pt = spec.get("policyTypes")
+    return "Egress" in pt if pt else bool(spec.get("egress"))
 def want_egress(t, vpc_s, dbs_s):
     sel = {"matchLabels": {"rag.zero-drift.io/tenant": t}}
     return sorted([
@@ -472,7 +476,7 @@ _vpc = ipaddress.ip_network(_m.group(1)) if _m else None
 _dbs = [str(n) for n in list(_vpc.subnets(new_prefix=24))[10:12]] if _vpc else []
 for t in sorted(TENANTS):
     got = sorted((canon_rule(r, d["spec"].get("podSelector")) for f, d in objs_of("NetworkPolicy", t)
-                  if "Egress" in (d.get("spec", {}).get("policyTypes") or [])
+                  if egress_on(d.get("spec", {}))
                   for r in d.get("spec", {}).get("egress", []) or []), key=str)
     res(_vpc is not None and got == want_egress(t, str(_vpc), _dbs),
         f"{t}: egress is exactly DNS 53, DB 5432, HTTPS 443 outside the VPC, app 8080 in-tenant")

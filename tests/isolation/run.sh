@@ -73,8 +73,11 @@ count_list() { # NS RESOURCES [SELECTOR]
     grep -c . <<< "$out" || true
 }
 # window.sh probe Pods (the P4 wrapper) carry their own label and are deleted
-# with --wait=false: wait for them to be gone and count them too.
-PROBE_LBL=app.kubernetes.io/name=zdr-probe
+# with --wait=false: wait for them to be gone and count them too. Only this
+# run's probes: window.sh adds rag.zero-drift.io/probe-run=$PROBE_RUN, so a
+# probe that another run or a person started is never deleted here.
+export PROBE_RUN="iso-$(date -u +%Y%m%d%H%M%S)-$$-$RANDOM"
+PROBE_LBL="app.kubernetes.io/name=zdr-probe,rag.zero-drift.io/probe-run=$PROBE_RUN"
 # Delete what the suite created, then prove it is gone. Sets CLEANUP_STATE to
 # verified-empty, left:<n> or unverified; returns 0 only for verified-empty.
 CLEANUP_STATE=unverified; CLEANED=""

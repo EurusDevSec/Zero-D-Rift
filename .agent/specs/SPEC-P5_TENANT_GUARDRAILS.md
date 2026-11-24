@@ -412,6 +412,10 @@ nothing about VPC CNI enforcement or IRSA.
       read must succeed; cleanup also deletes and waits for the `window.sh`
       probe Pods (`zdr-probe`); account IDs side by side are all scrubbed;
       egress is keyed by the policy podSelector with integer ports.
+      Codex APPROVE at ae20196; its two should-fix items done: a policy
+      without policyTypes counts its egress (Kubernetes default), and
+      cleanup touches only this run's probes (`PROBE_RUN` label set by
+      `window.sh`).
       Kind with Argo CD: 39 cases,
       33 PASS, 0 FAIL, 6 `SKIPPED_NEEDS_EKS`; one policy in `Audit` still
       exits 1.)
