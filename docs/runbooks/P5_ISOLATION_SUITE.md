@@ -2,7 +2,7 @@
 
 > **TL;DR** · Để làm gì: một lệnh thử mọi lớp chặn (RBAC, Pod Security, Kyverno, quota, NetworkPolicy, IAM/DB)
 > và ghi `acceptance.json` ·
-> Trạng thái: Claude chạy trên kind 24/11 sau review Codex (Kyverno `Deny`, có Argo CD): 38 case, 32 PASS, 0 FAIL,
+> Trạng thái: Claude chạy trên kind 24/11 sau review Codex (Kyverno `Deny`, có Argo CD): 39 case, 33 PASS, 0 FAIL,
 > 6 SKIPPED_NEEDS_EKS ·
 > Liên quan: `tests/isolation/run.sh`, SPEC-P5 P5-T4.1, THREAT_MODEL §11 ·
 > Mục lục: 0 Dựng kind · 1 Chạy · 2 Đọc kết quả · 3 Tự kiểm bộ test · 4 Dọn · 5 Trên EKS
@@ -56,8 +56,9 @@ MODE=kind CTX=kind-zdr-p5-iso OUT="$LAB/acceptance.json" bash tests/isolation/ru
 
 **Dự đoán trước:** Pod `privileged` bị lớp nào chặn? Pod gắn nhãn `tenant-b` trong `tenant-a`? Pod xin 1Gi?
 
-**Phải thấy:** `total 38, pass 32, fail 0, skipped 6`, `RESULT: PASS`, `cleanup: no suite object left`, `exit=0`.
-Không cài Argo CD thì hai case T03 thành SKIPPED: `total 38, pass 30, skipped 8`.
+**Phải thấy:** `total 39, pass 33, fail 0, skipped 6`, dòng `PASS … cleanup … verified-empty`, `RESULT: PASS`, `exit=0`.
+Không cài Argo CD thì hai case T03 thành SKIPPED: `total 39, pass 31, skipped 8`. Case `cleanup` chỉ PASS khi suite
+**đọc được** danh sách và thấy trống; đọc lỗi thì là `unverified`, tính FAIL.
 
 ## 2. Đọc kết quả
 
@@ -67,7 +68,7 @@ jq '.summary' "$LAB/acceptance.json"
 ```
 
 Cột `observed` cho biết **lớp nào** trả lời: `deny:rbac`, `deny:pod-security`, `deny:kyverno:<tên policy>`, `deny:quota`,
-`deny:limitrange`, `deny:argocd`. Bắt đầu bằng `error:` (webhook không gọi được, `can-i` lỗi, mạng `refused`…) nghĩa là
+`deny:limitrange`, `deny:argocd`. Bắt đầu bằng `error:` (webhook không gọi được, SubjectAccessReview báo `evaluationError`, mạng `refused`, Job không `Complete`…) nghĩa là
 **không ai quyết định cả**, nên tính FAIL chứ không tính là bị chặn. `SKIPPED_NEEDS_EKS` = kind không có VPC CNI, IRSA, RDS, Argo CD; **không bao giờ** tính là PASS.
 File không chứa tên context (trên EKS tên đó có account ID).
 
@@ -113,7 +114,8 @@ của hai tenant, rồi chạy:
 MODE=eks CTX="$(kubectl config current-context)" NET_PHASE=control RUN_ID=P5-L3-<ngày>-01-control OUT=control.json bash tests/isolation/run.sh
 ```
 
-Suite chỉ chạy 4 đường mạng: own-app, a→b, b→a, metadata. Cả 4 phải `allow`. Nếu còn NetworkPolicy, suite từ chối.
+Suite chỉ chạy 4 đường mạng: own-app, a→b, b→a, metadata. Cả 4 phải `allow`. Nếu còn NetworkPolicy, hoặc không đọc được
+danh sách NetworkPolicy, suite dừng trước khi thử mạng.
 
 **Pha enforced**: bật lại sync. Argo trả NetworkPolicy từ Git. Kyverno `Audit` → báo cáo sạch → commit `Deny`.
 Sau đó chạy:
@@ -128,7 +130,9 @@ MODE=eks CTX="$(kubectl config current-context)" NET_PHASE=enforced CONTROL=cont
   NetworkPolicy cho Pod không có owner. Mỗi Job chờ 20 s cho khoảng hở của standard mode.
   - Mạng: chỉ `TIMEOUT` mới tính là NetworkPolicy chặn. `refused` hay lỗi DNS là FAIL.
   - T07: chỉ `AccessDenied` mới tính là IAM chặn.
+- Pha enforced chỉ nhận file control của **đúng** `RUN_ID-control`, cùng sandbox, và mọi case đều PASS (case `net-control-receipt`).
 - Trước các case mạng, suite đợi mỗi NetworkPolicy trong Git có một PolicyEndpoint, tức node agent đã nạp.
+- Kết quả của một Job chỉ được đọc khi Job đã `Complete`; Job thất bại thì là lỗi, kể cả khi log đã in `RESULT TIMEOUT`.
 - Probe P4 (`platform`, `sandbox`, `cross` cho cả hai tenant) phải exit 0 và in **đủ** từng case. Thiếu case
   hay có `SKIP` đều là FAIL.
 - Suite tự xóa Job, Pod, ServiceAccount và Argo app nó tạo (nhãn `app.kubernetes.io/name=zdr-isolation`),

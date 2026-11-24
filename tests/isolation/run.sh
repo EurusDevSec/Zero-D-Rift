@@ -11,14 +11,18 @@
 # written as SKIPPED_NEEDS_EKS, never PASS. eks: nothing may be skipped.
 # eks NET_PHASE=control runs only the network paths, with no NetworkPolicy in
 # the tenant namespaces: every path must be open, so a later deny is the policy's
-# doing. NET_PHASE=enforced runs everything; it needs the control file, the Git
-# NetworkPolicies present and programmed (PolicyEndpoints), and Kyverno in Deny.
+# doing (a failed or non-empty NetworkPolicy list stops it). NET_PHASE=enforced
+# runs everything; it needs the control file of RUN_ID-control for the same
+# sandbox with every case PASS, the Git NetworkPolicies present and programmed
+# (PolicyEndpoints), and Kyverno in Deny. A probe result counts only when its
+# Job is Complete.
 # The P4 negatives run through infra/p4-window/window.sh probe, which uses the
 # current kubectl context, so CTX must be the current context.
 # Admission cases are server dry runs. Network and IAM cases run as Jobs: the
 # VPC CNI does not enforce NetworkPolicy on a Pod without an owner. Everything
-# the suite creates carries app.kubernetes.io/name=zdr-isolation and is removed
-# and checked from an exit trap. The context name, account IDs and ARNs are
+# the suite creates carries app.kubernetes.io/name=zdr-isolation; it is removed
+# and the removal verified (case "cleanup") before RESULT, and again from an
+# exit trap on an abnormal exit. The context name, account IDs and ARNs are
 # scrubbed from every line written.
 set -euo pipefail
 # "pod ... | case_admit" must record in this shell, not in a pipeline subshell,
@@ -44,34 +48,55 @@ fi
 scrub() {
     local s="${1//"$CTX"/<ctx>}"
     sed -E -e 's/arn:aws[a-z-]*:[^ "]*/<arn>/g' -e 's/(^|[^0-9])[0-9]{12}([^0-9]|$)/\1<acct>\2/g' \
-           -e 's/[A-Za-z0-9.-]+\.eks\.amazonaws\.com/<eks-endpoint>/g' <<< "$s" | tr '\n' ' '
+           -e 's/[A-Za-z0-9.-]+\.eks\.amazonaws\.com/<eks-endpoint>/g' <<< "$s" | tr '\n' ' ' | sed 's/ $//'
 }
 
-# record ID THREAT LAYER EXPECTED OBSERVED EVIDENCE
+# record ID THREAT LAYER EXPECTED OBSERVED EVIDENCE. Observed and evidence are
+# scrubbed before they are printed or written.
 record() {
-    local res ev; ev="$(scrub "$6")"
+    local res ev ob; ev="$(scrub "$6")"; ob="$(scrub "$5")"
     if [[ "$5" == SKIPPED_* ]]; then res="$5"
     elif [[ "$4" == "$5" ]]; then res=PASS
     else res=FAIL; bad=1; fi
-    printf '%-18s %-6s %-26s expected=%-30s observed=%-30s %s\n' "$res" "$2" "$1" "$4" "$5" "${ev:0:110}"
-    cases="$(jq -c --arg id "$1" --arg t "$2" --arg l "$3" --arg e "$4" --arg o "$5" --arg r "$res" \
+    printf '%-18s %-6s %-26s expected=%-30s observed=%-30s %s\n' "$res" "$2" "$1" "$4" "$ob" "${ev:0:110}"
+    cases="$(jq -c --arg id "$1" --arg t "$2" --arg l "$3" --arg e "$4" --arg o "$ob" --arg r "$res" \
         --arg ev "${ev:0:300}" --arg at "$(date -u +%FT%TZ)" \
         '. + [{id:$id, threat:$t, layer:$l, expected:$e, observed:$o, result:$r, utc:$at, evidence:$ev}]' <<< "$cases")"
 }
 
-# Exit trap: delete what the suite created, then prove it is gone.
+# count_list NS RESOURCES: number of suite objects, or "error" when the list
+# itself fails (a Forbidden or unreachable API is not "none left").
+count_list() {
+    local out; out="$($K -n "$1" get "$2" -l "$LBL" -o name 2>/dev/null)" || { echo error; return; }
+    grep -c . <<< "$out" || true
+}
+# Delete what the suite created, then prove it is gone. Sets CLEANUP_STATE to
+# verified-empty, left:<n> or unverified; returns 0 only for verified-empty.
+CLEANUP_STATE=unverified; CLEANED=""
 cleanup() {
-    local left
+    local argo n c left=0 unread=0
     for ns in tenant-a tenant-b; do
         $K -n "$ns" delete jobs,pods,serviceaccounts -l "$LBL" --wait=true --timeout=120s >/dev/null 2>&1 || true
     done
-    $K get ns argocd >/dev/null 2>&1 && { $K -n argocd delete applications.argoproj.io -l "$LBL" --wait=true --timeout=60s >/dev/null 2>&1 || true; }
-    left="$( { for ns in tenant-a tenant-b; do $K -n "$ns" get jobs,pods,serviceaccounts -l "$LBL" -o name 2>/dev/null; done
-              $K get ns argocd >/dev/null 2>&1 && $K -n argocd get applications.argoproj.io -l "$LBL" -o name 2>/dev/null; true; } | wc -l)"
-    if (( left )); then echo "FAIL  cleanup: $left suite objects still present (label $LBL)"; return 1; fi
-    echo "cleanup: no suite object left"
+    argo="$($K get ns argocd --ignore-not-found -o name 2>/dev/null)" || argo=error
+    [[ "$argo" == namespace/argocd ]] && { $K -n argocd delete applications.argoproj.io -l "$LBL" --wait=true --timeout=60s >/dev/null 2>&1 || true; }
+    for n in tenant-a:jobs,pods,serviceaccounts tenant-b:jobs,pods,serviceaccounts ${argo:+argocd:applications.argoproj.io}; do
+        [[ "$n" == argocd:* && "$argo" != namespace/argocd ]] && { [[ "$argo" == error ]] && unread=1; continue; }
+        c="$(count_list "${n%%:*}" "${n#*:}")"
+        if [[ "$c" == error ]]; then unread=1; else left=$((left + c)); fi
+    done
+    if (( unread )); then CLEANUP_STATE=unverified
+    elif (( left )); then CLEANUP_STATE="left:$left"
+    else CLEANUP_STATE=verified-empty; fi
+    [[ "$CLEANUP_STATE" == verified-empty ]]
 }
-on_exit() { local rc=$?; cleanup || rc=1; exit "$rc"; }
+# Abnormal exit (set -e, a refusal): still clean up, and never exit 0 unverified.
+on_exit() {
+    local rc=$?
+    [[ -n "$CLEANED" ]] && exit "$rc"
+    cleanup || { echo "FAIL  cleanup: $CLEANUP_STATE (label $LBL)"; rc=1; }
+    exit "$rc"
+}
 trap on_exit EXIT
 
 # A restricted-compliant Pod that passes every guardrail; patches change one thing.
@@ -87,25 +112,31 @@ pod() { # NAME NS [CONTAINER_PATCH] [SPEC_PATCH] [LABEL_PATCH]
                resources:{requests:{cpu:"50m",memory:"96Mi"},limits:{memory:"192Mi"}}} * $c)]} * $s)}'
 }
 
-# job NS NAME PYTHON_CODE [SPEC_PATCH] [ARGS...] -> prints the last "RESULT ..." line,
-# or "RESULT ERROR job-<state>" / "RESULT ERROR no-output". The Job owns its Pod.
+# job NS NAME PYTHON_CODE [SPEC_PATCH] [ARGS...] -> prints the last "RESULT ..."
+# line, read only when the Job has condition Complete=True. A Job that failed,
+# hit its deadline or was never created prints "RESULT ERROR job-<state>", even
+# if its Pod logged a RESULT line first. The Job owns its Pod.
 job() {
-    local ns=$1 n=$2 code=$3 spec="${4:-}" state="" i line
+    local ns=$1 n=$2 code=$3 spec="${4:-}" state=timeout i cond line
     shift 4 || shift $#
-    pod "$n" "$ns" "$(jq -nc --arg c "$code" '{command:(["python","-c",$c] + $ARGS.positional)}' --args "$@")" "$spec" \
+    if ! pod "$n" "$ns" "$(jq -nc --arg c "$code" '{command:(["python","-c",$c] + $ARGS.positional)}' --args "$@")" "$spec" \
         | jq '{apiVersion:"batch/v1",kind:"Job",metadata:{name:.metadata.name,namespace:.metadata.namespace,labels:.metadata.labels},
                spec:{backoffLimit:0,activeDeadlineSeconds:150,template:{metadata:{labels:.metadata.labels},spec:.spec}}}' \
-        | $K apply -f - >/dev/null
+        | $K apply -f - >/dev/null 2>&1; then
+        echo "RESULT ERROR job-apply"; return
+    fi
     for i in $(seq 1 85); do
-        state="$($K -n "$ns" get job "$n" -o jsonpath='{.status.succeeded}/{.status.failed}' 2>/dev/null || true)"
-        [[ "$state" == 1/* || "$state" == */1 ]] && break
+        cond=" $($K -n "$ns" get job "$n" -o jsonpath='{range .status.conditions[?(@.status=="True")]}{.type}{" "}{end}' 2>/dev/null || true) "
+        [[ "$cond" == *" Complete "* ]] && { state=complete; break; }
+        [[ "$cond" == *" Failed "* ]] && { state=failed; break; }
         sleep 2
     done
-    line="$($K -n "$ns" logs "job/$n" 2>/dev/null | grep '^RESULT ' | tail -1 || true)"
+    line=""
+    [[ "$state" == complete ]] && line="$($K -n "$ns" logs "job/$n" 2>/dev/null | grep '^RESULT ' | tail -1 || true)"
     $K -n "$ns" delete job "$n" --cascade=foreground --wait=true --timeout=60s >/dev/null 2>&1 || true
-    if [[ -n "$line" ]]; then echo "$line"
-    elif [[ "$state" == 1/* ]]; then echo "RESULT ERROR no-output"
-    else echo "RESULT ERROR job-${state:-missing}"; fi
+    if [[ "$state" != complete ]]; then echo "RESULT ERROR job-$state"
+    elif [[ -n "$line" ]]; then echo "$line"
+    else echo "RESULT ERROR no-output"; fi
 }
 
 # Which layer answered an admission attempt. A webhook that could not be called
@@ -127,15 +158,43 @@ admit() { # manifest on stdin -> prints "OBSERVED|evidence"
 case_admit() { # ID THREAT EXPECTED  (manifest on stdin)
     local r; r="$(admit)"; record "$1" "$2" admission "$3" "${r%%|*}" "${r#*|}"
 }
-# can-i prints "yes" or "no" on stdout (warnings go to stderr); anything else,
-# or nothing (the API server unreachable), is not a denial.
-case_rbac() { # ID THREAT EXPECTED VERB RESOURCE NS-or-- AS [GROUP]
-    local ns=() ans obs; [[ "$6" != - ]] && ns=(-n "$6")
-    ans="$($K auth can-i "$4" "$5" "${ns[@]}" --as="$7" ${8:+--as-group="$8"} 2>/dev/null || true)"
-    case "$(head -1 <<< "$ans")" in
-        yes*) obs=allow ;; no|"no "*) obs=deny:rbac ;; *) obs=error:rbac ;;
-    esac
-    record "$1" "$2" rbac "$3" "$obs" "can-i $4 $5 ${6} as $7: $(head -1 <<< "$ans")"
+# A SubjectAccessReview, not "can-i": can-i prints "no" also when the
+# authorizer reports an evaluation error. Here allowed=true is allow,
+# allowed=false without evaluationError is deny:rbac, anything else (an error,
+# no answer) is error:rbac. Groups mirror what impersonation (--as) would send.
+case_rbac() { # ID THREAT EXPECTED VERB RESOURCE[.GROUP] NS-or-- USER [GROUP]
+    local res="${5%%.*}" grp="" ans
+    [[ "$5" == *.* ]] && grp="${5#*.}"
+    ans="$(jq -n --arg v "$4" --arg r "$res" --arg g "$grp" --arg ns "$6" --arg u "$7" --arg gr "${8:-}" '
+        ($u | startswith("system:serviceaccount:")) as $sa |
+        {apiVersion:"authorization.k8s.io/v1", kind:"SubjectAccessReview",
+         spec:{user:$u,
+               groups:((if $gr != "" then [$gr] else [] end)
+                       + (if $sa then ["system:serviceaccounts", "system:serviceaccounts:" + ($u | split(":")[2])] else [] end)
+                       + ["system:authenticated"]),
+               resourceAttributes:({verb:$v, resource:$r, group:$g} + (if $ns != "-" then {namespace:$ns} else {} end))}}' \
+        | $K create -f - -o json 2>/dev/null \
+        | jq -r '.status | (if (.evaluationError // "") != "" then "error:rbac" elif .allowed == true then "allow"
+                 elif .allowed == false then "deny:rbac" else "error:rbac" end) + "|" + (.reason // "")' 2>/dev/null || true)"
+    [[ -n "$ans" ]] || ans="error:rbac|no SubjectAccessReview answer"
+    record "$1" "$2" rbac "$3" "${ans%%|*}" "SubjectAccessReview $4 $5 ${6} as $7: ${ans#*|}"
+}
+
+# finish PHASE: clean up and record the verified result as a case, then write
+# the JSON, then print RESULT. PASS is printed only after cleanup is verified.
+finish() {
+    cleanup || true; CLEANED=1
+    record cleanup T15 harness verified-empty "$CLEANUP_STATE" "suite objects (label $LBL) after the run"
+    jq -n --arg run "$RUN_ID" --arg mode "$MODE" --arg ph "$1" --arg sb "$SANDBOX" --arg img "$IMG" --argjson c "$cases" \
+        '{run_id:$run, mode:$mode, net_phase:$ph, sandbox:$sb, image:$img, cases:$c,
+          summary:{total:($c|length), pass:([$c[]|select(.result=="PASS")]|length),
+                   fail:([$c[]|select(.result=="FAIL")]|length),
+                   skipped:([$c[]|select(.result|startswith("SKIPPED"))]|length)}}' > "$OUT"
+    echo
+    jq -r '.summary | "total \(.total), pass \(.pass), fail \(.fail), skipped \(.skipped)"' "$OUT"
+    if (( bad )); then echo "RESULT: FAIL ($1, $OUT)"; exit 1; fi
+    if [[ "$MODE" == eks && "$(jq '.summary.skipped' "$OUT")" != 0 ]]; then echo "RESULT: FAIL (skipped cases in eks mode)"; exit 1; fi
+    echo "RESULT: PASS ($1, $OUT)"; exit 0
 }
 
 echo "isolation suite mode=$MODE phase=${NET_PHASE:-n/a} run=$RUN_ID $(date -u +%FT%TZ)"
@@ -178,16 +237,32 @@ if [[ "$MODE" != eks ]]; then
         record "$c" "${c%%-*}" networkpolicy see-eks SKIPPED_NEEDS_EKS "kind has no VPC CNI NetworkPolicy"
     done
 elif [[ "$NET_PHASE" == control ]]; then
+    # The list must succeed and be empty: a Forbidden list is not "no policy".
     for t in tenant-a tenant-b; do
-        nps="$($K -n "$t" get networkpolicies -o name 2>&1 | grep -c networkpolicy || true)"
-        record "net-control-$t" T10 networkpolicy none "$([[ "$nps" == 0 ]] && echo none || echo "present:$nps")" "$t NetworkPolicies before the control run"
+        if nps="$($K -n "$t" get networkpolicies -o name 2>/dev/null)"; then
+            c="$(grep -c . <<< "$nps" || true)"; o="$([[ "$c" == 0 ]] && echo none || echo "present:$c")"
+        else o=error:list; fi
+        record "net-control-$t" T10 networkpolicy none "$o" "$t NetworkPolicies before the control run"
     done
-    for c in "${NETS[@]}"; do set -- $c; net_case "$1" "$2" allow "$3" "$4" "$5"; done
+    # A path probed with policies present (or unknown) proves nothing: stop here.
+    (( bad )) || for c in "${NETS[@]}"; do set -- $c; net_case "$1" "$2" allow "$3" "$4" "$5"; done
 else
-    # The control run must have opened the same paths before the policies existed.
+    # The receipt: a control run of this window (RUN_ID-control) and this
+    # sandbox, with every case PASS. Only fixed codes reach the output.
+    o="$(jq -r --arg run "$RUN_ID-control" --arg sb "$SANDBOX" '
+        if .mode != "eks" or .net_phase != "control" then "not-a-control-run"
+        elif .run_id != $run then "other-run"
+        elif .sandbox != $sb then "other-sandbox"
+        elif (.summary.fail != 0) or (.summary.pass != .summary.total) or ([.cases[] | select(.result != "PASS")] | length) != 0 then "control-not-passing"
+        else "ok" end' "$CONTROL" 2>/dev/null || echo unreadable)"
+    case "$o" in ok|not-a-control-run|other-run|other-sandbox|control-not-passing) ;; *) o=unreadable ;; esac
+    record net-control-receipt T10 networkpolicy ok "$o" "control run $RUN_ID-control, sandbox $SANDBOX"
+    # The control run opened the same paths before the policies existed.
     for c in "${NETS[@]}"; do set -- $c
-        o="$(jq -r --arg id "$1" 'if .mode == "eks" and .net_phase == "control" then ([.cases[] | select(.id == $id) | .observed][0] // "missing") else "not-a-control-run" end' "$CONTROL" 2>/dev/null || echo unreadable)"
-        record "$1-control" "$2" networkpolicy allow "$o" "same path in the control run ($(jq -r .run_id "$CONTROL" 2>/dev/null))"
+        o="$(jq -r --arg id "$1" '[.cases[] | select(.id == $id)][0] | if . == null then "missing"
+              elif .result == "PASS" and .observed == "allow" then "allow" else "not-allow" end' "$CONTROL" 2>/dev/null || echo unreadable)"
+        case "$o" in allow|not-allow|missing) ;; *) o=unreadable ;; esac
+        record "$1-control" "$2" networkpolicy allow "$o" "same path in the control run"
     done
     # Every Git NetworkPolicy exists and the node agent has programmed it.
     for t in tenant-a tenant-b; do
@@ -205,13 +280,7 @@ else
     net_case T06-metadata T06 deny:network tenant-a 169.254.169.254 80
 fi
 
-if [[ "$NET_PHASE" == control ]]; then
-    jq -n --arg run "$RUN_ID" --arg mode "$MODE" --argjson c "$cases" \
-        '{run_id:$run, mode:$mode, net_phase:"control", cases:$c,
-          summary:{total:($c|length), pass:([$c[]|select(.result=="PASS")]|length), fail:([$c[]|select(.result=="FAIL")]|length)}}' > "$OUT"
-    if (( bad )); then echo "RESULT: FAIL (control run, $OUT)"; exit 1; fi
-    echo "RESULT: PASS (control run, $OUT)"; exit 0
-fi
+if [[ "$NET_PHASE" == control ]]; then finish control; fi
 
 # --- T04: Kubernetes RBAC (D1, D2) ----------------------------------------------
 DEV=dev-a; GRP=zdr:tenant-a:developers; SA=system:serviceaccount:tenant-a:default
@@ -272,7 +341,8 @@ wait_msg() {
     done
     echo "$m"
 }
-if $K get ns argocd >/dev/null 2>&1; then
+argo="$($K get ns argocd --ignore-not-found -o name 2>/dev/null)" || argo=error
+if [[ "$argo" == namespace/argocd ]]; then
     a="zdr-iso-badns-$RANDOM"; app "$a" gitops/requests zdr-platform
     want="do not match any of the allowed destinations in project 'zdr-requests'"
     m="$(wait_msg "$a" "$want")"
@@ -280,8 +350,12 @@ if $K get ns argocd >/dev/null 2>&1; then
     a="zdr-iso-badkind-$RANDOM"; app "$a" gitops/lab tenant-a
     want="resource apps:Deployment is not permitted in project zdr-requests"
     m="$(wait_msg "$a" "$want")"
-    made="$($K get deploy -A -o name 2>/dev/null | grep -c zdr-lab-pause || true)"
+    # The list must succeed: a failed list is not "no Deployment created".
+    if dl="$($K get deploy -A -o name 2>/dev/null)"; then made="$(grep -c zdr-lab-pause <<< "$dl" || true)"; else made=list-error; fi
     record T03-foreign-kind T03 argocd deny:argocd "$([[ "$m" == *"$want"* && "$made" == 0 ]] && echo deny:argocd || echo "other:deployments=$made")" "$m"
+elif [[ "$argo" == error ]]; then
+    record T03-foreign-namespace T03 argocd deny:argocd error:list "could not read namespace argocd"
+    record T03-foreign-kind      T03 argocd deny:argocd error:list "could not read namespace argocd"
 else
     record T03-foreign-namespace T03 argocd deny:argocd SKIPPED_NEEDS_EKS "no argocd namespace in this cluster"
     record T03-foreign-kind      T03 argocd deny:argocd SKIPPED_NEEDS_EKS "no argocd namespace in this cluster"
@@ -310,12 +384,14 @@ if [[ "$MODE" == eks ]]; then
     if [[ -z "$role" ]]; then
         record T07-other-sa T07 iam deny:iam error:no-annotation "rag-$SANDBOX in tenant-a has no role annotation to copy"
     else
-        $K -n tenant-a create serviceaccount zdr-iso-other --dry-run=client -o json \
+        # An apply error can echo the object (and the ARN): keep it off the output.
+        if $K -n tenant-a create serviceaccount zdr-iso-other --dry-run=client -o json 2>/dev/null \
             | jq --arg r "$role" '.metadata.annotations["eks.amazonaws.com/role-arn"] = $r
                  | .metadata.labels["app.kubernetes.io/name"] = "zdr-isolation" | .automountServiceAccountToken = false' \
-            | $K apply -f - >/dev/null
+            | $K apply -f - >/dev/null 2>&1; then
+            r="$(job tenant-a "zdr-iso-t07-$RANDOM" "$T07CODE" '{"serviceAccountName":"zdr-iso-other"}')"
+        else r="RESULT ERROR sa-apply"; fi
         unset role
-        r="$(job tenant-a "zdr-iso-t07-$RANDOM" "$T07CODE" '{"serviceAccountName":"zdr-iso-other"}')"
         case "$r" in "RESULT DENIED AccessDenied") obs=deny:iam ;; "RESULT ASSUMED") obs=allow ;; *) obs="error:$(cut -d' ' -f3 <<< "$r")" ;; esac
         record T07-other-sa T07 iam deny:iam "$obs" "zdr-iso-other AssumeRoleWithWebIdentity on the tenant-a role: ${r#RESULT }"
     fi
@@ -356,14 +432,4 @@ else
     record P4-probes T08 iam-or-db pass SKIPPED_NEEDS_EKS "needs RDS, Secrets Manager, S3 and IRSA"
 fi
 
-jq -n --arg run "$RUN_ID" --arg mode "$MODE" --arg ph "${NET_PHASE:-none}" --arg img "$IMG" --argjson c "$cases" \
-    '{run_id:$run, mode:$mode, net_phase:$ph, image:$img, cases:$c,
-      summary:{total:($c|length), pass:([$c[]|select(.result=="PASS")]|length),
-               fail:([$c[]|select(.result=="FAIL")]|length),
-               skipped:([$c[]|select(.result|startswith("SKIPPED"))]|length)}}' > "$OUT"
-echo
-jq -r '.summary | "total \(.total), pass \(.pass), fail \(.fail), skipped \(.skipped)"' "$OUT"
-skipped="$(jq '.summary.skipped' "$OUT")"
-if (( bad )); then echo "RESULT: FAIL ($OUT)"; exit 1; fi
-if [[ "$MODE" == eks && "$skipped" != 0 ]]; then echo "RESULT: FAIL (skipped cases in eks mode)"; exit 1; fi
-echo "RESULT: PASS ($OUT)"
+finish "${NET_PHASE:-none}"

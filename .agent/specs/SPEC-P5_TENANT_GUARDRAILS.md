@@ -404,8 +404,13 @@ nothing about VPC CNI enforcement or IRSA.
       cases; T03 adds a foreign kind; network and T07 probes are Jobs; the P4
       wrapper needs exit 0 and the full case set of each probe, `platform`
       included; evidence is scrubbed; an exit trap removes and checks every
-      suite object. Kind with Argo CD: 38 cases, 32 PASS, 0 FAIL, 6
-      `SKIPPED_NEEDS_EKS`; one policy in `Audit` still exits 1.)
+      suite object. After Codex re-review: probe results count only from a
+      `Complete` Job; enforced accepts only a fully passing control receipt of
+      `RUN_ID-control` for the same sandbox; RBAC by SubjectAccessReview
+      (`evaluationError` is an error); failed lists are errors, not "none";
+      cleanup is a recorded case before RESULT. Kind with Argo CD: 39 cases,
+      33 PASS, 0 FAIL, 6 `SKIPPED_NEEDS_EKS`; one policy in `Audit` still
+      exits 1.)
 
 ### P5-T4.2 — L3 window on EKS (4 h)
 

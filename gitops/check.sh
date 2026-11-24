@@ -41,7 +41,7 @@ unpinned="$(grep -h -E '^\s*-?\s*(image|package):\s*\S' $files | grep -v '@sha25
 
 # 4-7 need structure: read every document once.
 python -I - $files <<'EOF' || failed=1
-import sys, yaml, re, os, ipaddress
+import sys, yaml, re, os, ipaddress, json
 docs = []
 for f in sys.argv[1:]:
     for d in yaml.safe_load_all(open(f)):
@@ -443,6 +443,33 @@ for f, d in objs_of("NetworkPolicy"):
                        or any(str(q.get("port")) != "53" for q in ports)) for p in peers)):
             loose.append(f"{d['metadata'].get('namespace')}/{d['metadata']['name']}")
 res(not loose, "every egress rule names peers and ports; other namespaces only for DNS" + (f": {loose}" if loose else ""))
+# Each tenant's egress is exactly these four rules, each port with an explicit
+# protocol and number (a port entry {} means every port). A rule that goes
+# missing (no DB path for one tenant) fails here too, not only a wider one.
+def canon_rule(r):
+    ports = r.get("ports") or []
+    if any(set(q) != {"protocol", "port"} for q in ports):
+        return ("bad-port",)
+    return (json.dumps(sorted(json.dumps(p, sort_keys=True) for p in r.get("to") or [])),
+            tuple(sorted((q["protocol"], str(q["port"])) for q in ports)))
+def want_egress(t, vpc_s, dbs_s):
+    return sorted([
+        canon_rule({"to": [{"namespaceSelector": DNS_NS, "podSelector": {"matchLabels": {"k8s-app": "kube-dns"}}}],
+                    "ports": [{"protocol": "UDP", "port": 53}, {"protocol": "TCP", "port": 53}]}),
+        canon_rule({"to": [{"ipBlock": {"cidr": c}} for c in sorted(dbs_s)], "ports": [{"protocol": "TCP", "port": 5432}]}),
+        canon_rule({"to": [{"ipBlock": {"cidr": "0.0.0.0/0", "except": [vpc_s, "169.254.0.0/16"]}}],
+                    "ports": [{"protocol": "TCP", "port": 443}]}),
+        canon_rule({"to": [{"podSelector": {"matchLabels": {"rag.zero-drift.io/tenant": t}}}],
+                    "ports": [{"protocol": "TCP", "port": 8080}]})], key=str)
+_tf = open(os.environ["TF_VARIABLES"], encoding="utf-8").read() if os.path.exists(os.environ["TF_VARIABLES"]) else ""
+_m = re.search(r'variable "vpc_cidr"[^}]*?default\s*=\s*"([0-9./]+)"', _tf, re.S)
+_vpc = ipaddress.ip_network(_m.group(1)) if _m else None
+_dbs = [str(n) for n in list(_vpc.subnets(new_prefix=24))[10:12]] if _vpc else []
+for t in sorted(TENANTS):
+    got = sorted((canon_rule(r) for f, d in objs_of("NetworkPolicy", t)
+                  for r in d.get("spec", {}).get("egress", []) or []), key=str)
+    res(_vpc is not None and got == want_egress(t, str(_vpc), _dbs),
+        f"{t}: egress is exactly DNS 53, DB 5432, HTTPS 443 outside the VPC, app 8080 in-tenant")
 # The DB and VPC addresses in the policies follow Terraform's vpc_cidr default
 # (locals.tf: cidrsubnet(vpc_cidr, 8, 10 + i)); a VPC override must change both.
 tf = open(os.environ["TF_VARIABLES"], encoding="utf-8").read() if os.path.exists(os.environ["TF_VARIABLES"]) else ""
