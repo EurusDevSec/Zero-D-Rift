@@ -408,7 +408,11 @@ nothing about VPC CNI enforcement or IRSA.
       `Complete` Job; enforced accepts only a fully passing control receipt of
       `RUN_ID-control` for the same sandbox; RBAC by SubjectAccessReview
       (`evaluationError` is an error); failed lists are errors, not "none";
-      cleanup is a recorded case before RESULT. Kind with Argo CD: 39 cases,
+      cleanup is a recorded case before RESULT. Third Codex pass: the log
+      read must succeed; cleanup also deletes and waits for the `window.sh`
+      probe Pods (`zdr-probe`); account IDs side by side are all scrubbed;
+      egress is keyed by the policy podSelector with integer ports.
+      Kind with Argo CD: 39 cases,
       33 PASS, 0 FAIL, 6 `SKIPPED_NEEDS_EKS`; one policy in `Audit` still
       exits 1.)
 

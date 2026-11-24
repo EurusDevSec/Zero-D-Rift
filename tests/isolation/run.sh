@@ -47,7 +47,9 @@ fi
 # Remove the context name, AWS account IDs, ARNs and EKS endpoints from a line.
 scrub() {
     local s="${1//"$CTX"/<ctx>}"
-    sed -E -e 's/arn:aws[a-z-]*:[^ "]*/<arn>/g' -e 's/(^|[^0-9])[0-9]{12}([^0-9]|$)/\1<acct>\2/g' \
+    # The account-ID rule loops (one match per pass) so IDs that share a
+    # separator (two 12-digit IDs joined by a comma) are all replaced.
+    sed -E -e 's/arn:aws[a-z-]*:[^ "]*/<arn>/g' -e ':a' -e 's/(^|[^0-9])[0-9]{12}([^0-9]|$)/\1<acct>\2/' -e 'ta' \
            -e 's/[A-Za-z0-9.-]+\.eks\.amazonaws\.com/<eks-endpoint>/g' <<< "$s" | tr '\n' ' ' | sed 's/ $//'
 }
 
@@ -66,10 +68,13 @@ record() {
 
 # count_list NS RESOURCES: number of suite objects, or "error" when the list
 # itself fails (a Forbidden or unreachable API is not "none left").
-count_list() {
-    local out; out="$($K -n "$1" get "$2" -l "$LBL" -o name 2>/dev/null)" || { echo error; return; }
+count_list() { # NS RESOURCES [SELECTOR]
+    local out; out="$($K -n "$1" get "$2" -l "${3:-$LBL}" -o name 2>/dev/null)" || { echo error; return; }
     grep -c . <<< "$out" || true
 }
+# window.sh probe Pods (the P4 wrapper) carry their own label and are deleted
+# with --wait=false: wait for them to be gone and count them too.
+PROBE_LBL=app.kubernetes.io/name=zdr-probe
 # Delete what the suite created, then prove it is gone. Sets CLEANUP_STATE to
 # verified-empty, left:<n> or unverified; returns 0 only for verified-empty.
 CLEANUP_STATE=unverified; CLEANED=""
@@ -83,6 +88,12 @@ cleanup() {
     for n in tenant-a:jobs,pods,serviceaccounts tenant-b:jobs,pods,serviceaccounts ${argo:+argocd:applications.argoproj.io}; do
         [[ "$n" == argocd:* && "$argo" != namespace/argocd ]] && { [[ "$argo" == error ]] && unread=1; continue; }
         c="$(count_list "${n%%:*}" "${n#*:}")"
+        if [[ "$c" == error ]]; then unread=1; else left=$((left + c)); fi
+    done
+    for ns in tenant-a tenant-b zdr-platform; do
+        $K -n "$ns" delete pod -l "$PROBE_LBL" --wait=false >/dev/null 2>&1 || true
+        $K -n "$ns" wait --for=delete pod -l "$PROBE_LBL" --timeout=120s >/dev/null 2>&1 || true
+        c="$(count_list "$ns" pods "$PROBE_LBL")"
         if [[ "$c" == error ]]; then unread=1; else left=$((left + c)); fi
     done
     if (( unread )); then CLEANUP_STATE=unverified
@@ -131,8 +142,13 @@ job() {
         [[ "$cond" == *" Failed "* ]] && { state=failed; break; }
         sleep 2
     done
-    line=""
-    [[ "$state" == complete ]] && line="$($K -n "$ns" logs "job/$n" 2>/dev/null | grep '^RESULT ' | tail -1 || true)"
+    # The log read itself must succeed: a partial read that failed is no result.
+    line=""; local logs
+    if [[ "$state" == complete ]]; then
+        if logs="$($K -n "$ns" logs "job/$n" 2>/dev/null)"; then
+            line="$(grep '^RESULT ' <<< "$logs" | tail -1 || true)"
+        else state=log-error; fi
+    fi
     $K -n "$ns" delete job "$n" --cascade=foreground --wait=true --timeout=60s >/dev/null 2>&1 || true
     if [[ "$state" != complete ]]; then echo "RESULT ERROR job-$state"
     elif [[ -n "$line" ]]; then echo "$line"

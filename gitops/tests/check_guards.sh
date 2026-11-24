@@ -161,6 +161,8 @@ case_ "DB subnet off the VPC" "match Terraform vpc_cidr" "$NP" 'docs[2]["spec"][
 case_ "HTTPS rule with an empty port" "tenant-a: egress is exactly" "$NP" 'docs[3]["spec"]["egress"][0]["ports"] = [{}]'
 case_ "tenant-b loses DB egress" "tenant-b: egress is exactly" "$NP" 'del docs[7]'
 case_ "app egress to the other tenant" "tenant-a: egress is exactly" "$NP" 'docs[4]["spec"]["egress"][0]["to"] = [{"podSelector": {"matchLabels": {"rag.zero-drift.io/tenant": "tenant-b"}}}]'
+case_ "tenant-b DB policy selects no Pod" "tenant-b: egress is exactly" "$NP" 'docs[7]["spec"]["podSelector"] = {"matchLabels": {"rag.zero-drift.io/tenant": "nobody"}}'
+case_ "HTTPS port as a string" "tenant-a: egress is exactly" "$NP" 'docs[3]["spec"]["egress"][0]["ports"][0]["port"] = "443"'
 case_ "tenant label on zdr-platform" "tenant label only on tenant namespaces" platform/tenants/namespaces.yaml 'next(d for d in docs if d["metadata"]["name"] == "zdr-platform")["metadata"].setdefault("labels", {})["rag.zero-drift.io/tenant"] = "zdr-platform"'
 case_ "tenant group bound in zdr-platform" "bound only in its own namespace" platform/tenants/rbac.yaml 'docs.append({"apiVersion": "rbac.authorization.k8s.io/v1", "kind": "RoleBinding", "metadata": {"name": "x", "namespace": "zdr-platform"}, "roleRef": {"apiGroup": "rbac.authorization.k8s.io", "kind": "ClusterRole", "name": "view"}, "subjects": [{"kind": "Group", "apiGroup": "rbac.authorization.k8s.io", "name": "zdr:tenant-a:developers"}]})'
 case_ "Kyverno digest in an unused key" "pinned by digest at the chart's keys" "$KY" 'v = '"$KV"'; b = v["backgroundController"]; b["unused"] = {"image": b.pop("image")}'

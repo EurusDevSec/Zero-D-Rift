@@ -446,27 +446,33 @@ res(not loose, "every egress rule names peers and ports; other namespaces only f
 # Each tenant's egress is exactly these four rules, each port with an explicit
 # protocol and number (a port entry {} means every port). A rule that goes
 # missing (no DB path for one tenant) fails here too, not only a wider one.
-def canon_rule(r):
+# A rule is keyed by the Pods it applies to (the policy podSelector) as well as
+# its peers and ports; ports must be an integer with TCP or UDP. A policy whose
+# policyTypes leave out Egress has no egress effect, so its rules do not count.
+def canon_rule(r, sel):
     ports = r.get("ports") or []
-    if any(set(q) != {"protocol", "port"} for q in ports):
+    if any(set(q) != {"protocol", "port"} or type(q["port"]) is not int or q["protocol"] not in ("TCP", "UDP")
+           for q in ports):
         return ("bad-port",)
-    return (json.dumps(sorted(json.dumps(p, sort_keys=True) for p in r.get("to") or [])),
+    return (json.dumps(sel, sort_keys=True), json.dumps(sorted(json.dumps(p, sort_keys=True) for p in r.get("to") or [])),
             tuple(sorted((q["protocol"], str(q["port"])) for q in ports)))
 def want_egress(t, vpc_s, dbs_s):
+    sel = {"matchLabels": {"rag.zero-drift.io/tenant": t}}
     return sorted([
         canon_rule({"to": [{"namespaceSelector": DNS_NS, "podSelector": {"matchLabels": {"k8s-app": "kube-dns"}}}],
-                    "ports": [{"protocol": "UDP", "port": 53}, {"protocol": "TCP", "port": 53}]}),
-        canon_rule({"to": [{"ipBlock": {"cidr": c}} for c in sorted(dbs_s)], "ports": [{"protocol": "TCP", "port": 5432}]}),
+                    "ports": [{"protocol": "UDP", "port": 53}, {"protocol": "TCP", "port": 53}]}, sel),
+        canon_rule({"to": [{"ipBlock": {"cidr": c}} for c in sorted(dbs_s)], "ports": [{"protocol": "TCP", "port": 5432}]}, sel),
         canon_rule({"to": [{"ipBlock": {"cidr": "0.0.0.0/0", "except": [vpc_s, "169.254.0.0/16"]}}],
-                    "ports": [{"protocol": "TCP", "port": 443}]}),
+                    "ports": [{"protocol": "TCP", "port": 443}]}, sel),
         canon_rule({"to": [{"podSelector": {"matchLabels": {"rag.zero-drift.io/tenant": t}}}],
-                    "ports": [{"protocol": "TCP", "port": 8080}]})], key=str)
+                    "ports": [{"protocol": "TCP", "port": 8080}]}, sel)], key=str)
 _tf = open(os.environ["TF_VARIABLES"], encoding="utf-8").read() if os.path.exists(os.environ["TF_VARIABLES"]) else ""
 _m = re.search(r'variable "vpc_cidr"[^}]*?default\s*=\s*"([0-9./]+)"', _tf, re.S)
 _vpc = ipaddress.ip_network(_m.group(1)) if _m else None
 _dbs = [str(n) for n in list(_vpc.subnets(new_prefix=24))[10:12]] if _vpc else []
 for t in sorted(TENANTS):
-    got = sorted((canon_rule(r) for f, d in objs_of("NetworkPolicy", t)
+    got = sorted((canon_rule(r, d["spec"].get("podSelector")) for f, d in objs_of("NetworkPolicy", t)
+                  if "Egress" in (d.get("spec", {}).get("policyTypes") or [])
                   for r in d.get("spec", {}).get("egress", []) or []), key=str)
     res(_vpc is not None and got == want_egress(t, str(_vpc), _dbs),
         f"{t}: egress is exactly DNS 53, DB 5432, HTTPS 443 outside the VPC, app 8080 in-tenant")
