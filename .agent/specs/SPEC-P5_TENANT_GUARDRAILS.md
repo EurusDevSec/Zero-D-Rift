@@ -398,6 +398,27 @@ nothing about VPC CNI enforcement or IRSA.
       eks mode allows no skip. Probe Pods: `window.sh run_probe` adds the tenant
       label in tenant namespaces and the app requests and memory limit.
       Runbook `docs/runbooks/P5_ISOLATION_SUITE.md`.)
+      (24/11, after Codex review: admission records the policy that denied
+      (`deny:kyverno:<policy>`) and treats an unreachable webhook as an error;
+      `can-i` answers other than yes/no are errors; workload ServiceAccount
+      cases; T03 adds a foreign kind; network and T07 probes are Jobs; the P4
+      wrapper needs exit 0 and the full case set of each probe, `platform`
+      included; evidence is scrubbed; an exit trap removes and checks every
+      suite object. After Codex re-review: probe results count only from a
+      `Complete` Job; enforced accepts only a fully passing control receipt of
+      `RUN_ID-control` for the same sandbox; RBAC by SubjectAccessReview
+      (`evaluationError` is an error); failed lists are errors, not "none";
+      cleanup is a recorded case before RESULT. Third Codex pass: the log
+      read must succeed; cleanup also deletes and waits for the `window.sh`
+      probe Pods (`zdr-probe`); account IDs side by side are all scrubbed;
+      egress is keyed by the policy podSelector with integer ports.
+      Codex APPROVE at ae20196; its two should-fix items done: a policy
+      without policyTypes counts its egress (Kubernetes default), and
+      cleanup touches only this run's probes (`PROBE_RUN` label set by
+      `window.sh`).
+      Kind with Argo CD: 39 cases,
+      33 PASS, 0 FAIL, 6 `SKIPPED_NEEDS_EKS`; one policy in `Audit` still
+      exits 1.)
 
 ### P5-T4.2 — L3 window on EKS (4 h)
 
@@ -409,18 +430,37 @@ pre-inventory, the owner's explicit approval.
 
 **B. Build (1 h)** — bootstrap with the RAG platform and NetworkPolicy enabled;
 platform through Argo CD; both sandboxes Ready **before** any guardrail.
+Pre-flight (Codex review 24/11): the planned `vpc_cidr` and DB subnets equal
+the NetworkPolicy `ipBlock` values (`gitops/check.sh` checks this against
+`infra/terraform/variables.tf`; recheck if the plan overrides `vpc_cidr`).
 
 **C. Control, then guardrails (1 h)**
 
-- [ ] Control run: tenant-a reaches a listener in tenant-b (expected to succeed).
-- [ ] Apply baseline and NetworkPolicies; Kyverno in `Audit`; reports clean;
-      switch to `Enforce`.
+The apps `25-tenants` and `47-kyverno-policies` use automated sync with
+`selfHeal`: a NetworkPolicy deleted by hand comes back within a reconcile, and
+a policy edited in the cluster is reverted. So every step that removes or
+changes a guardrail first suspends automated sync on the root app and on that
+app, and re-enables it afterwards. Audit to Deny is a Git commit, not a
+cluster edit.
+
+- [ ] Control run: suspend sync (root, `25-tenants`), delete the tenant
+      NetworkPolicies, `NET_PHASE=control`: the suite refuses to run if any
+      NetworkPolicy remains, and every path (own app, a→b, b→a, metadata) must
+      be open. Keep its JSON.
+- [ ] Re-enable sync; NetworkPolicies back from Git; PolicyEndpoints present.
+      Kyverno in `Audit`; reports clean; commit `Deny`; Argo applies it.
 - [ ] Delete and re-create both sandboxes; both Ready; independent check passes.
 
 **D. Suite and failure case (1 h)**
 
-- [ ] Full suite; observation limit 10 minutes per negative case, 900 s total.
-- [ ] Kyverno outage case of §4 on EKS.
+- [ ] Full suite, `NET_PHASE=enforced CONTROL=<control JSON>`: it checks the
+      control file, that every Git NetworkPolicy has a PolicyEndpoint, and runs
+      network and IAM probes as Jobs (the VPC CNI does not enforce NetworkPolicy
+      on a Pod without an owner). Only a timeout counts as a network deny;
+      `AccessDenied` is the only IAM deny. Observation limit 10 minutes per
+      negative case, 900 s total.
+- [ ] Kyverno outage case of §4 on EKS, with sync of `45-kyverno` and
+      `47-kyverno-policies` suspended first (self-heal would scale Kyverno back).
 - [ ] Owner-typed micro-lab: one forbidden request per layer, typed by hand.
 
 **E. Teardown (0.5 h)** — requests and cleanup → policies → Kyverno → P4/P3

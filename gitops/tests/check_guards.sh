@@ -8,6 +8,7 @@ set -euo pipefail
 src="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT
+export TF_VARIABLES="$src/../infra/terraform/variables.tf"
 failed=0
 n=0
 
@@ -153,6 +154,19 @@ case_ "default-deny with an allow rule" "tenant-a: one default-deny" "$NP" 'docs
 case_ "ingress from another namespace" "ingress only from Pods of the same namespace" "$NP" 'docs[4]["spec"]["ingress"][0]["from"].append({"namespaceSelector": {}})'
 case_ "443 rule without ports" "0.0.0.0/0 on all ports" "$NP" 'del docs[3]["spec"]["egress"][0]["ports"]'
 case_ "443 rule reaches metadata" "into the VPC/metadata" "$NP" 'docs[8]["spec"]["egress"][0]["to"][0]["ipBlock"]["except"] = ["10.0.0.0/16"]'
+# Codex review of P5 code (340558c): four mutations that used to pass.
+case_ "unrestricted egress rule" "every egress rule names peers and ports" "$NP" 'docs[1]["spec"]["egress"].append({})'
+case_ "egress to every namespace" "every egress rule names peers and ports" "$NP" 'docs[4]["spec"]["egress"][0]["to"].append({"namespaceSelector": {}})'
+case_ "DB subnet off the VPC" "match Terraform vpc_cidr" "$NP" 'docs[2]["spec"]["egress"][0]["to"][0]["ipBlock"]["cidr"] = "10.1.10.0/24"'
+case_ "HTTPS rule with an empty port" "tenant-a: egress is exactly" "$NP" 'docs[3]["spec"]["egress"][0]["ports"] = [{}]'
+case_ "tenant-b loses DB egress" "tenant-b: egress is exactly" "$NP" 'del docs[7]'
+case_ "app egress to the other tenant" "tenant-a: egress is exactly" "$NP" 'docs[4]["spec"]["egress"][0]["to"] = [{"podSelector": {"matchLabels": {"rag.zero-drift.io/tenant": "tenant-b"}}}]'
+case_ "tenant-b DB policy selects no Pod" "tenant-b: egress is exactly" "$NP" 'docs[7]["spec"]["podSelector"] = {"matchLabels": {"rag.zero-drift.io/tenant": "nobody"}}'
+case_ "HTTPS port as a string" "tenant-a: egress is exactly" "$NP" 'docs[3]["spec"]["egress"][0]["ports"][0]["port"] = "443"'
+case_ "extra egress policy without policyTypes" "tenant-a: egress is exactly" "$NP" 'import copy; x = copy.deepcopy(docs[3]); x["metadata"]["name"] = "extra"; del x["spec"]["policyTypes"]; x["spec"]["egress"][0]["ports"] = [{"protocol": "TCP", "port": 22}]; docs.append(x)'
+case_ "tenant label on zdr-platform" "tenant label only on tenant namespaces" platform/tenants/namespaces.yaml 'next(d for d in docs if d["metadata"]["name"] == "zdr-platform")["metadata"].setdefault("labels", {})["rag.zero-drift.io/tenant"] = "zdr-platform"'
+case_ "tenant group bound in zdr-platform" "bound only in its own namespace" platform/tenants/rbac.yaml 'docs.append({"apiVersion": "rbac.authorization.k8s.io/v1", "kind": "RoleBinding", "metadata": {"name": "x", "namespace": "zdr-platform"}, "roleRef": {"apiGroup": "rbac.authorization.k8s.io", "kind": "ClusterRole", "name": "view"}, "subjects": [{"kind": "Group", "apiGroup": "rbac.authorization.k8s.io", "name": "zdr:tenant-a:developers"}]})'
+case_ "Kyverno digest in an unused key" "pinned by digest at the chart's keys" "$KY" 'v = '"$KV"'; b = v["backgroundController"]; b["unused"] = {"image": b.pop("image")}'
 
 echo
 if (( failed )); then echo "RESULT: FAIL"; exit 1; fi
