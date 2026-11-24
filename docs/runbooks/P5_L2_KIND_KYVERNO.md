@@ -134,8 +134,8 @@ $K -n tenant-a create deployment badimg --image=busybox:1.37 --dry-run=server
 
 ## 2b. Tách ba case còn gộp hoặc thiếu ở bước 2 (§4 scenario 3)
 
-Ở bước 2, `busybox:1.37` sai **hai** điều cùng lúc: không có digest và sai registry. Còn `noreq` thì
-không tới được Kyverno, vì LimitRange điền trước. Bước này tách từng điều một:
+Ở bước 2, `busybox:1.37` sai **hai** điều cùng lúc: không có digest và sai registry. Còn `noreq` tới
+Kyverno khi LimitRange đã điền resources mặc định, nên `zdr-require-resources` không có gì để bắt. Bước này tách từng điều một:
 
 ```bash
 IMAGE=ghcr.io/eurusdevsec/zero-d-rift/rag-sandbox:latest $POD tagonly tenant-a | $K create --dry-run=server -f -
