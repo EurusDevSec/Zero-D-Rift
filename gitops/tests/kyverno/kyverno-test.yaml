@@ -1,0 +1,51 @@
+# L1 (SPEC-P5 P5-T2.2 A): one pass and one fail per rule; zdr-platform is out of scope.
+apiVersion: cli.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: zdr-pod-policies
+policies:
+- ../../platform/policies/zdr-require-resources.yaml
+- ../../platform/policies/zdr-image-digest.yaml
+- ../../platform/policies/zdr-tenant-label.yaml
+resources:
+- resources.yaml
+variables: values.yaml
+results:
+- policy: zdr-require-resources
+  resources:
+  - tenant-a/good
+  - tenant-a/tag-image
+  - tenant-a/no-label
+  result: pass
+  isValidatingPolicy: true
+- policy: zdr-require-resources
+  resources:
+  - tenant-a/no-resources
+  - tenant-a/no-mem-limit
+  result: fail
+  isValidatingPolicy: true
+- policy: zdr-image-digest
+  resources:
+  - tenant-a/good
+  - tenant-a/no-resources
+  result: pass
+  isValidatingPolicy: true
+- policy: zdr-image-digest
+  resources:
+  - tenant-a/tag-image
+  - tenant-a/other-registry
+  - tenant-a/init-tag
+  result: fail
+  isValidatingPolicy: true
+- policy: zdr-tenant-label
+  resources:
+  - tenant-a/good
+  - tenant-a/tag-image
+  result: pass
+  isValidatingPolicy: true
+- policy: zdr-tenant-label
+  resources:
+  - tenant-a/no-label
+  - tenant-a/wrong-label
+  result: fail
+  isValidatingPolicy: true

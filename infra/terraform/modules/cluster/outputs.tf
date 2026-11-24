@@ -37,3 +37,8 @@ output "oidc_issuer_url" {
   description = "Cluster OIDC issuer URL, used only as an input to the P3 IRSA role."
   value       = module.eks.cluster_oidc_issuer_url
 }
+
+output "vpc_cni_configuration" {
+  description = "configuration_values of the vpc-cni add-on, as planned (P5 D5)."
+  value       = jsondecode(module.eks.cluster_addons["vpc-cni"].configuration_values)
+}

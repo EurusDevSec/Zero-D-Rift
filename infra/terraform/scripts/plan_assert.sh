@@ -13,6 +13,9 @@
 # security group and ingress rule, five IRSA roles and six inline policies;
 # checks 14-17 then inspect them:
 #   ADMIN_WINDOW=1 P4_WINDOW=1 ./scripts/plan_assert.sh tfplan
+# A P5 window plan (DRF-68) must also turn on NetworkPolicy in the vpc-cni
+# add-on; check 18 inspects it:
+#   ADMIN_WINDOW=1 P4_WINDOW=1 P5_WINDOW=1 ./scripts/plan_assert.sh tfplan
 # --approved prints the approved P4 policy statements (fake account) for the
 # guard tests. The plan JSON stays in a pipe: it is never written to disk or printed.
 set -euo pipefail
@@ -312,6 +315,15 @@ if [[ "${P4_WINDOW:-0}" == 1 ]]; then
         [[ "$ok" == true ]] && pass "P4 trust $name: $(jq -r --arg n "$name" '.[$n] | "\(.op) \(.sub)"' <<< "$p4_trust")" \
             || fail "P4 trust $name: not the approved web identity, audience or subject"
     done
+fi
+
+# 18. P5 (DRF-68, SPEC-P5 D5): the vpc-cni add-on enforces NetworkPolicy in
+#     standard mode. Without it every NetworkPolicy is accepted and ignored.
+if [[ "${P5_WINDOW:-0}" == 1 ]]; then
+    cni="$(q '[.resource_changes[] | select(.type == "aws_eks_addon" and .change.after.addon_name == "vpc-cni") | .change.after.configuration_values // "null"] | first // "null"')"
+    ok="$(jq -r '(.enableNetworkPolicy == "true") and (.env.NETWORK_POLICY_ENFORCING_MODE == "standard")' <<< "$cni" 2>/dev/null || echo false)"
+    [[ "$ok" == true ]] && pass "P5 vpc-cni: NetworkPolicy on, standard mode" \
+        || fail "P5 vpc-cni: needs enableNetworkPolicy \"true\" and NETWORK_POLICY_ENFORCING_MODE standard"
 fi
 
 echo

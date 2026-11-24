@@ -1,0 +1,79 @@
+# Wave 45 (P5, DRF-67, SPEC-P5 D6-D9): Kyverno v1.20.0, chart 3.10.0
+# (VERSION_MATRIX §9). Every image is pinned by digest: the chart builds
+# registry/repository:tag, so tag carries "v1.20.0@sha256:...".
+# D7: admission, background and reports controllers, one replica each;
+# cleanup controller off. D8: Kyverno's webhooks only see namespaces that
+# carry rag.zero-drift.io/tenant, so platform namespaces (kube-system,
+# argocd, kro, crossplane-system, zdr-platform, kyverno) are never blocked
+# and teardown stays possible. The policies (failurePolicy Fail) live in
+# gitops/platform/policies/ and sync in wave 47.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: zdr-kyverno
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "45"
+spec:
+  project: default
+  source:
+    repoURL: https://kyverno.github.io/kyverno/
+    chart: kyverno
+    targetRevision: 3.10.0
+    helm:
+      releaseName: kyverno
+      valuesObject:
+        config:
+          webhooks:
+            namespaceSelector:
+              matchExpressions:
+                - key: rag.zero-drift.io/tenant
+                  operator: Exists
+        admissionController:
+          replicas: 1
+          initContainer:
+            image:
+              tag: "v1.20.0@sha256:339067e083430e0c97007541bef9cfdbac89bee13f7228772c77ae8aead14b8b"
+          container:
+            image:
+              tag: "v1.20.0@sha256:9de49c5416ea536f00a205527197ac048abdf32c5a75d633cd9afff8928f359d"
+        backgroundController:
+          replicas: 1
+          image:
+            tag: "v1.20.0@sha256:c72df38320a48fc9de10f9d23d087a117853bb08207b7f60f6d1e8457fb3ddb7"
+        reportsController:
+          replicas: 1
+          image:
+            tag: "v1.20.0@sha256:f54e3cc106fadb1a615d0ec11c42f741f51d3580a5f70dfbe7bd7ec58864ef03"
+        cleanupController:
+          enabled: false
+        upgrade:
+          legacyPolicyCheck:
+            image:
+              tag: "v1.20.0@sha256:bd2b8b7c9d550ecf04e0bacaf351adce2f82ce67fd3f291075edcee7f8ab4ab4"
+        crds:
+          migration:
+            image:
+              tag: "v1.20.0@sha256:bd2b8b7c9d550ecf04e0bacaf351adce2f82ce67fd3f291075edcee7f8ab4ab4"
+        webhooksCleanup:
+          image:
+            tag: "v1.20.0@sha256:6079a30d75fe7ba868a5a7e5dfa71ee92a3a8bae97adcea1c8cfb1009280ee6c"
+        test:
+          image:
+            tag: "v1.20.0@sha256:6079a30d75fe7ba868a5a7e5dfa71ee92a3a8bae97adcea1c8cfb1009280ee6c"
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: kyverno
+  syncPolicy:
+    automated:
+      prune: false
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
+    retry:
+      limit: 10
+      backoff:
+        duration: 15s
+        factor: 2
+        maxDuration: 3m

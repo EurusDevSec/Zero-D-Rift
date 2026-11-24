@@ -5,6 +5,15 @@
 data "aws_caller_identity" "current" {}
 
 locals {
+  # Keys from the add-on schema of v1.22.4-eksbuild.10 (P5-T1 evidence):
+  # enableNetworkPolicy is a string, the mode an env enum standard | strict.
+  vpc_cni_configuration = {
+    enableNetworkPolicy = "true"
+    env = {
+      NETWORK_POLICY_ENFORCING_MODE = "standard"
+    }
+  }
+
   # Stable role ARN, never an STS session ARN (ADR-0007).
   bootstrap_role_arn = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/${var.bootstrap_role_name}"
 
@@ -62,6 +71,10 @@ module "eks" {
       addon_version  = var.addon_versions["vpc-cni"]
       most_recent    = false
       before_compute = true
+      # P5 (DRF-68, SPEC-P5 D5): NetworkPolicy enforcement by the VPC CNI node
+      # agent, standard mode. Set at cluster creation: turning it on later
+      # restarts aws-node on every node.
+      configuration_values = jsonencode(local.vpc_cni_configuration)
     }
     kube-proxy = {
       addon_version = var.addon_versions["kube-proxy"]

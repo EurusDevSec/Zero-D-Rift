@@ -82,3 +82,19 @@ run "floating_addon_is_rejected" {
   }
   expect_failures = [var.addon_versions]
 }
+
+# P5 (DRF-68, SPEC-P5 D5): without these values the cluster accepts every
+# NetworkPolicy and enforces none of them.
+run "vpc_cni_enforces_network_policy" {
+  command = apply
+
+  assert {
+    condition     = output.vpc_cni_configuration.enableNetworkPolicy == "true"
+    error_message = "vpc-cni must set enableNetworkPolicy = \"true\" (SPEC-P5 D5)."
+  }
+
+  assert {
+    condition     = output.vpc_cni_configuration.env.NETWORK_POLICY_ENFORCING_MODE == "standard"
+    error_message = "vpc-cni NetworkPolicy mode must be standard (SPEC-P5 D5)."
+  }
+}

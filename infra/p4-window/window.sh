@@ -93,14 +93,20 @@ run_probe() { # namespace serviceaccount extra-env-json args...
   local pod="zdr-probe-$(date +%s)-$RANDOM" env vol rc=0
   env="$(concat "$(db_env)" "$extra")"
   vol="$(lab_volume "$ns")"
+  # P5 (SPEC-P5 A2, D6): in a tenant namespace the probe carries the tenant label
+  # and the app's requests and memory limit, so it passes Kyverno and the
+  # NetworkPolicy allow rules like the app itself. The same image alone is not enough.
   jq -n --arg ns "$ns" --arg pod "$pod" --arg sa "$sa" --arg img "$IMG" --arg code "$(cat "$HERE/probe.py")" \
+        --arg pns "$PLATFORM_NS" \
         --argjson env "$env" --argjson vol "$vol" --argjson podsc "$POD_SC" --argjson ctrsc "$CTR_SC" \
         --args '{apiVersion:"v1",kind:"Pod",
-          metadata:{name:$pod,namespace:$ns,labels:{"app.kubernetes.io/name":"zdr-probe"}},
+          metadata:{name:$pod,namespace:$ns,labels:({"app.kubernetes.io/name":"zdr-probe"}
+                    + (if $ns == $pns then {} else {"rag.zero-drift.io/tenant":$ns} end))},
           spec:{restartPolicy:"Never",activeDeadlineSeconds:150,serviceAccountName:$sa,
                 automountServiceAccountToken:false,securityContext:$podsc,volumes:$vol.volumes,
                 containers:[{name:"probe",image:$img,command:["python","-c",$code],args:$ARGS.positional,
-                             env:$env,securityContext:$ctrsc,volumeMounts:$vol.mounts}]}}' "$@" \
+                             env:$env,securityContext:$ctrsc,volumeMounts:$vol.mounts,
+                             resources:{requests:{cpu:"50m",memory:"96Mi"},limits:{memory:"192Mi"}}}]}}' "$@" \
     | kubectl apply -f - >/dev/null
   finish_pod "$ns" "$pod" || rc=1
   kubectl -n "$ns" delete pod "$pod" --wait=false >/dev/null

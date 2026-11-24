@@ -1,0 +1,18 @@
+# kyverno test inputs (L1), outside every synced path.
+{"apiVersion": "v1", "kind": "Pod", "metadata": {"name": "good", "namespace": "tenant-a", "labels": {"rag.zero-drift.io/tenant": "tenant-a"}}, "spec": {"containers": [{"name": "c", "image": "ghcr.io/eurusdevsec/zero-d-rift/rag-sandbox@sha256:850c77c200a798b5706ce56c7878164d4887fcf3661bbec91b2d8564df735263", "resources": {"requests": {"cpu": "50m", "memory": "96Mi"}, "limits": {"memory": "192Mi"}}}]}}
+---
+{"apiVersion": "v1", "kind": "Pod", "metadata": {"name": "no-resources", "namespace": "tenant-a", "labels": {"rag.zero-drift.io/tenant": "tenant-a"}}, "spec": {"containers": [{"name": "c", "image": "ghcr.io/eurusdevsec/zero-d-rift/rag-sandbox@sha256:850c77c200a798b5706ce56c7878164d4887fcf3661bbec91b2d8564df735263"}]}}
+---
+{"apiVersion": "v1", "kind": "Pod", "metadata": {"name": "no-mem-limit", "namespace": "tenant-a", "labels": {"rag.zero-drift.io/tenant": "tenant-a"}}, "spec": {"containers": [{"name": "c", "image": "ghcr.io/eurusdevsec/zero-d-rift/rag-sandbox@sha256:850c77c200a798b5706ce56c7878164d4887fcf3661bbec91b2d8564df735263", "resources": {"requests": {"cpu": "50m", "memory": "96Mi"}}}]}}
+---
+{"apiVersion": "v1", "kind": "Pod", "metadata": {"name": "tag-image", "namespace": "tenant-a", "labels": {"rag.zero-drift.io/tenant": "tenant-a"}}, "spec": {"containers": [{"name": "c", "image": "ghcr.io/eurusdevsec/zero-d-rift/rag-sandbox:latest", "resources": {"requests": {"cpu": "50m", "memory": "96Mi"}, "limits": {"memory": "192Mi"}}}]}}
+---
+{"apiVersion": "v1", "kind": "Pod", "metadata": {"name": "other-registry", "namespace": "tenant-a", "labels": {"rag.zero-drift.io/tenant": "tenant-a"}}, "spec": {"containers": [{"name": "c", "image": "docker.io/library/nginx@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "resources": {"requests": {"cpu": "50m", "memory": "96Mi"}, "limits": {"memory": "192Mi"}}}]}}
+---
+{"apiVersion": "v1", "kind": "Pod", "metadata": {"name": "init-tag", "namespace": "tenant-a", "labels": {"rag.zero-drift.io/tenant": "tenant-a"}}, "spec": {"containers": [{"name": "c", "image": "ghcr.io/eurusdevsec/zero-d-rift/rag-sandbox@sha256:850c77c200a798b5706ce56c7878164d4887fcf3661bbec91b2d8564df735263", "resources": {"requests": {"cpu": "50m", "memory": "96Mi"}, "limits": {"memory": "192Mi"}}}], "initContainers": [{"name": "i", "image": "ghcr.io/eurusdevsec/zero-d-rift/rag-sandbox:latest", "resources": {"requests": {"cpu": "10m", "memory": "16Mi"}, "limits": {"memory": "32Mi"}}}]}}
+---
+{"apiVersion": "v1", "kind": "Pod", "metadata": {"name": "no-label", "namespace": "tenant-a", "labels": {}}, "spec": {"containers": [{"name": "c", "image": "ghcr.io/eurusdevsec/zero-d-rift/rag-sandbox@sha256:850c77c200a798b5706ce56c7878164d4887fcf3661bbec91b2d8564df735263", "resources": {"requests": {"cpu": "50m", "memory": "96Mi"}, "limits": {"memory": "192Mi"}}}]}}
+---
+{"apiVersion": "v1", "kind": "Pod", "metadata": {"name": "wrong-label", "namespace": "tenant-a", "labels": {"rag.zero-drift.io/tenant": "tenant-b"}}, "spec": {"containers": [{"name": "c", "image": "ghcr.io/eurusdevsec/zero-d-rift/rag-sandbox@sha256:850c77c200a798b5706ce56c7878164d4887fcf3661bbec91b2d8564df735263", "resources": {"requests": {"cpu": "50m", "memory": "96Mi"}, "limits": {"memory": "192Mi"}}}]}}
+---
+{"apiVersion": "v1", "kind": "Pod", "metadata": {"name": "platform-pod", "namespace": "zdr-platform", "labels": {}}, "spec": {"containers": [{"name": "c", "image": "busybox:latest"}]}}

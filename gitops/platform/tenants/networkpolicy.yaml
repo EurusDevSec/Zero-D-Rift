@@ -1,0 +1,223 @@
+# P5 (DRF-68, SPEC-P5 P5-T3 B, D5, threats T04, T06, T07). Enforced by the
+# VPC CNI node agent in standard mode (infra/terraform, vpc-cni
+# configuration_values); on a cluster without it these objects do nothing.
+# Per tenant namespace: deny all, then allow only
+#   - DNS to CoreDNS (kube-system, k8s-app=kube-dns), 53 UDP/TCP;
+#   - PostgreSQL 5432 to the two DB subnets (10.0.10.0/24, 10.0.11.0/24 =
+#     cidrsubnet(vpc_cidr 10.0.0.0/16, 8, 10 + i), infra/terraform/locals.tf);
+#   - 443 to addresses outside the VPC, without the link-local range
+#     (instance metadata). NetworkPolicy matches addresses and ports, not AWS
+#     service names, so this is the tightest rule here; which AWS API a Pod may
+#     call is decided by IAM (IRSA);
+#   - the app port 8080 between Pods of the same tenant (app <- window probe).
+# Allow rules select Pods by rag.zero-drift.io/tenant; Kyverno zdr-tenant-label
+# keeps that label equal to the namespace, so an unlabelled Pod stays denied.
+# UNVERIFIED until the P5 L3 window: kubelet readiness probes under
+# default-deny ingress (VPC CNI standard mode).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny
+  namespace: tenant-a
+spec:
+  podSelector: {}
+  policyTypes:
+  - Ingress
+  - Egress
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-dns
+  namespace: tenant-a
+spec:
+  podSelector:
+    matchLabels:
+      rag.zero-drift.io/tenant: tenant-a
+  policyTypes:
+  - Egress
+  egress:
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: kube-system
+      podSelector:
+        matchLabels:
+          k8s-app: kube-dns
+    ports:
+    - protocol: UDP
+      port: 53
+    - protocol: TCP
+      port: 53
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-db
+  namespace: tenant-a
+spec:
+  podSelector:
+    matchLabels:
+      rag.zero-drift.io/tenant: tenant-a
+  policyTypes:
+  - Egress
+  egress:
+  - to:
+    - ipBlock:
+        cidr: 10.0.10.0/24
+    - ipBlock:
+        cidr: 10.0.11.0/24
+    ports:
+    - protocol: TCP
+      port: 5432
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-https-outside-vpc
+  namespace: tenant-a
+spec:
+  podSelector:
+    matchLabels:
+      rag.zero-drift.io/tenant: tenant-a
+  policyTypes:
+  - Egress
+  egress:
+  - to:
+    - ipBlock:
+        cidr: 0.0.0.0/0
+        except:
+        - 10.0.0.0/16
+        - 169.254.0.0/16
+    ports:
+    - protocol: TCP
+      port: 443
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-app-same-tenant
+  namespace: tenant-a
+spec:
+  podSelector: &id001
+    matchLabels:
+      rag.zero-drift.io/tenant: tenant-a
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  - from:
+    - podSelector: *id001
+    ports:
+    - protocol: TCP
+      port: 8080
+  egress:
+  - to:
+    - podSelector: *id001
+    ports:
+    - protocol: TCP
+      port: 8080
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny
+  namespace: tenant-b
+spec:
+  podSelector: {}
+  policyTypes:
+  - Ingress
+  - Egress
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-dns
+  namespace: tenant-b
+spec:
+  podSelector:
+    matchLabels:
+      rag.zero-drift.io/tenant: tenant-b
+  policyTypes:
+  - Egress
+  egress:
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: kube-system
+      podSelector:
+        matchLabels:
+          k8s-app: kube-dns
+    ports:
+    - protocol: UDP
+      port: 53
+    - protocol: TCP
+      port: 53
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-db
+  namespace: tenant-b
+spec:
+  podSelector:
+    matchLabels:
+      rag.zero-drift.io/tenant: tenant-b
+  policyTypes:
+  - Egress
+  egress:
+  - to:
+    - ipBlock:
+        cidr: 10.0.10.0/24
+    - ipBlock:
+        cidr: 10.0.11.0/24
+    ports:
+    - protocol: TCP
+      port: 5432
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-https-outside-vpc
+  namespace: tenant-b
+spec:
+  podSelector:
+    matchLabels:
+      rag.zero-drift.io/tenant: tenant-b
+  policyTypes:
+  - Egress
+  egress:
+  - to:
+    - ipBlock:
+        cidr: 0.0.0.0/0
+        except:
+        - 10.0.0.0/16
+        - 169.254.0.0/16
+    ports:
+    - protocol: TCP
+      port: 443
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-app-same-tenant
+  namespace: tenant-b
+spec:
+  podSelector: &id001
+    matchLabels:
+      rag.zero-drift.io/tenant: tenant-b
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  - from:
+    - podSelector: *id001
+    ports:
+    - protocol: TCP
+      port: 8080
+  egress:
+  - to:
+    - podSelector: *id001
+    ports:
+    - protocol: TCP
+      port: 8080

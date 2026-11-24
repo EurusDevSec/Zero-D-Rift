@@ -3,14 +3,15 @@
 Mở repo mà thấy rối thì quay lại đây. Đây là nơi duy nhất cần nhớ.
 Bản trực quan: tab **Repo** trong [learning/zero-drift-explorer.html](learning/zero-drift-explorer.html).
 
-## 1. Bốn thư mục code (DevOps thật cần thành thạo)
+## 1. Năm thư mục code (DevOps thật cần thành thạo)
 
 | Thư mục | Là gì | Mở khi nào | Phase |
 |---|---|---|---|
 | `infra/terraform/` | Dựng nền AWS một lần: VPC, EKS, IAM, RDS (`modules/` = khối dùng lại, `tests/` = test không tốn tiền, `scripts/` = mở/đóng window) | Sửa hạ tầng AWS | P2, P4 |
-| `gitops/` | Những gì Argo CD đồng bộ vào cluster: `bootstrap/` → `platform/` (apps, providers, RGD, RBAC, tenants) → `requests/` (đơn của tenant) | Thêm/sửa thứ chạy trong cluster | P3, P4 |
+| `gitops/` | Những gì Argo CD đồng bộ vào cluster: `bootstrap/` → `platform/` (apps, providers, RGD, RBAC, tenants, `policies/` Kyverno, NetworkPolicy) → `requests/` (đơn của tenant); `tests/` = guard và `kyverno test` | Thêm/sửa thứ chạy trong cluster | P3, P4, P5 |
 | `workloads/rag-sandbox/` | Code app Python + test + Dockerfile | Sửa app | P4 |
-| `labs/` | Lab local trên kind, mỗi thư mục một bài (`p3-kind`, `p4-kro-spike`, `p4-kind-db`, `p4-kind`) | Tập/kiểm chứng trước khi lên AWS | P3, P4 |
+| `labs/` | Lab local trên kind, mỗi thư mục một bài (`p3-kind`, `p4-kro-spike`, `p4-kind-db`, `p4-kind`, `p5-kind`) | Tập/kiểm chứng trước khi lên AWS | P3, P4 |
+| `tests/isolation/` | Bộ test cô lập P5: mỗi case ghi lớp nào chặn, ra `acceptance.json` (kind hoặc EKS) | Kiểm guardrail tenant | P5 |
 
 Thêm: `.github/workflows/` = CI (static gates), `infra/iam/` = policy IAM mẫu.
 Bỏ qua: `infra/terraform/.terraform/` (module tải về, Git bỏ qua, hơn 130 file `.md` không phải của mình).
@@ -30,7 +31,7 @@ Bỏ qua: `infra/terraform/.terraform/` (module tải về, Git bỏ qua, hơn 1
 | P2 nền AWS | `.agent/specs/SPEC-P2_*` | `P2_EKS`, `P2_NETWORK`, `P2_L3_WINDOW` | `evidence/p2/` |
 | P3 controller | `.agent/specs/SPEC-P3_*` | `P3_RESOURCE_GRAPH`, `P3_L2_KIND_LAB` | `evidence/p3/` |
 | P4 RAG sandbox | `.agent/specs/SPEC-P4_*` | `P4_L2_KIND_LAB`, `P4_TERRAFORM_RAG`, `P4_RAG_IMAGE` | `evidence/p4/` |
-| P5 tenant guardrails | `.agent/specs/SPEC-P5_*` (owner duyệt 22/11) | `P5_PINS` | `evidence/p5/` |
+| P5 tenant guardrails | `.agent/specs/SPEC-P5_*` (owner duyệt 22/11) | `P5_PINS`, `P5_L2_KIND_BASELINE`, `P5_L2_KIND_KYVERNO`, `P5_ISOLATION_SUITE` | `evidence/p5/` |
 
 **Bản nháp SPEC P6–P9 đã có sẵn, đừng viết mới từ đầu.** Claude Fable 5.2 phác thảo ngày 16/11 theo yêu cầu
 của owner, nằm trên nhánh `claude/specs-p5-p9-draft-ecc762` (chưa merge):

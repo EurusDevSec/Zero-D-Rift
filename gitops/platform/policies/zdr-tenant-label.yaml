@@ -1,0 +1,38 @@
+# P5 (DRF-67, SPEC-P5 D6, D8, D9). Validate only, Pods in namespaces that
+# carry rag.zero-drift.io/tenant. Starts in Audit; the switch to Deny is a
+# pull request after the policy reports are clean. failurePolicy Fail (D8):
+# if Kyverno is down, tenant Pods are refused; platform namespaces are outside
+# the selector, so teardown still works. No PolicyException (D9).
+# Autogen is off: kro-created Deployments are judged by their Pods.
+# Threats T04, T11. NetworkPolicy selectors rely on this label. The namespace
+# label rag.zero-drift.io/tenant equals the namespace name (check.sh rule 13),
+# so comparing with the Pod's namespace also works in background scans.
+apiVersion: policies.kyverno.io/v1
+kind: ValidatingPolicy
+metadata:
+  name: zdr-tenant-label
+spec:
+  failurePolicy: Fail
+  validationActions: [Audit]
+  autogen:
+    podControllers:
+      controllers: []
+  evaluation:
+    background:
+      enabled: true
+  matchConstraints:
+    namespaceSelector:
+      matchExpressions:
+        - key: rag.zero-drift.io/tenant
+          operator: Exists
+    resourceRules:
+      - apiGroups: [""]
+        apiVersions: [v1]
+        operations: [CREATE, UPDATE]
+        resources: [pods]
+  validations:
+    - expression: >-
+        has(object.metadata.labels)
+        && 'rag.zero-drift.io/tenant' in object.metadata.labels
+        && object.metadata.labels['rag.zero-drift.io/tenant'] == object.metadata.namespace
+      message: "Pod label rag.zero-drift.io/tenant must equal its tenant namespace (SPEC-P5 D6)"

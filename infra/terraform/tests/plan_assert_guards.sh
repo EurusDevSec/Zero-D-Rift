@@ -100,5 +100,15 @@ expect4 FAIL "P4 trust zero-drift-rag-crossplane-s3" crossplane-no-audience   "$
 expect4 INFO "P4 policies unknown"      master-unknown-first-plan "$(p4 "$master_unknown")"
 expect4 PASS "P4 policies approved" master-unknown-rest-ok    "$(p4 "$master_unknown")"
 
+# --- P5 (DRF-68) --------------------------------------------------------------
+# cni <configuration_values string or null> -> plan with only the vpc-cni add-on
+cni() { jq -n --arg c "$1" '{resource_changes: [{mode: "managed", type: "aws_eks_addon", change: {actions: ["create"],
+    after: ({addon_name: "vpc-cni"} + (if $c == "" then {} else {configuration_values: $c} end))}}]}'; }
+expect5() { run_case "$1" "P5 vpc-cni" "p5-$2" "$3" ADMIN_WINDOW=1 P4_WINDOW=1 P5_WINDOW=1; }
+expect5 PASS network-policy-standard "$(cni '{"enableNetworkPolicy":"true","env":{"NETWORK_POLICY_ENFORCING_MODE":"standard"}}')"
+expect5 FAIL no-configuration        "$(cni '')"
+expect5 FAIL network-policy-off      "$(cni '{"enableNetworkPolicy":"false","env":{"NETWORK_POLICY_ENFORCING_MODE":"standard"}}')"
+expect5 FAIL strict-mode             "$(cni '{"enableNetworkPolicy":"true","env":{"NETWORK_POLICY_ENFORCING_MODE":"strict"}}')"
+
 if (( bad )); then echo "RESULT: FAIL"; exit 1; fi
 echo "RESULT: PASS (guards only; plan_assert on a real plan is still required)"
