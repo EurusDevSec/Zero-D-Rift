@@ -16,7 +16,7 @@
 | Mọi kịch bản §4 có evidence L3 trên EKS | **Đạt có giới hạn**: 7/7 kịch bản có evidence L3. Dòng `sts` do owner tự gõ (DRF-56 C) đã có ở window xác nhận 22/11 (`P4-T4.2_L3_CONFIRM_20261122.md`, V4). Còn một giới hạn: kịch bản 6 chỉ đạt một phần, vì nguyên nhân lỗi retry được gỡ bằng `kubectl`, không qua Git (C7) |
 | Teardown sạch | **Đạt** 21/11 và 22/11: mỗi lần `65 destroyed`, state 0, `inventory.sh` `RESULT: CLEAN` |
 | Inventory trễ sạch | **Đạt** 22/11 02:44Z: owner chạy với MFA, `RESULT: CLEAN`. Chỉ mục tag đã hết lệch (mục 6) |
-| Đã đọc billing | **Đạt (số ước tính)** 23/11: Bills tháng 11 gross **0,73 USD** cho cả tài khoản, gồm P3 window 05/11 và hai window P4, nên P4 ≤ 0,73 USD, dưới trần 5 USD (D10). Hoá đơn còn `Pending`; số chốt có khi hoá đơn tháng được phát hành (mục 6.1) |
+| Đã đọc billing | **Đạt** 23/11, đọc lại 24/11 không đổi: Bills tháng 11 gross **0,73 USD** cho cả tài khoản, gồm P3 window 05/11 và hai window P4, nên P4 ≤ 0,73 USD, dưới trần 5 USD (D10). Hoá đơn còn `Pending` (số ước tính); số chốt khi hoá đơn tháng được phát hành không còn là cổng của P4 (mục 6.1) |
 | Review độc lập ghi findings và giới hạn | **Đạt**: Codex review lần 1 (1 HIGH, 6 MEDIUM, 3 LOW, mục 5); đã sửa cả 10 (mục 5.1). Review lại 22/11: C1, C5, C6 sửa một phần; 2 MEDIUM, 2 LOW mới (mục 5.2), xử lý ở mục 5.3. Codex kiểm bản sửa `70ad8d8`: **APPROVE**, không finding mới; đồng ý giữ `GetBucketLocation` làm giới hạn LOW (mục 5.4). Sau đó `fec7847` siết thêm `cleanup` theo review Copilot, Codex chưa kiểm (mục 5.4) |
 | Owner `PRACTICED` + `EXPLAINED`: IRSA workload, luồng secret, tầng credential PostgreSQL | **Đạt** 22/11: IRSA đạt từ 21/11 (dòng `sts` có ở window 22/11). Luồng secret và tầng credential được kiểm bằng hai câu chuyển giao trên ca mới (câu A, B), owner tự gõ, không gợi ý. Bốn câu còn nợ của DRF-51/45 cũng đã trả lời (`P4-T4.2_TEACHBACK_20261121.md`) |
 
@@ -304,5 +304,18 @@ dùng ước tính 0,71 USD, còn 199,29 USD. Chênh 0,02 USD vì hai trang cậ
 - **Glue** có trong 13 dịch vụ với 0,00 USD, không có credit nào. P1–P4 không chủ động dùng Glue. Không tốn tiền;
   đưa vào lượt rà inventory tiếp theo để biết nguồn.
 
-**Giới hạn:** số ước tính, hoá đơn `Pending`. Số chốt có khi hoá đơn tháng 11 được phát hành (đầu tháng 12).
+**Đọc lại 24/11** (owner dán text trang Bills, tab Savings → Credits): tổng `(USD 0.73)`, 7 dịch vụ, từng dòng
+giống hệt 23/11 (EKS 0,31, EC2 0,28, RDS 0,12, VPC 0,02, S3/Secrets Manager/Data Transfer 0,00). Hai lần đọc cách
+nhau khoảng một ngày, đều sau window cuối hơn 24 giờ, mà số không đổi; nên chi phí của window 22/11 đã vào đủ.
+Phần billing của P4 **chốt ở 0,73 USD gross (cận trên của P4)**.
+
+**Cách đọc lại (runbook ngắn, cho mỗi window sau):** đợi khoảng 24 giờ sau khi destroy xong, rồi:
+1. Billing and Cost Management → **Bills**, chọn đúng tháng.
+2. Bảng **Charges by service**: đọc `Total pre-tax service charges` (net, đã trừ credit).
+3. Tab **Savings**: đọc `Total savings` (credit đã trừ); bảng **Credits** bên dưới chia theo dịch vụ.
+4. **Gross = bước 2 + bước 3.** Trang **Credits** ở menu trái chỉ cho biết credit còn lại, không phải gross.
+5. Ghi lại không kèm account ID (đầu trang Bills và góc phải trên đều hiện nó).
+
+**Giới hạn:** số ước tính, hoá đơn `Pending`. Số chính thức có khi hoá đơn tháng 11 được phát hành (đầu tháng 12);
+nếu số đó khác 0,73 thì ghi thêm ở đây, nhưng không mở lại P4 trừ khi vượt trần 5 USD.
 Inventory trễ cho window 22/11 vẫn là việc riêng: lần chạy ở mục 6 (02:44Z) diễn ra **trước** window đó (02:51Z).
