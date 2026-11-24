@@ -1,7 +1,8 @@
 # P5 L2: phá từng lớp baseline trên kind (DRF-66, P5-T2.1 B)
 
 > **TL;DR** · Để làm gì: tự tay phá từng lớp RBAC, Pod Security, quota, AppProject và xem lớp nào chặn ·
-> Trạng thái: Claude chạy thử cả 5 bước trên kind ngày 22/11 (khớp "Phải thấy"); owner chưa làm ·
+> Trạng thái: Claude chạy thử 22/11; **owner chạy trọn 24/11**, mọi bước khớp "Phải thấy"
+> (evidence `docs/evidence/p5/P5-T2.1_L2_KIND_BASELINE_20261124.md`) ·
 > Kết luận cần tự thấy: mỗi lần chỉ một lớp chặn, kèm đúng thông báo của lớp đó · Liên quan: SPEC-P5 §4 scenario 2–3,
 > D1–D4; manifest `gitops/platform/tenants/`, `gitops/platform/apps/85-project-requests.yaml` ·
 > Mục lục: 0 Chuẩn bị · 1 RBAC · 2 Pod Security · 3 Quota · 4 AppProject · 5 Dọn
