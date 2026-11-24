@@ -60,8 +60,8 @@ Follow [context governance](../references/context-governance.md).
 1. Owner rebaselines P6–P11 before the P6 gate (D11); ver3 §12.1 forbids
    cutting trials, acceptance, learning gate or teardown. D12 (branch
    protection) deferred by the owner, so T01 stays an open limit.
-2. P4 closing items: Bills gross read 23/11 (November 0.73 USD whole account,
-   P4 <= 0.73, audit §6.1; RDS 0.12 and Glue to inspect, not gating). Still
+2. P4 closing items: billing closed (Bills gross 0.73 USD, read 23/11 and
+   unchanged 24/11, audit §6.1; RDS 0.12 and Glue to inspect, not gating). Still
    open: delayed inventory of the 22/11 window; land by PR; Linear
    DRF-55/56/57 Done.
 3. Carried from P3 (not gates): re-ask teach-back Q3–Q5 at P11; endpoint check 7
