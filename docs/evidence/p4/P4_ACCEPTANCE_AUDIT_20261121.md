@@ -7,7 +7,8 @@
 - Codex đã review bản nháp theo mục 4: REQUEST CHANGES (mục 5). Các sửa ở mục 5.1 đã merge (PR #55–#57).
   Codex review lại ngày 22/11: REQUEST CHANGES, 2 MEDIUM, 2 LOW (mục 5.2); xử lý ở mục 5.3.
   Codex kiểm bản sửa ở `70ad8d8`: APPROVE, không finding mới (mục 5.4).
-  Mục 6 (inventory trễ, Bills) điền ngày 22/11; mục 6.1 (Bills gross tháng 11) điền ngày 23/11.
+  Mục 6 (inventory trễ, Bills) điền ngày 22/11; mục 6.1 (Bills gross tháng 11) điền ngày 23/11;
+  mục 6.2 (inventory trễ sau window 22/11) điền ngày 24/11.
 
 ## 1. Quy tắc hoàn thành P4 (SPEC §8)
 
@@ -15,7 +16,7 @@
 |---|---|
 | Mọi kịch bản §4 có evidence L3 trên EKS | **Đạt có giới hạn**: 7/7 kịch bản có evidence L3. Dòng `sts` do owner tự gõ (DRF-56 C) đã có ở window xác nhận 22/11 (`P4-T4.2_L3_CONFIRM_20261122.md`, V4). Còn một giới hạn: kịch bản 6 chỉ đạt một phần, vì nguyên nhân lỗi retry được gỡ bằng `kubectl`, không qua Git (C7) |
 | Teardown sạch | **Đạt** 21/11 và 22/11: mỗi lần `65 destroyed`, state 0, `inventory.sh` `RESULT: CLEAN` |
-| Inventory trễ sạch | **Đạt** 22/11 02:44Z: owner chạy với MFA, `RESULT: CLEAN`. Chỉ mục tag đã hết lệch (mục 6) |
+| Inventory trễ sạch | **Đạt** cho cả hai window: 22/11 02:44Z sau window 21/11 (mục 6) và 24/11 06:20Z sau window 22/11 (mục 6.2); cả hai `RESULT: CLEAN`, chỉ còn bucket state |
 | Đã đọc billing | **Đạt** 23/11, đọc lại 24/11 không đổi: Bills tháng 11 gross **0,73 USD** cho cả tài khoản, gồm P3 window 05/11 và hai window P4, nên P4 ≤ 0,73 USD, dưới trần 5 USD (D10). Hoá đơn còn `Pending` (số ước tính); số chốt khi hoá đơn tháng được phát hành không còn là cổng của P4 (mục 6.1) |
 | Review độc lập ghi findings và giới hạn | **Đạt**: Codex review lần 1 (1 HIGH, 6 MEDIUM, 3 LOW, mục 5); đã sửa cả 10 (mục 5.1). Review lại 22/11: C1, C5, C6 sửa một phần; 2 MEDIUM, 2 LOW mới (mục 5.2), xử lý ở mục 5.3. Codex kiểm bản sửa `70ad8d8`: **APPROVE**, không finding mới; đồng ý giữ `GetBucketLocation` làm giới hạn LOW (mục 5.4). Sau đó `fec7847` siết thêm `cleanup` theo review Copilot, Codex chưa kiểm (mục 5.4) |
 | Owner `PRACTICED` + `EXPLAINED`: IRSA workload, luồng secret, tầng credential PostgreSQL | **Đạt** 22/11: IRSA đạt từ 21/11 (dòng `sts` có ở window 22/11). Luồng secret và tầng credential được kiểm bằng hai câu chuyển giao trên ca mới (câu A, B), owner tự gõ, không gợi ý. Bốn câu còn nợ của DRF-51/45 cũng đã trả lời (`P4-T4.2_TEACHBACK_20261121.md`) |
@@ -319,3 +320,22 @@ Phần billing của P4 **chốt ở 0,73 USD gross (cận trên của P4)**.
 **Giới hạn:** số ước tính, hoá đơn `Pending`. Số chính thức có khi hoá đơn tháng 11 được phát hành (đầu tháng 12);
 nếu số đó khác 0,73 thì ghi thêm ở đây, nhưng không mở lại P4 trừ khi vượt trần 5 USD.
 Inventory trễ cho window 22/11 vẫn là việc riêng: lần chạy ở mục 6 (02:44Z) diễn ra **trước** window đó (02:51Z).
+Đã làm ở mục 6.2.
+
+### 6.2 Inventory trễ sau window 22/11 (24/11)
+
+Owner chạy trên máy mình, với MFA `zdr-bootstrap`, `AWS_PROFILE=zdr-tf`, `AWS_REGION=us-east-1`, rồi dán output vào chat.
+Lần gõ đầu thiếu `AWS_REGION`; script dừng ở bước kiểm biến (dòng 9), chưa gọi AWS. Output không có ID hay ARN.
+
+**Inventory** `2026-11-24T06:20:22Z`, `us-east-1`, khoảng 50 giờ sau khi destroy xong (22/11 04:00Z):
+`RESULT: CLEAN (only the retain allowlist remains)`.
+- 30 bộ đếm đều 0, gồm `eks_clusters`, `ec2_instances_live`, `ebs_volumes`, `vpcs_non_default`, `nat_gateways_live`,
+  `vpc_endpoints_live`, `enis`, `sg_non_default`, `rds_instances`, `rds_snapshots_manual`, `rds_snapshots_automated`,
+  `rds_automated_backups`, `rds_subnet_groups`, `secrets`, `p4_secrets_incl_pending`,
+  `rds_managed_secrets_incl_pending`, `p4_buckets`, `p4_iam_roles`, `p3_iam_roles`, `oidc_providers`,
+  `kms_customer_aliases`, `eks_log_groups`.
+- Chỉ còn `s3_buckets=1`, là bucket state (allowlist). Chỉ mục tag `Project=Zero-D-Rift` chỉ còn `1 s3:bucket`.
+
+**Kết luận:** sau cả hai window P4 không còn tài nguyên tính tiền nào ngoài allowlist. Role `zero-drift-bootstrap`,
+thiết bị MFA và bucket state vẫn nguyên. `inventory.sh` không đếm Glue; nguồn dòng Glue 0,00 USD ở mục 6.1
+vẫn là việc cần xem, không chặn P4.
