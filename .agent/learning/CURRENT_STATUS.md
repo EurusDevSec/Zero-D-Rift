@@ -1,8 +1,8 @@
 ---
-as_of: 2026-11-22
-active_phase: P4
-active_task: P4-T4.2 acceptance (DRF-57)
-task_status: P4_TEACHBACK_RECORDED
+as_of: 2026-11-24
+active_phase: P5
+active_task: P5 owner L2 labs done (DRF-66, DRF-67)
+task_status: P5_L2_LABS_PRACTICED
 history: .agent/learning/LEARNING_LOG.md
 ---
 
@@ -21,6 +21,7 @@ in `LEARNING_LOG.md`; this file must not invent mastery from generated artifacts
 | Terraform applied use | `PRACTICED` + `EXPLAINED` (05/11/2026) | Local `terraform_data` lab with predictions (dependency order, NOOP/exit code, update vs replace); one L3 EKS create/verify/destroy window; own-words answers to SPEC-P2 §7 (state sensitivity, no-NAT trade-off, failure localization, NOOP limits, teardown inventory). Gaps: losing state and plaintext secrets in state; ECR API still needs Internet without interface endpoints |
 | Argo CD, kro, Crossplane | `PRACTICED` + `EXPLAINED` (14/11/2026), with a provenance limit | Kind lab parts 0–7 run by the owner. SPEC-P3 §7: Git → Argo (tracking-id) → kro renders the RGD into the MR → provider via IRSA; Argo green means only cluster = Git; selfHeal vs prune through Git and `managementPolicies: "*"`; DRC → SA → EKS webhook → STS and trust/permission layers; provider removed before MRs leaves finalizers and orphans; Terraform owns the role, Crossplane the bucket. Limit: Q3–Q6 were a pasted block close to Claude's wording; re-ask Q3–Q5 orally at P11 |
 | P4 RAGSandbox: IRSA workload, secret flow, PostgreSQL credential tiers | `PRACTICED` + `EXPLAINED` (22/11/2026) | kind graph lab and two EKS micro-labs; the owner kept the `sts` line. Typed answers, no hints: the bucket waits for bootstrap through a graph reference; retry is `bootstrapAttempt` in Git; `db-init` is idempotent. Two transfer cases (a leaked sandbox password, a Secret committed to GitOps) were derived correctly. Gaps: RDS ingress is the node SG only; Secrets Manager force delete; `ALTER ROLE` keeps open sessions; no branch protection; `propagationPolicy` unverified |
+| P5 tenant guardrails: RBAC, Pod Security, quota/LimitRange, AppProject, Kyverno | `PRACTICED` on kind (24/11/2026), not yet `EXPLAINED` | Owner ran both L2 labs end to end, without predictions, reading each output with Claude. Own words so far: `big` is refused per container; `noreq` passes because LimitRange fills resources before Kyverno. Not yet in own words: how quota differs from LimitRange (namespace total), when `zdr-require-resources` matters, fail open vs fail closed. NetworkPolicy and IRSA not practiced (EKS only). SPEC-P5 §7 teach-back not started |
 
 ## Current P4 learning gate
 

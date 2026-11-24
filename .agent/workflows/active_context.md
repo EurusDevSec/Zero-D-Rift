@@ -2,7 +2,7 @@
 project: Zero D-Rift
 status: P5_SPEC_OWNER_APPROVED
 active_phase: P5 (P4 closed 24/11)
-active_task: P5-T2.2 A (DRF-67), T3 (DRF-68), T4.1 (DRF-70) on branch; owner labs T2.1 B and T2.2 B next
+active_task: owner L2 labs T2.1 B and T2.2 B done 24/11; next Codex review, then L3 window request (P5-T4.2)
 active_feature: Tenant guardrails (SPEC-P5)
 active_spec: .agent/specs/SPEC-P5_TENANT_GUARDRAILS.md
 current_learning: .agent/learning/CURRENT_STATUS.md
@@ -74,15 +74,14 @@ Follow [context governance](../references/context-governance.md).
 
 ## Next safe action
 
-P5-T2.1 A merged (PR #66). Branch `hoang/drf-67-p5-kyverno` (uncommitted
-24/11): Kyverno Application and three ValidatingPolicies in `Audit`
-(check.sh rule 17), tenant NetworkPolicies (rule 18), vpc-cni NetworkPolicy
-in Terraform (test and plan_assert check 18), probe Pods Kyverno-compliant,
-isolation suite `tests/isolation/run.sh` (kind dry run). Runbooks
-`P5_L2_KIND_BASELINE.md` and `P5_L2_KIND_KYVERNO.md` ran end to end on kind.
-Next: owner labs T2.1 B and T2.2 B with own predictions (evidence in
-`docs/evidence/p5/`), Codex review of the candidate, then the P5 L3 window
-(P5-T4.2) on its own approval. Overflow moves to 25/11 (D11).
+P5-T2.1 A merged (PR #66). Kyverno, tenant NetworkPolicies, vpc-cni
+NetworkPolicy in Terraform and the isolation suite merged as PR #70
+(`05afd58`). On 24/11 the owner ran both L2 labs on kind end to end, without
+predictions; every step matched (`docs/evidence/p5/P5-T2.1_L2_KIND_BASELINE_20261124.md`,
+`docs/evidence/p5/P5-T2.2_L2_KIND_KYVERNO_20261124.md`; T2.1 B API call and
+reference image via step 0b, `labs/p5-kind/api-call.sh`). Next: Codex review of
+the candidate, then the P5 L3 window (P5-T4.2) on its own approval.
+Overflow moves to 25/11 (D11).
 
 ## Context expansion
 

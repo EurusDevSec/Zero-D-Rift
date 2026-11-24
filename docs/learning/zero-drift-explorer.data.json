@@ -1,7 +1,7 @@
 {
  "$schema": "project-explorer/v1",
  "title": "Zero D-Rift Explorer",
- "description": "Bản đồ học tập dự án Zero D-Rift (ghi chú ôn tập, không phải nguồn chính thức). Nguồn: docs/de_cuong_tot_nghiep_ver3.md, gitops/platform/rgd/rag-sandbox.yaml, docs/runbooks/P4_L2_KIND_LAB.md mục G, docs/evidence/.",
+ "description": "Bản đồ học tập dự án Zero D-Rift (ghi chú ôn tập, không phải nguồn chính thức). Nguồn: docs/de_cuong_tot_nghiep_ver3.md, gitops/platform/rgd/rag-sandbox.yaml, docs/runbooks/P4_L2_KIND_LAB.md mục G, docs/evidence/. Cập nhật P5 ngày 24/11: guardrail tenant (RBAC, quota, Pod Security, Kyverno, NetworkPolicy, isolation suite).",
  "modes": {
   "lab": "🧪 Lab kind",
   "aws": "☁️ AWS thật"
@@ -106,6 +106,14 @@
    "g": "aws",
    "mode": "aws",
    "inactiveNote": "lab: không có"
+  },
+  {
+   "x": 0.0,
+   "y": 15.84,
+   "w": 5.28,
+   "d": 3.96,
+   "label": "namespace kyverno (P5)",
+   "g": "ctrl"
   }
  ],
  "phaseIds": [
@@ -139,19 +147,19 @@
   },
   {
    "p": "P4",
-   "st": "now",
+   "st": "done",
    "t": "RAGSandbox + RDS dùng chung + IRSA",
-   "d": "RGD, request, CI, lab kind graph, rồi L3 trên EKS (DRF-56) và acceptance (DRF-57).",
+   "d": "RGD, request, CI, lab kind graph, hai window L3 trên EKS (21/11, 22/11), inventory sạch, billing 0,73 USD gross.",
    "exit": "App, DB, S3 access và usable status đạt end-to-end trên EKS.",
    "k": "Job, readyWhen, externalRef, probe, IRSA, Secrets Manager"
   },
   {
    "p": "P5",
-   "st": "",
+   "st": "now",
    "t": "Governance: RBAC, quota, NetworkPolicy, Pod Security, Kyverno",
-   "d": "Bộ test âm bảo mật / cô lập.",
+   "d": "Code đã merge (PR 66, 70) và chạy thử trên kind; còn: hai lab của owner, Codex review, window L3 trên EKS, acceptance, teach-back.",
    "exit": "Negative security/isolation suite pass; không tuyên bố hard tenancy.",
-   "k": "Admission, NetworkPolicy, ResourceQuota, test âm"
+   "k": "RBAC, Pod Security, Kyverno, ResourceQuota/LimitRange, NetworkPolicy, test âm, fail closed"
   },
   {
    "p": "P6",
@@ -275,7 +283,8 @@
    "lab": "check.sh bắt tên docs--qa, image không pin digest, ServiceAccount nền tảng trong namespace tenant…",
    "cmd": "bash gitops/check.sh",
    "emoji": "🛡️",
-   "icon": "github-actions.svg"
+   "icon": "github-actions.svg",
+   "ls": "CI gates"
   },
   {
    "id": "tf",
@@ -314,7 +323,7 @@
     "P9"
    ],
    "vv": "Người chạy bàn mang đơn từ sổ vào bếp",
-   "what": "Controller GitOps: đồng bộ Git → cluster. Có ignoreDifferences cho annotation role ARN áp trong window.",
+   "what": "Controller GitOps: đồng bộ Git → cluster. Có ignoreDifferences cho annotation role ARN áp trong window. P5: AppProject zdr-requests chỉ cho đơn tenant tạo RAGSandbox vào tenant-a hoặc tenant-b (D4).",
    "notdo": "Không tự nghĩ ra resource; chỉ apply cái có trong Git.",
    "lab": "Lab giả lập Argo bằng kubectl apply.",
    "cmd": "kubectl -n argocd get applications",
@@ -333,10 +342,11 @@
     "P5"
    ],
    "vv": "Bảo vệ cổng soát vé",
-   "what": "Chặn manifest sai trước khi lưu: Pod Security restricted (P4), Kyverno policy (P5).",
-   "lab": "Mọi container phải runAsNonRoot, drop ALL, seccomp RuntimeDefault, nếu không bị từ chối.",
+   "what": "Chuỗi cửa khi tạo Pod: RBAC (bạn có được tạo không) → LimitRange điền mặc định → Pod Security restricted (P4) → webhook Kyverno (P5) → ResourceQuota. Một lớp nói không là Pod không được lưu.",
+   "lab": "P4: mọi container phải runAsNonRoot, drop ALL, seccomp RuntimeDefault. P5: kịch bản ⑧ đi qua từng lớp (Claude chạy thử trên kind).",
    "cmd": "kubectl get ns --show-labels",
-   "emoji": "🚧"
+   "emoji": "🚧",
+   "notdo": "Chỉ xét lúc tạo hoặc sửa object, không xét Pod đang chạy."
   },
   {
    "id": "kro",
@@ -427,7 +437,8 @@
    "lab": "TOPOLOGICALORDER = platformConfig → bootstrap → serviceAccount → app → service (bản thật thêm bucket).",
    "cmd": "kubectl get rgd rag-sandbox -o wide",
    "emoji": "📜",
-   "icon": "k8s-crd.svg"
+   "icon": "k8s-crd.svg",
+   "ls": "RGD"
   },
   {
    "id": "xp",
@@ -505,7 +516,8 @@
    "what": "Golden path thứ 2: job huấn luyện theo lô, checkpoint vào S3, chạy trên CPU (ADR-0009, AWS từ chối quota GPU).",
    "lab": "Chưa làm (P6).",
    "cmd": "kubectl get batchtrainingjob -A",
-   "emoji": "🏋️"
+   "emoji": "🏋️",
+   "ls": "BatchJob"
   },
   {
    "id": "keda",
@@ -556,7 +568,8 @@
    "lab": "Chưa làm (P7).",
    "cmd": "kubectl top pods -A",
    "emoji": "📊",
-   "icon": "cncf-prometheus.svg"
+   "icon": "cncf-prometheus.svg",
+   "ls": "Prom + OpenCost"
   },
   {
    "id": "pcfg",
@@ -573,7 +586,8 @@
    "lab": "G4: thiếu nó → instance chờ 'waiting for external reference platformConfig: not found'.",
    "cmd": "kubectl -n zdr-platform get cm platform-config",
    "emoji": "🔑",
-   "icon": "k8s-cm.svg"
+   "icon": "k8s-cm.svg",
+   "ls": "platform-cfg"
   },
   {
    "id": "boot",
@@ -590,7 +604,8 @@
    "lab": "G6: secret bootstrap sai → Failed, app không được tạo. G7: attempt 1 → Job mới Complete.",
    "cmd": "kubectl -n zdr-platform get jobs",
    "emoji": "🚀",
-   "icon": "k8s-job.svg"
+   "icon": "k8s-job.svg",
+   "ls": "Job bootstrap"
   },
   {
    "id": "dbinit",
@@ -660,7 +675,8 @@
    "cmd": "kubectl -n zdr-platform get pod lab-db",
    "emoji": "🐘",
    "icon": "k8s-pod.svg",
-   "shape": "cyl"
+   "shape": "cyl",
+   "ls": "lab-db"
   },
   {
    "id": "pvc",
@@ -678,7 +694,8 @@
    "lab": "G5: Pod tenant-a chỉ thấy /secrets/zero-drift/rag/tenant-a.",
    "cmd": "kubectl get pvc -A",
    "emoji": "💾",
-   "icon": "k8s-pvc.svg"
+   "icon": "k8s-pvc.svg",
+   "ls": "PVC secrets"
   },
   {
    "id": "req",
@@ -694,7 +711,8 @@
    "what": "Instance: 1 request theo khuôn RGD. spec chỉ có bootstrapAttempt. status: endpoint, schema, secretName, bootstrapState, availableReplicas.",
    "lab": "G4–G5: IN_PROGRESS → ACTIVE / Ready.",
    "cmd": "kubectl -n tenant-a get ragsandbox docs-qa -o wide",
-   "emoji": "📝"
+   "emoji": "📝",
+   "ls": "RAGSandbox"
   },
   {
    "id": "sa",
@@ -759,11 +777,13 @@
     "P5"
    ],
    "vv": "Bức tường giữa hai phòng",
-   "what": "Tường lửa nội bộ: chặn tenant-a gọi sang tenant-b (mặc định K8s mọi Pod thông nhau).",
-   "lab": "Chưa làm (P5: bộ test âm).",
+   "what": "Chặn mặc định mọi vào/ra của Pod tenant (default-deny), rồi chỉ mở: DNS tới CoreDNS; Postgres 5432 tới hai subnet DB; 443 ra ngoài VPC (trừ dải VPC và metadata 169.254); 8080 giữa các Pod cùng tenant. Luật chọn Pod theo nhãn tenant, nhãn mà Kyverno giữ cho đúng. VPC CNI trên EKS thực thi (standard mode).",
+   "lab": "Đã viết (gitops/platform/tenants/networkpolicy.yaml, check.sh rule 18). Chưa chạy trên EKS: window L3 P5.",
    "cmd": "kubectl get networkpolicy -A",
    "emoji": "🧱",
-   "icon": "k8s-netpol.svg"
+   "icon": "k8s-netpol.svg",
+   "notdo": "Chỉ khớp IP và cổng, không biết tên dịch vụ AWS. Không có tác dụng trên kind.",
+   "ls": "NetworkPolicy"
   },
   {
    "id": "reqb",
@@ -779,7 +799,8 @@
    "what": "Cùng khuôn, khác tenant. Schema riêng rag_tenant_b__docs_qa.",
    "lab": "G6/G7: ca bootstrap sai rồi retry làm trên tenant-b.",
    "cmd": "kubectl -n tenant-b get ragsandbox -o wide",
-   "emoji": "📝"
+   "emoji": "📝",
+   "ls": "RAGSandbox"
   },
   {
    "id": "sab",
@@ -851,7 +872,7 @@
     "P10"
    ],
    "vv": "Mảnh đất và toà nhà",
-   "what": "Mạng riêng và cluster Kubernetes do AWS quản lý control plane (Terraform dựng).",
+   "what": "Mạng riêng và cluster Kubernetes do AWS quản lý control plane (Terraform dựng). P5: add-on vpc-cni bật enableNetworkPolicy ngay lúc tạo cluster.",
    "lab": "kind thay cho EKS khi tập.",
    "cmd": "aws eks list-clusters",
    "emoji": "☁️",
@@ -870,11 +891,12 @@
     "P5"
    ],
    "vv": "Chìa khoá theo thẻ nhân viên",
-   "what": "IRSA: ServiceAccount gắn IAM role → Pod gọi AWS không cần access key. Role tenant tên zero-drift-rag-<tenant>.",
+   "what": "IRSA: ServiceAccount gắn IAM role → Pod gọi AWS không cần access key. Role tenant tên zero-drift-rag-<tenant>. P5: ServiceAccount tên ngoài mẫu rag-* phải bị STS từ chối (T07).",
    "lab": "Lab kind không chứng minh được IRSA.",
    "cmd": "kubectl get sa -A -o yaml | grep role-arn",
    "emoji": "🔐",
-   "icon": "aws-iam.svg"
+   "icon": "aws-iam.svg",
+   "ls": "IAM / IRSA"
   },
   {
    "id": "sm",
@@ -891,7 +913,8 @@
    "lab": "Lab thay bằng file trên PVC.",
    "cmd": "(trong window, qua AWS CLI)",
    "emoji": "🔒",
-   "icon": "aws-secrets-manager.svg"
+   "icon": "aws-secrets-manager.svg",
+   "ls": "Secrets Mgr"
   },
   {
    "id": "rds",
@@ -912,7 +935,8 @@
    "cmd": "(trong window)",
    "emoji": "🐘",
    "icon": "aws-rds.svg",
-   "shape": "cyl"
+   "shape": "cyl",
+   "ls": "RDS pgvector"
   },
   {
    "id": "s3",
@@ -980,7 +1004,78 @@
    "lab": "Chưa làm (P6).",
    "cmd": "kubectl get nodes",
    "emoji": "🖥️",
-   "icon": "aws-ec2.svg"
+   "icon": "aws-ec2.svg",
+   "ls": "EC2 Spot"
+  },
+  {
+   "id": "kyv",
+   "l": "Kyverno (P5)",
+   "g": "ctrl",
+   "x": 1.98,
+   "y": 17.16,
+   "ph": [
+    "P5"
+   ],
+   "shape": "hex",
+   "emoji": "🛂",
+   "vv": "Bảo vệ riêng ở cửa từng căn hộ tenant",
+   "what": "Admission webhook với 3 luật (ValidatingPolicy, viết bằng CEL), chỉ cho namespace có nhãn rag.zero-drift.io/tenant: (1) container phải khai requests và memory limit; (2) image từ ghcr.io/eurusdevsec/zero-d-rift/ và pin @sha256; (3) nhãn tenant của Pod bằng tên namespace. Bắt đầu ở Audit (chỉ ghi), chuyển Deny bằng PR khi báo cáo sạch.",
+   "notdo": "Không lặp lại luật của Pod Security (D6). Không canh namespace nền tảng (zdr-platform, kube-system). Không xét Deployment (autogen tắt), chỉ xét Pod.",
+   "lab": "Runbook P5_L2_KIND_KYVERNO: Claude chạy trọn trên kind 24/11; owner chưa làm (P5-T2.2 B).",
+   "cmd": "kubectl get validatingpolicies; kubectl get policyreport -A"
+  },
+  {
+   "id": "role",
+   "l": "Role tenant-viewer",
+   "g": "ten",
+   "x": 21.78,
+   "y": 11.4,
+   "h": 14,
+   "ph": [
+    "P5"
+   ],
+   "emoji": "🪪",
+   "vv": "Thẻ khách: chỉ được nhìn",
+   "what": "Role chỉ đọc (get/list/watch Pod, log, Service, ConfigMap, Deployment, Job, quota) gắn cho nhóm zdr:tenant-a:developers. Không có quyền Secret, không tạo hay xoá gì: đường ghi duy nhất là Pull Request (D1). ServiceAccount default không tự gắn token (D2). tenant-b có bản giống hệt.",
+   "notdo": "Không phải đăng nhập thật: kiểm bằng giả danh --as / --as-group từ phiên admin (D1).",
+   "lab": "Runbook P5_L2_KIND_BASELINE (owner chưa làm, P5-T2.1 B). Suite T04 trên kind: 11 case.",
+   "cmd": "kubectl auth can-i list pods -n tenant-b --as dev-a --as-group zdr:tenant-a:developers",
+   "ls": "Role viewer"
+  },
+  {
+   "id": "quota",
+   "l": "Quota + LimitRange",
+   "g": "ten",
+   "x": 24.42,
+   "y": 11.4,
+   "h": 14,
+   "ph": [
+    "P5"
+   ],
+   "emoji": "📏",
+   "vv": "Hạn mức ví của cả nhà + suất ăn mặc định",
+   "what": "ResourceQuota: trần tổng CPU, memory, số Pod/Job/Service cho cả namespace; GPU = 0 (D3, ADR-0009). LimitRange: container không khai thì được điền requests 50m/96Mi, memory limit 192Mi; tối đa 512Mi một container.",
+   "notdo": "Không xét image hay nhãn (việc của Kyverno).",
+   "lab": "Suite T11 trên kind: GPU, 1Gi, Pod không khai resources.",
+   "cmd": "kubectl -n tenant-a describe quota,limitrange",
+   "ls": "Quota/Limit"
+  },
+  {
+   "id": "suite",
+   "l": "Isolation suite (P5)",
+   "g": "user",
+   "x": 3.168,
+   "y": 9.9,
+   "ph": [
+    "P5"
+   ],
+   "emoji": "🧪",
+   "vv": "Đội thử cửa: mỗi người thử một cửa và ghi lại lớp nào chặn mình",
+   "what": "tests/isolation/run.sh: 31 case cho các threat T03–T15, ghi acceptance.json (case, threat, lớp mong đợi, kết quả thật, giờ UTC). Bị chặn đúng nhưng sai lớp cũng là FAIL. Mode kind: case cần AWS ghi SKIPPED_NEEDS_EKS; mode eks: không case nào được skip.",
+   "notdo": "Chạy trên kind thì không chứng minh gì về EKS. Không tạo tài nguyên AWS.",
+   "lab": "Claude chạy trên kind 24/11: 24 PASS, 0 FAIL, 7 SKIPPED_NEEDS_EKS; hạ một policy về Audit thì exit 1.",
+   "cmd": "MODE=kind CTX=kind-zdr-p5-iso bash tests/isolation/run.sh",
+   "ls": "Test suite"
   }
  ],
  "edges": [
@@ -1200,6 +1295,22 @@
   [
    "obs",
    "app"
+  ],
+  [
+   "kyv",
+   "adm"
+  ],
+  [
+   "quota",
+   "adm"
+  ],
+  [
+   "role",
+   "api"
+  ],
+  [
+   "suite",
+   "api"
   ]
  ],
  "scenarios": [
@@ -2115,7 +2226,11 @@
     "karp": "ghost",
     "obs": "ghost",
     "netpol": "ghost",
-    "cleanup": "ghost"
+    "cleanup": "ghost",
+    "kyv": "ghost",
+    "role": "ghost",
+    "quota": "ghost",
+    "suite": "ghost"
    },
    "steps": [
     {
@@ -2185,21 +2300,25 @@
     },
     {
      "t": "P4: chuẩn bị window",
-     "proof": "plan",
+     "proof": "aws",
      "ev": [
       [
-       "Terraform RAG (static)",
-       "../evidence/p4/P4-T2.2_TERRAFORM_RAG_20261119.md"
+       "P4 acceptance audit",
+       "../evidence/p4/P4_ACCEPTANCE_AUDIT_20261121.md"
+      ],
+      [
+       "Window L3 21/11",
+       "../evidence/p4/P4-T4.1_L3_WINDOW_20261121.md"
       ]
      ],
-     "d": "Terraform tạo RDS dùng chung + role; db-init; platform-config apply sau db-init; Argo sync RGD. <b>Kế hoạch (DRF-56)</b>: mới có code + kiểm tra static, chưa apply trên AWS.",
+     "d": "Terraform tạo RDS dùng chung + role; db-init; platform-config apply sau db-init; Argo sync RGD. <b>Đã làm</b> trên EKS (window 21/11 và 22/11), audit P4.",
      "set": {
-      "rds": "plan",
-      "sm": "plan",
-      "dbinit": "plan",
-      "sapl": "plan",
-      "pcfg": "plan",
-      "rgd": "plan"
+      "rds": "ok",
+      "sm": "ok",
+      "dbinit": "ok",
+      "sapl": "ok",
+      "pcfg": "ok",
+      "rgd": "ok"
      },
      "on": [
       "tf",
@@ -2212,32 +2331,40 @@
       [
        "tf",
        "rds",
-       "plan"
+       "ok"
       ],
       [
        "dbinit",
        "rds",
-       "plan"
+       "ok"
       ]
      ]
     },
     {
      "t": "P4: request thật",
-     "proof": "plan",
+     "proof": "aws",
      "ev": [
       [
-       "Logic graph đã chứng minh trên kind",
-       "../evidence/p4/P4-T3.2_L2_KIND_GRAPH_20261119.md"
+       "P4 acceptance audit",
+       "../evidence/p4/P4_ACCEPTANCE_AUDIT_20261121.md"
+      ],
+      [
+       "Window L3 21/11",
+       "../evidence/p4/P4-T4.1_L3_WINDOW_20261121.md"
       ]
      ],
-     "d": "PR thêm RAGSandbox → bootstrap Job → Bucket (Crossplane) + SA (IRSA) + app + Service; app đọc Secrets Manager, truy vấn RDS. <b>Kế hoạch (DRF-56)</b>: thứ tự graph đã chứng minh trên kind, phần IRSA/RDS/S3 chưa.",
+     "d": "PR thêm RAGSandbox → bootstrap Job → Bucket (Crossplane) + SA (IRSA) + app + Service; app đọc Secrets Manager, truy vấn RDS. <b>Đã làm</b> cho cả tenant-a và tenant-b trên EKS (window 21/11 và 22/11), audit P4.",
      "set": {
-      "boot": "plan",
-      "s3": "plan",
-      "sa": "plan",
-      "app": "plan",
-      "svc": "plan",
-      "req": "plan"
+      "boot": "ok",
+      "s3": "ok",
+      "sa": "ok",
+      "app": "ok",
+      "svc": "ok",
+      "req": "ok",
+      "sab": "ok",
+      "appb": "ok",
+      "svcb": "ok",
+      "reqb": "ok"
      },
      "on": [
       "req",
@@ -2251,54 +2378,62 @@
       [
        "req",
        "kro",
-       "plan"
+       "ok"
       ],
       [
        "kro",
        "boot",
-       "plan"
+       "ok"
       ],
       [
        "kro",
        "xp",
-       "plan"
+       "ok"
       ],
       [
        "xp",
        "s3",
-       "plan"
+       "ok"
       ],
       [
        "sa",
        "iam",
-       "plan"
+       "ok"
       ],
       [
        "app",
        "sm",
-       "plan"
+       "ok"
       ],
       [
        "app",
        "rds",
-       "plan"
+       "ok"
       ]
      ]
     },
     {
      "t": "P5: governance",
      "proof": "plan",
-     "d": "Kyverno, RBAC, ResourceQuota, NetworkPolicy, Pod Security; bộ <b>test âm</b>. Không tuyên bố hard tenancy. <b>Kế hoạch.</b>",
+     "d": "RBAC, ResourceQuota/LimitRange, Pod Security, Kyverno, NetworkPolicy; bộ <b>test âm</b> ghi lớp nào chặn. Code đã merge và chạy thử trên kind; window EKS <b>kế hoạch</b>. Không tuyên bố hard tenancy.",
      "set": {
       "netpol": "plan",
-      "sab": "plan",
-      "appb": "plan",
-      "svcb": "plan",
-      "reqb": "plan"
+      "kyv": "plan",
+      "role": "plan",
+      "quota": "plan",
+      "suite": "plan"
      },
      "on": [
       "adm",
-      "netpol"
+      "kyv",
+      "netpol",
+      "suite"
+     ],
+     "ev": [
+      [
+       "SPEC-P5",
+       "../../.agent/specs/SPEC-P5_TENANT_GUARDRAILS.md"
+      ]
      ]
     },
     {
@@ -2391,6 +2526,420 @@
       "cleanup",
       "tf"
      ]
+    }
+   ]
+  },
+  {
+   "name": "⑧ P5: một Pod đi qua các lớp cửa",
+   "mode": "lab",
+   "proof": "kind",
+   "ev": [
+    [
+     "Evidence lab baseline (owner, 24/11)",
+     "../evidence/p5/P5-T2.1_L2_KIND_BASELINE_20261124.md"
+    ],
+    [
+     "Evidence lab Kyverno (owner, 24/11)",
+     "../evidence/p5/P5-T2.2_L2_KIND_KYVERNO_20261124.md"
+    ],
+    [
+     "Runbook isolation suite",
+     "../runbooks/P5_ISOLATION_SUITE.md"
+    ],
+    [
+     "Runbook baseline",
+     "../runbooks/P5_L2_KIND_BASELINE.md"
+    ]
+   ],
+   "init": {
+    "sa": "ok",
+    "app": "ok",
+    "svc": "ok",
+    "req": "ok",
+    "boot": "ok",
+    "pcfg": "ok",
+    "sab": "ok",
+    "appb": "ok",
+    "svcb": "ok",
+    "reqb": "ok",
+    "kyv": "ok",
+    "role": "ok",
+    "quota": "ok",
+    "suite": "ok"
+   },
+   "learn": [
+    "Mỗi loại Pod sai bị lớp nào chặn",
+    "Vì sao một lỗi chỉ nên có một lớp chặn",
+    "Vì sao bị chặn đúng nhưng sai lớp vẫn là FAIL"
+   ],
+   "steps": [
+    {
+     "t": "Dev chỉ được nhìn",
+     "on": [
+      "dev",
+      "role",
+      "api"
+     ],
+     "e": [
+      [
+       "dev",
+       "api",
+       "fail",
+       "create pod / get secret"
+      ]
+     ],
+     "d": "Dev của tenant-a (nhóm <code>zdr:tenant-a:developers</code>) thử tạo Pod hoặc đọc Secret: RBAC trả <b>no</b>. Chỉ get/list/watch trong tenant-a, không thấy tenant-b. Muốn tạo gì thì mở Pull Request. Suite T04: 11 case."
+    },
+    {
+     "t": "PR → CI → Argo CD",
+     "on": [
+      "git",
+      "ci",
+      "argo"
+     ],
+     "e": [
+      [
+       "git",
+       "ci",
+       "ok",
+       "check.sh rule 13–18"
+      ],
+      [
+       "git",
+       "argo",
+       "ok",
+       "",
+       "desired"
+      ]
+     ],
+     "d": "PR qua static gates: nhãn namespace, quota có GPU 0, đúng 3 policy Kyverno, mỗi tenant có default-deny. AppProject <code>zdr-requests</code> chỉ cho tạo RAGSandbox vào tenant-a/b (T03; cần Argo CD nên SKIPPED trên kind)."
+    },
+    {
+     "t": "LimitRange điền mặc định",
+     "on": [
+      "quota",
+      "adm"
+     ],
+     "e": [
+      [
+       "quota",
+       "adm",
+       "ok",
+       "điền 50m / 96Mi"
+      ]
+     ],
+     "d": "Bước sửa (mutating) chạy trước: container không khai resources được điền requests 50m/96Mi, limit 192Mi. Xin 1Gi thì <b>bị chặn</b>: <code>maximum memory usage per Container is 512Mi</code>."
+    },
+    {
+     "t": "Pod Security restricted",
+     "on": [
+      "adm"
+     ],
+     "d": "privileged, hostNetwork, hostPath, chạy bằng root: <b>bị chặn</b> bởi <code>PodSecurity \"restricted\"</code>, luật chung của namespace có từ P4. Suite T05: 4 case âm + 1 dương."
+    },
+    {
+     "t": "Kyverno: ba luật của dự án",
+     "on": [
+      "kyv",
+      "adm"
+     ],
+     "e": [
+      [
+       "adm",
+       "kyv",
+       "ok",
+       "webhook, failurePolicy Fail"
+      ]
+     ],
+     "d": "API server gọi webhook Kyverno, chỉ với namespace có nhãn tenant. Image tag <code>:latest</code> hoặc registry khác: <b>bị chặn</b> (<code>zdr-image-digest</code>). Pod gắn nhãn tenant-b trong tenant-a: <b>bị chặn</b> (<code>zdr-tenant-label</code>; NetworkPolicy dựa vào nhãn này). Ở giai đoạn Audit, các lỗi này chỉ được ghi vào PolicyReport."
+    },
+    {
+     "t": "ResourceQuota",
+     "on": [
+      "quota"
+     ],
+     "d": "Cuối chuỗi, quota cộng dồn cả namespace. Xin GPU: <b>exceeded quota</b> (GPU = 0 cho cả dự án, ADR-0009)."
+    },
+    {
+     "t": "Pod hợp lệ được lưu",
+     "on": [
+      "api",
+      "kubelet",
+      "app"
+     ],
+     "set": {
+      "app": "ok"
+     },
+     "e": [
+      [
+       "api",
+       "etcd",
+       "ok"
+      ],
+      [
+       "kubelet",
+       "app",
+       "ok",
+       "chạy Pod"
+      ]
+     ],
+     "d": "Pod đúng mọi luật (image dự án pin digest, nhãn tenant đúng, có resources, non-root) được lưu vào etcd rồi chạy. Trên kind: 24 case chạy được đều khớp, 7 case chờ EKS."
+    }
+   ]
+  },
+  {
+   "name": "⑨ Kyverno sập: tắt êm khác mất liên lạc",
+   "mode": "lab",
+   "proof": "kind",
+   "ev": [
+    [
+     "Evidence lab Kyverno (owner, 24/11)",
+     "../evidence/p5/P5-T2.2_L2_KIND_KYVERNO_20261124.md"
+    ],
+    [
+     "Runbook Kyverno §3–4",
+     "../runbooks/P5_L2_KIND_KYVERNO.md"
+    ],
+    [
+     "SPEC-P5 §10 (F1–F3)",
+     "../../.agent/specs/SPEC-P5_TENANT_GUARDRAILS.md"
+    ]
+   ],
+   "init": {
+    "sa": "ok",
+    "app": "ok",
+    "svc": "ok",
+    "req": "ok",
+    "boot": "ok",
+    "pcfg": "ok",
+    "sab": "ok",
+    "appb": "ok",
+    "svcb": "ok",
+    "reqb": "ok",
+    "kyv": "ok"
+   },
+   "learn": [
+    "Khi nào webhook Fail thật sự chặn",
+    "Vì sao gỡ Kyverno phải scale về 0 trước"
+   ],
+   "steps": [
+    {
+     "t": "Bình thường",
+     "on": [
+      "kyv",
+      "adm"
+     ],
+     "e": [
+      [
+       "adm",
+       "kyv",
+       "ok",
+       "vpol…-fail"
+      ]
+     ],
+     "d": "Webhook <code>vpol.validate.kyverno.svc-fail</code>: failurePolicy <b>Fail</b>, chỉ namespace có nhãn tenant."
+    },
+    {
+     "t": "Tắt êm: scale về 0",
+     "on": [
+      "kyv",
+      "adm"
+     ],
+     "set": {
+      "kyv": "ghost"
+     },
+     "d": "Admin scale admission controller về 0. Kyverno <b>tự gỡ webhook của mình</b> trước khi tắt, nên cả Pod hợp lệ lẫn Pod sai đều được tạo: cửa mở (F1). Việc này cần quyền admin nền tảng trên namespace kyverno; tenant chỉ có quyền đọc."
+    },
+    {
+     "t": "Bật lại",
+     "on": [
+      "kyv"
+     ],
+     "set": {
+      "kyv": "ok"
+     },
+     "e": [
+      [
+       "adm",
+       "kyv",
+       "ok"
+      ]
+     ],
+     "d": "Scale lên 1: Kyverno đăng ký lại webhook, luật có hiệu lực trở lại."
+    },
+    {
+     "t": "Mất liên lạc",
+     "on": [
+      "kyv",
+      "adm",
+      "app"
+     ],
+     "set": {
+      "kyv": "fail"
+     },
+     "e": [
+      [
+       "adm",
+       "kyv",
+       "fail",
+       "connection refused"
+      ]
+     ],
+     "d": "Controller vẫn chạy nhưng Service trỏ vào hư không (giống crash hay đứt mạng). Webhook còn, failurePolicy Fail: Pod hợp lệ ở tenant-a <b>bị từ chối</b> (fail closed, D8). Pod ở kube-system vẫn tạo được (F2)."
+    },
+    {
+     "t": "Gỡ đúng thứ tự",
+     "on": [
+      "kyv"
+     ],
+     "set": {
+      "kyv": "ghost"
+     },
+     "d": "Xoá policy → scale về 0 → xoá Kyverno → kiểm không còn webhook. Xoá thẳng mà không scale: còn sót <b>8 webhook configuration</b> không còn chủ (F3). Đó là điều kiện dừng của window L3."
+    }
+   ]
+  },
+  {
+   "name": "⑩ Mạng tenant trên EKS (kế hoạch)",
+   "mode": "aws",
+   "proof": "plan",
+   "ev": [
+    [
+     "NetworkPolicy",
+     "../../gitops/platform/tenants/networkpolicy.yaml"
+    ],
+    [
+     "SPEC-P5 P5-T3, T4.2",
+     "../../.agent/specs/SPEC-P5_TENANT_GUARDRAILS.md"
+    ]
+   ],
+   "init": {
+    "sa": "ok",
+    "app": "ok",
+    "svc": "ok",
+    "req": "ok",
+    "boot": "ok",
+    "pcfg": "ok",
+    "sab": "ok",
+    "appb": "ok",
+    "svcb": "ok",
+    "reqb": "ok",
+    "vpc": "ok",
+    "iam": "ok",
+    "rds": "ok",
+    "s3": "ok",
+    "sm": "ok",
+    "netpol": "ghost"
+   },
+   "learn": [
+    "NetworkPolicy chặn theo cái gì",
+    "Vì sao kind không chứng minh được phần này"
+   ],
+   "steps": [
+    {
+     "t": "Bật NetworkPolicy ở VPC CNI",
+     "on": [
+      "tf",
+      "vpc"
+     ],
+     "e": [
+      [
+       "tf",
+       "vpc",
+       "plan",
+       "enableNetworkPolicy"
+      ]
+     ],
+     "d": "Terraform đặt <code>configuration_values</code> cho add-on vpc-cni: enableNetworkPolicy \"true\", standard mode, ngay lúc tạo cluster (bật sau thì aws-node restart). <code>plan_assert.sh</code> check 18 chặn plan thiếu nó. Code và test static đã có."
+    },
+    {
+     "t": "Khoá hết",
+     "on": [
+      "netpol"
+     ],
+     "set": {
+      "netpol": "plan"
+     },
+     "d": "<code>default-deny</code> cho cả vào lẫn ra trong mỗi namespace tenant. Từ đây Pod tenant không nói chuyện được với ai."
+    },
+    {
+     "t": "Mở đúng đường cần",
+     "on": [
+      "app",
+      "rds",
+      "s3"
+     ],
+     "e": [
+      [
+       "app",
+       "rds",
+       "plan",
+       "5432",
+       "data"
+      ],
+      [
+       "app",
+       "s3",
+       "plan",
+       "443",
+       "data"
+      ],
+      [
+       "app",
+       "svc",
+       "plan",
+       "8080"
+      ]
+     ],
+     "d": "Mở DNS, 5432 tới subnet DB, 443 ra ngoài VPC (trừ dải VPC và 169.254), 8080 giữa Pod cùng tenant."
+    },
+    {
+     "t": "tenant-a → tenant-b: bị chặn",
+     "on": [
+      "app",
+      "svcb"
+     ],
+     "e": [
+      [
+       "app",
+       "svcb",
+       "plan",
+       "8080"
+      ]
+     ],
+     "d": "Suite T10 dùng Pod Python thật, chờ 20 s trước khi thử (standard mode để Pod mới thông suốt một lúc cho tới khi luật được nạp). Kỳ vọng: tenant-a gọi app của mình được, gọi tenant-b thì không."
+    },
+    {
+     "t": "Pod → metadata 169.254.169.254",
+     "on": [
+      "app",
+      "vpc"
+     ],
+     "e": [
+      [
+       "app",
+       "vpc",
+       "plan",
+       "IMDS"
+      ]
+     ],
+     "d": "Suite T06: Pod tenant không được lấy credential của node qua instance metadata."
+    },
+    {
+     "t": "SA sai tên dùng role tenant",
+     "on": [
+      "sa",
+      "iam"
+     ],
+     "e": [
+      [
+       "sa",
+       "iam",
+       "plan",
+       "AssumeRoleWithWebIdentity"
+      ]
+     ],
+     "d": "Suite T07: ServiceAccount <code>zdr-iso-other</code> (ngoài mẫu <code>rag-*</code>) mang annotation role của tenant-a; STS phải trả <b>AccessDenied</b>. Cùng window: probe P4 (secret, schema, bucket của tenant kia) chạy lại trong suite."
     }
    ]
   }
@@ -2639,7 +3188,7 @@
    2,
    "Admission",
    "Bảo vệ cổng soát vé",
-   "Từ chối manifest sai trước khi lưu (Pod Security, Kyverno)",
+   "Từ chối object sai trước khi lưu: LimitRange (sửa), Pod Security, Kyverno, quota (duyệt)",
    "Namespace restricted bắt runAsNonRoot",
    "kubectl get ns --show-labels"
   ],
@@ -2648,7 +3197,7 @@
    "RBAC",
    "Danh sách ai mở được cửa nào",
    "Role/ClusterRole + Binding: ai được get/create/delete cái gì",
-   "kro-zdr-p4-children: ConfigMap chỉ đọc",
+   "P4: kro chỉ đọc ConfigMap. P5: Role tenant-viewer chỉ đọc trong namespace của tenant",
    "kubectl auth can-i"
   ],
   [
@@ -2842,6 +3391,118 @@
    "Thực tế lệch khai báo → controller đưa về",
    "P8: Security Group",
    ""
+  ],
+  [
+   0,
+   "VPC CNI",
+   "Thợ đi dây mạng cho Pod trên EKS",
+   "Plugin mạng của EKS: cấp IP trong VPC cho Pod; từ P5 còn thực thi NetworkPolicy",
+   "enableNetworkPolicy \"true\", standard mode",
+   "kubectl -n kube-system get ds aws-node"
+  ],
+  [
+   1,
+   "ResourceQuota",
+   "Hạn mức ví của cả nhà",
+   "Trần tổng CPU, memory, số object trong một namespace",
+   "GPU = 0 → exceeded quota",
+   "kubectl -n tenant-a describe quota"
+  ],
+  [
+   1,
+   "LimitRange",
+   "Suất ăn mặc định và suất tối đa",
+   "Điền requests/limits mặc định cho container và đặt mức tối đa",
+   "Không khai → 50m/96Mi; xin 1Gi → bị chặn (tối đa 512Mi)",
+   "kubectl -n tenant-a describe limitrange"
+  ],
+  [
+   1,
+   "NetworkPolicy",
+   "Tường và cửa giữa các phòng",
+   "Luật vào/ra cho Pod theo nhãn, namespace, IP, cổng; cần CNI thực thi",
+   "default-deny + 4 luật mở cho mỗi tenant",
+   "kubectl -n tenant-a get networkpolicy"
+  ],
+  [
+   1,
+   "Impersonation (--as)",
+   "Mượn thẻ người khác để thử cửa",
+   "kubectl hỏi API server bằng danh tính giả để kiểm quyền; không phải đăng nhập thật",
+   "Suite T04: can-i --as dev-a --as-group zdr:tenant-a:developers",
+   "kubectl auth can-i … --as … --as-group …"
+  ],
+  [
+   2,
+   "Kyverno",
+   "Bảo vệ riêng ở cửa căn hộ tenant",
+   "Policy engine chạy như admission webhook; P5 dùng ValidatingPolicy (CEL)",
+   "3 luật zdr-*, chỉ namespace có nhãn tenant",
+   "kubectl get validatingpolicies"
+  ],
+  [
+   2,
+   "Webhook (admission)",
+   "Gọi điện hỏi ý kiến trước khi cho vào",
+   "API server gửi object sang một dịch vụ khác để duyệt",
+   "vpol.validate.kyverno.svc-fail",
+   "kubectl get validatingwebhookconfigurations"
+  ],
+  [
+   2,
+   "failurePolicy",
+   "Mất liên lạc với bảo vệ thì đóng hay mở cửa",
+   "Fail: từ chối khi webhook không trả lời. Ignore: cho qua",
+   "Kyverno P5: Fail, chỉ namespace tenant (D8)",
+   "kubectl get validatingwebhookconfiguration kyverno-resource-validating-webhook-cfg -o yaml"
+  ],
+  [
+   2,
+   "Audit vs Deny",
+   "Ghi biên bản hay chặn thật",
+   "Audit: chỉ ghi PolicyReport. Deny: từ chối request",
+   "validationActions [Audit] → [Deny] bằng PR khi báo cáo sạch",
+   "kubectl get policyreport -A"
+  ],
+  [
+   2,
+   "AppProject",
+   "Danh sách nơi người phục vụ được mang đơn tới",
+   "Giới hạn của Argo CD: nguồn Git, namespace đích, loại object được tạo",
+   "zdr-requests: chỉ RAGSandbox vào tenant-a/b (D4)",
+   "kubectl -n argocd get appproject zdr-requests -o yaml"
+  ],
+  [
+   4,
+   "Default deny",
+   "Khoá hết rồi mở từng cửa",
+   "Bắt đầu từ chặn mọi thứ, chỉ mở đường đã liệt kê",
+   "default-deny vào + ra ở mỗi tenant",
+   "kubectl -n tenant-a get networkpolicy default-deny -o yaml"
+  ],
+  [
+   4,
+   "Defense in depth",
+   "Nhiều lớp cửa, mỗi lớp một việc",
+   "Nhiều lớp độc lập; mỗi loại lỗi có một lớp chịu trách nhiệm",
+   "RBAC → LimitRange → Pod Security → Kyverno → quota → NetworkPolicy → IAM",
+   "tests/isolation/run.sh"
+  ],
+  [
+   4,
+   "Fail open / fail closed",
+   "Mất điện thì cửa tự mở hay tự khoá",
+   "Khi lớp bảo vệ hỏng, hệ thống cho qua hay chặn hết",
+   "Kyverno: tắt êm → mở; mất liên lạc → đóng (F1, F2)",
+   "—"
+  ],
+  [
+   4,
+   "Soft isolation",
+   "Chung cư, không phải nhà riêng",
+   "Tenant chung cluster, node và control plane; cô lập bằng luật, không bằng máy riêng",
+   "P5 không tuyên bố hard tenancy",
+   "—"
   ]
  ],
  "quiz": [
@@ -2908,6 +3569,22 @@
   [
    "Khi merge PR thêm RAGSandbox, chuỗi sự kiện là gì? (nói không nhìn)",
    "Argo ghi vào apiserver → kro thấy → tạo Job → scheduler, kubelet chạy Pod → Job Complete → kro tạo SA, Deployment, Service → readiness OK → kro ghi Ready."
+  ],
+  [
+   "Pod dùng image :latest trong tenant-a bị lớp nào chặn?",
+   "Kyverno zdr-image-digest, khi policy ở Deny. Pod Security không xét image."
+  ],
+  [
+   "Audit khác Deny thế nào, và khi nào được chuyển?",
+   "Audit chỉ ghi PolicyReport; Deny từ chối. Chuyển bằng PR khi báo cáo sạch (SPEC-P5 P5-T2.2)."
+  ],
+  [
+   "Suite thấy request bị chặn, nhưng bởi lớp khác lớp mong đợi. Kết quả là gì?",
+   "FAIL: lớp mình tưởng đang canh thật ra không canh."
+  ],
+  [
+   "Vì sao case mạng trên kind ghi SKIPPED_NEEDS_EKS chứ không PASS?",
+   "NetworkPolicy của P5 do VPC CNI trên EKS thực thi; kind không chứng minh được, nên không được tính là PASS."
   ]
  ],
  "overview": {
@@ -2922,7 +3599,8 @@
    "keda",
    "karp",
    "obs",
-   "ci"
+   "ci",
+   "kyv"
   ]
  },
  "pages": [
@@ -3028,6 +3706,7 @@
    "adm"
   ],
   "RBAC": [
+   "role",
    "sapl"
   ],
   "CRD": [
@@ -3095,6 +3774,53 @@
   ],
   "Drift / remediation": [
    "xp"
+  ],
+  "VPC CNI": [
+   "vpc",
+   "netpol"
+  ],
+  "ResourceQuota": [
+   "quota"
+  ],
+  "LimitRange": [
+   "quota"
+  ],
+  "NetworkPolicy": [
+   "netpol"
+  ],
+  "Impersonation (--as)": [
+   "role",
+   "suite"
+  ],
+  "Kyverno": [
+   "kyv"
+  ],
+  "Webhook (admission)": [
+   "kyv",
+   "adm"
+  ],
+  "failurePolicy": [
+   "kyv"
+  ],
+  "Audit vs Deny": [
+   "kyv"
+  ],
+  "AppProject": [
+   "argo"
+  ],
+  "Default deny": [
+   "netpol"
+  ],
+  "Defense in depth": [
+   "adm",
+   "suite"
+  ],
+  "Fail open / fail closed": [
+   "kyv"
+  ],
+  "Soft isolation": [
+   "netpol",
+   "quota"
   ]
  },
  "confusions": [
@@ -3147,6 +3873,26 @@
    "Controller",
    "Reconcile",
    "Controller là vòng lặp chạy mãi; reconcile là một lượt so sánh rồi sửa của vòng lặp đó."
+  ],
+  [
+   "Pod Security restricted",
+   "Kyverno",
+   "Pod Security: luật chung về đặc quyền (privileged, root, hostPath). Kyverno: luật riêng của dự án (digest, resources, nhãn tenant)."
+  ],
+  [
+   "ResourceQuota",
+   "LimitRange",
+   "Quota: trần tổng của cả namespace. LimitRange: mặc định và mức tối đa cho từng container."
+  ],
+  [
+   "Audit vs Deny",
+   "failurePolicy",
+   "Audit/Deny: luật bị vi phạm thì ghi hay chặn. failurePolicy: không gọi được Kyverno thì chặn hay cho qua."
+  ],
+  [
+   "RBAC",
+   "Admission",
+   "RBAC: bạn có được làm việc này không. Admission: object bạn gửi có hợp lệ không."
   ]
  ],
  "repo": {
@@ -3237,7 +3983,8 @@
     "when": "Thêm/sửa thứ chạy trong cluster",
     "ph": [
      "P3",
-     "P4"
+     "P4",
+     "P5"
     ],
     "nodes": [
      "git",
@@ -3258,10 +4005,11 @@
      {
       "path": "platform/",
       "kind": "code",
-      "what": "Nền tảng: apps, Crossplane providers, RGD, RBAC cho kro, tenants",
+      "what": "Nền tảng: apps, Crossplane providers, RGD, RBAC cho kro, tenants, policy Kyverno",
       "ph": [
        "P3",
-       "P4"
+       "P4",
+       "P5"
       ],
       "nodes": [
        "kro",
@@ -3294,12 +4042,27 @@
        {
         "path": "tenants/",
         "kind": "code",
-        "what": "Namespace + quyền cho từng tenant",
+        "what": "Namespace, RBAC, quota/LimitRange, ServiceAccount, NetworkPolicy cho từng tenant",
         "ph": [
-         "P4"
+         "P4",
+         "P5"
         ],
         "nodes": [
-         "sa"
+         "sa",
+         "role",
+         "quota",
+         "netpol"
+        ]
+       },
+       {
+        "path": "policies/",
+        "kind": "code",
+        "what": "Ba ValidatingPolicy của Kyverno (Argo app wave 47)",
+        "ph": [
+         "P5"
+        ],
+        "nodes": [
+         "kyv"
         ]
        }
       ]
@@ -3319,9 +4082,10 @@
      {
       "path": "tests/",
       "kind": "code",
-      "what": "Script kiểm tra guard (static gate)",
+      "what": "Guard của check.sh và kyverno test cho ba policy",
       "ph": [
-       "P4"
+       "P4",
+       "P5"
       ],
       "nodes": [
        "ci"
@@ -3350,7 +4114,8 @@
     "when": "Tập trước khi lên AWS",
     "ph": [
      "P3",
-     "P4"
+     "P4",
+     "P5"
     ],
     "nodes": [
      "labdb",
@@ -3400,9 +4165,39 @@
        "cleanup",
        "pcfg"
       ]
+     },
+     {
+      "path": "p5-kind/",
+      "kind": "code",
+      "what": "Pod mẫu cho lab P5 (pod.sh)",
+      "ph": [
+       "P5"
+      ],
+      "nodes": [
+       "adm"
+      ]
      }
     ],
     "analog": "dev/ hoặc hack/"
+   },
+   {
+    "path": "tests/isolation/",
+    "kind": "code",
+    "what": "Bộ test cô lập P5, ra acceptance.json",
+    "when": "Kiểm guardrail tenant (kind hoặc EKS)",
+    "ph": [
+     "P5"
+    ],
+    "nodes": [
+     "suite"
+    ],
+    "analog": "Test tích hợp / acceptance test",
+    "read": [
+     [
+      "Runbook",
+      "../runbooks/P5_ISOLATION_SUITE.md"
+     ]
+    ]
    },
    {
     "path": ".github/workflows/",
@@ -3575,5 +4370,6 @@
     "when": "Khi ôn"
    }
   ]
- }
+ },
+ "proofLabels": {}
 }

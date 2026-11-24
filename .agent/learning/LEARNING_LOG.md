@@ -355,3 +355,23 @@ Status meanings:
   - the `propagationPolicy` cause of the orphan Pod is still a hypothesis;
   - Q3 and 6c of 21/11 were summaries close to prior wording, now superseded by the transfer cases.
 - Status: PRACTICED + EXPLAINED (IRSA workload, secret flow, PostgreSQL credential tiers, kro graph and retry)
+
+### 2026-11-24 — P5 guardrails on kind: baseline and Kyverno labs (DRF-66, DRF-67)
+- Phase/task: P5-T2.1 B and P5-T2.2 B.
+- Learning objective: see which layer refuses each unsafe or oversized Pod, and how Kyverno behaves on outage and uninstall.
+- Source(s) consulted: `docs/runbooks/P5_L2_KIND_BASELINE.md`, `docs/runbooks/P5_L2_KIND_KYVERNO.md`; Claude explained P5 with the apartment-building analogy first.
+- Prediction before lab: none. The owner chose to run without predicting ("chắc chắn tôi không đoán được đâu chỉ có làm thôi").
+- Micro-lab/change performed: the owner ran both runbooks end to end in Git Bash and pasted every output; Claude read each one with them.
+- Expected vs actual: every step matched the runbooks. That includes the step 0b add-on (a Pod with its own token gets 403), fail open on a graceful scale to zero, fail closed when the Service is unreachable, and no webhook left after the ordered uninstall.
+- Evidence path: `docs/evidence/p5/P5-T2.1_L2_KIND_BASELINE_20261124.md`, `docs/evidence/p5/P5-T2.2_L2_KIND_KYVERNO_20261124.md`.
+- Explain in my own words (typed, no hints):
+  - "big bị chặn vì vượt giới hạn từng container";
+  - "noreq qua vì LimitRange điền resources trước Kyverno".
+- Failure I can now diagnose: not yet shown in the owner's own words.
+- Remaining gap:
+  - quota (namespace total) versus LimitRange (per container);
+  - when `zdr-require-resources` matters;
+  - fail open versus fail closed;
+  - NetworkPolicy and IRSA (EKS only);
+  - SPEC-P5 §7 teach-back not started.
+- Status: PRACTICED

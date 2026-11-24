@@ -1,10 +1,11 @@
 # P5 L2: Kyverno trên kind — audit, enforce, sập, gỡ (DRF-67, P5-T2.2 B)
 
 > **TL;DR** · Để làm gì: tự thấy Kyverno chặn đúng ba luật D6, và tự thấy chuyện gì xảy ra khi Kyverno sập hoặc bị gỡ ·
-> Trạng thái: Claude chạy trọn runbook trên kind ngày 24/11, mọi "Phải thấy" khớp; owner chưa làm ·
+> Trạng thái: Claude chạy thử 24/11; **owner chạy trọn 24/11** (cả bước 0b), mọi bước khớp "Phải thấy"
+> (evidence `docs/evidence/p5/P5-T2.2_L2_KIND_KYVERNO_20261124.md`) ·
 > Kết luận cần tự thấy: Kyverno chỉ canh namespace tenant; "sập êm" và "không gọi được" cho hai kết quả khác nhau ·
 > Liên quan: SPEC-P5 §4 scenario 3, D6–D9; `gitops/platform/apps/45-kyverno.yaml`, `gitops/platform/policies/` ·
-> Mục lục: 0 Chuẩn bị · 1 Audit · 2 Deny · 3 Sập · 4 Gỡ · 5 Dọn
+> Mục lục: 0 Chuẩn bị · 0b Pod tự xin token · 1 Audit · 2 Deny · 3 Sập · 4 Gỡ · 5 Dọn
 
 Không AWS, không tốn tiền. Khoảng 45–60 phút. Làm sau lab baseline (`P5_L2_KIND_BASELINE.md`).
 
@@ -59,6 +60,31 @@ $K get validatingwebhookconfiguration kyverno-resource-validating-webhook-cfg -o
 **Phải thấy:** `vpol.validate.kyverno.svc-fail` với `Fail`, chỉ namespace có nhãn `rag.zero-drift.io/tenant`.
 Thêm một webhook nội bộ `protect-generation-labels` (`Fail`, mọi namespace) nhưng `objectSelector` chỉ bắt object có
 nhãn `generate.kyverno.io/policy-name`; dự án không có policy generate nào nên nó không chạm gì.
+
+## 0b. Bổ sung lab baseline: Pod tự xin chìa khoá API (P5-T2.1 B)
+
+Hai mục còn thiếu của lab baseline, làm ở đây vì cluster này đã có image dự án:
+một Pod **thật** chạy image dự án dưới `restricted`, và một lần **gọi API thật** bằng token.
+
+Ví von: SA `default` của căn hộ đã dặn "không phát chìa khoá" (bước 1 lab baseline). Nhưng Pod vẫn
+có thể **tự ghi trong đơn** "tôi cần chìa khoá", và Kubernetes nghe Pod. Vậy cầm chìa khoá rồi thì
+mở được gì?
+
+```bash
+labs/p5-kind/api-call.sh tenant-a | $K create -f -
+$K -n tenant-a wait --for=jsonpath='{.status.phase}'=Succeeded pod/apicall --timeout=240s
+$K -n tenant-a logs apicall
+$K -n tenant-a get pod apicall -o jsonpath='{.status.phase} {.spec.volumes[*].name}{"\n"}'
+$K -n tenant-a delete pod apicall
+```
+
+**Phải thấy** (Claude chạy thử 24/11):
+- `pod/apicall condition met`: image dự án chạy thật trong `tenant-a`, qua Pod Security `restricted`.
+- Hai dòng `403 … User "system:serviceaccount:tenant-a:default" cannot list resource "pods"` và
+  `… "secrets"`: có chìa khoá nhưng thẻ từ không mở được cửa nào, vì SA này không có RoleBinding.
+- `Succeeded kube-api-access-…`: lần này Pod **có** volume token (khác bước 1 lab baseline).
+
+Bài học: tắt token (D2) và RBAC (D1) là **hai lớp**. Pod tự bật lại token thì RBAC vẫn đỡ.
 
 ## 1. Audit: chỉ ghi, chưa chặn
 
@@ -171,6 +197,7 @@ kind delete cluster --name zdr-p5-kyv; rm -rf "$HOME/zdr-p5-kyv"; unset K POD LA
 | Bước | Dự đoán | Thực tế | Đúng? |
 |---|---|---|---|
 | 0 webhook: failurePolicy, namespace | | | |
+| 0b Pod có token: gọi pods, secrets | | | |
 | 1 Audit: `tagimg`; báo cáo của `good` | | | |
 | 2 Deny: 7 dòng | | | |
 | 3a tắt êm: `ok`, `bad` | | | |
