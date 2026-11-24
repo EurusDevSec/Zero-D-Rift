@@ -456,7 +456,8 @@ destroy; stop time reached. The cap counts every retry and cleanup.
 
 - [ ] Acceptance audit `docs/evidence/p4/`: run ID, revision, versions and
       digests, scenario → evidence, limits.
-- [ ] Delayed inventory the next day; billing read by the owner.
+- [x] Delayed inventory the next day; billing read by the owner. (Audit §6–6.2:
+      inventory CLEAN 22/11 and 24/11; Bills gross 0.73 USD read 23/11 and 24/11.)
 
 **B. Independent review (0.5 h plus waiting)**
 
