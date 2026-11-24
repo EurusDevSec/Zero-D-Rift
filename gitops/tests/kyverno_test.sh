@@ -38,10 +38,19 @@ f="$tmp/tests/kyverno/kyverno-test.yaml"
 n="$(grep -c '^  result: pass$' "$f" || true)"
 [[ "$n" -ge 1 ]] || { echo "FAIL self-test: no 'result: pass' to flip"; exit 1; }
 sed -i '0,/^  result: pass$/s//  result: fail/' "$f"
+# mktemp -d is 0700; the CLI image runs as a non-root user and must read the copy.
+chmod -R a+rX "$tmp"
 r=0; s="$(run "$tmp")" || r=$?
-echo "${s%%$'\n'*}"
+first="${s%%$'\n'*}"
+echo "$first"
 if [[ $r -eq 0 ]]; then
   echo "FAIL self-test: flipped expectation still passed"
+  exit 1
+fi
+# The run must fail because of the flipped case, not because it could not run.
+if [[ ! "$first" =~ tests\ passed\ and\ [1-9][0-9]*\ tests\ failed$ ]]; then
+  printf '%s\n' "$s"
+  echo "FAIL self-test: the flipped run did not report failed cases"
   exit 1
 fi
 echo "PASS kyverno test and self-test"
