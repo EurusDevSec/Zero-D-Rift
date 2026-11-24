@@ -157,7 +157,7 @@
    "p": "P5",
    "st": "now",
    "t": "Governance: RBAC, quota, NetworkPolicy, Pod Security, Kyverno",
-   "d": "Code đã merge (PR 66, 70). Owner làm hai lab trên kind 24/11 (còn bước 2b của lab Kyverno); còn: Codex review, window L3 trên EKS, acceptance, teach-back.",
+   "d": "Code đã merge (PR 66, 70). Owner làm hai lab trên kind 24/11, kể cả bước 2b; còn: Codex review, window L3 trên EKS, acceptance, teach-back.",
    "exit": "Negative security/isolation suite pass; không tuyên bố hard tenancy.",
    "k": "RBAC, Pod Security, Kyverno, ResourceQuota/LimitRange, NetworkPolicy, test âm, fail closed"
   },
@@ -1021,7 +1021,7 @@
    "vv": "Bảo vệ riêng ở cửa từng căn hộ tenant",
    "what": "Admission webhook với 3 luật (ValidatingPolicy, viết bằng CEL), chỉ cho namespace có nhãn rag.zero-drift.io/tenant: (1) container phải khai requests và memory limit; (2) image từ ghcr.io/eurusdevsec/zero-d-rift/ và pin @sha256; (3) nhãn tenant của Pod bằng tên namespace. Bắt đầu ở Audit (chỉ ghi), chuyển Deny bằng PR khi báo cáo sạch.",
    "notdo": "Không lặp lại luật của Pod Security (D6). Không canh namespace nền tảng (zdr-platform, kube-system). Không xét Deployment (autogen tắt), chỉ xét Pod.",
-   "lab": "Runbook P5_L2_KIND_KYVERNO: owner chạy trọn trên kind 24/11 (P5-T2.2 B); còn bước 2b tách ba case chặn.",
+   "lab": "Runbook P5_L2_KIND_KYVERNO: owner chạy trọn trên kind 24/11 (P5-T2.2 B), kể cả bước 2b tách ba case chặn.",
    "cmd": "kubectl get validatingpolicies; kubectl get policyreport -A"
   },
   {

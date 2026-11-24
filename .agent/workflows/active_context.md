@@ -2,7 +2,7 @@
 project: Zero D-Rift
 status: P5_SPEC_OWNER_APPROVED
 active_phase: P5 (P4 closed 24/11)
-active_task: owner L2 labs done 24/11 except Kyverno step 2b (DRF-67); then Codex review and L3 window request (P5-T4.2)
+active_task: P5 L2 labs closed 24/11 (DRF-66, DRF-67); next Codex review of P5 code, then L3 window request (P5-T4.2)
 active_feature: Tenant guardrails (SPEC-P5)
 active_spec: .agent/specs/SPEC-P5_TENANT_GUARDRAILS.md
 current_learning: .agent/learning/CURRENT_STATUS.md
@@ -80,9 +80,8 @@ NetworkPolicy in Terraform and the isolation suite merged as PR #70
 predictions; every step matched (`docs/evidence/p5/P5-T2.1_L2_KIND_BASELINE_20261124.md`,
 `docs/evidence/p5/P5-T2.2_L2_KIND_KYVERNO_20261124.md`; T2.1 B API call and
 reference image via step 0b, `labs/p5-kind/api-call.sh`). Codex light review
-of PR #71: Enforce stays open until the owner runs step 2b of the Kyverno
-runbook (tag only, outside registry, no requests without LimitRange). Next:
-step 2b, Codex review of the P5 candidate, then the P5 L3 window (P5-T4.2) on
+of PR #71 asked for step 2b of the Kyverno runbook; the owner ran it on 24/11
+and Enforce is closed. Next: Codex review of the P5 candidate, then the P5 L3 window (P5-T4.2) on
 its own approval.
 Overflow moves to 25/11 (D11).
 
