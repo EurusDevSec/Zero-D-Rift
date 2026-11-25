@@ -22,6 +22,22 @@ check() { if [[ "$2" == "$3" ]]; then pass "$1"; else fail "$1 (got '$2', want '
 pin() { sed -nE "s/^ *\"?$1\"? *= *\"([^\"]+)\".*/\1/p" "$here/variables.tf" | head -1; }
 ami_pin="$(sed -nE 's/^ *default *= *"(1[.]35[.][0-9]+-[0-9]{8})".*/\1/p' "$here/variables.tf" | head -1)"
 
+# Node count: the window's run.tfvars, else the variables.tf default (P5 runs 2
+# nodes; window P5-L3-20261125-01 F8). Only these two numbers are read from
+# run.tfvars. NODES=<n> overrides both, for a run.tfvars kept elsewhere.
+size() { # VARIABLE DEFAULT_IF_UNSET
+    local v=""
+    [[ -f "$here/run.tfvars" ]] && v="$(sed -nE "s/^[[:space:]]*$1[[:space:]]*=[[:space:]]*([0-9]+)[[:space:]]*(#.*)?\$/\1/p" "$here/run.tfvars" | tail -1)"
+    [[ -n "$v" ]] || v="$(awk -v n="$1" '$0 ~ "variable \"" n "\"" {f=1} f && /^ *default *=/ {print $3; exit}' "$here/variables.tf")"
+    echo "${v:-$2}"
+}
+want_desired="${NODES:-$(size system_node_desired_size 1)}"
+want_max="$(size system_node_max_size 2)"
+if [[ ! "$want_desired" =~ ^[12]$ || ! "$want_max" =~ ^[12]$ ]] || (( want_desired > want_max )); then
+    echo "FAIL  node count: desired=$want_desired max=$want_max is not 1-2 with desired <= max"
+    exit 1
+fi
+
 echo "smoke $(date -u +%Y-%m-%dT%H:%M:%SZ) cluster=$name region=$AWS_REGION"
 
 # kubectl must be within one minor of the 1.35 API server (1.34-1.36); the gcloud
@@ -61,11 +77,11 @@ ng="$(aws eks list-nodegroups --cluster-name "$name" --query 'nodegroups[0]' --o
 n="$(aws eks describe-nodegroup --cluster-name "$name" --nodegroup-name "$ng" --output json)"
 check "node group ACTIVE"   "$(jq -r .nodegroup.status <<< "$n")" ACTIVE
 check "node group AMI"      "$(jq -r '"\(.nodegroup.amiType) \(.nodegroup.releaseVersion)"' <<< "$n")" "AL2023_x86_64_STANDARD $ami_pin"
-check "node group capacity" "$(jq -r '"\(.nodegroup.instanceTypes | join(",")) \(.nodegroup.capacityType) desired=\(.nodegroup.scalingConfig.desiredSize) max=\(.nodegroup.scalingConfig.maxSize)"' <<< "$n")" "m6i.large ON_DEMAND desired=1 max=2"
+check "node group capacity" "$(jq -r '"\(.nodegroup.instanceTypes | join(",")) \(.nodegroup.capacityType) desired=\(.nodegroup.scalingConfig.desiredSize) max=\(.nodegroup.scalingConfig.maxSize)"' <<< "$n")" "m6i.large ON_DEMAND desired=$want_desired max=$want_max"
 
-# 5. Instances: one running node, IMDSv2 only with hop limit 1, public IPv4 present.
+# 5. Instances: one running instance per desired node, IMDSv2 only with hop limit 1, public IPv4 present.
 i="$(aws ec2 describe-instances --filters "Name=tag:eks:cluster-name,Values=$name" Name=instance-state-name,Values=pending,running --output json | jq '[.Reservations[].Instances[]]')"
-check "running node instances" "$(jq length <<< "$i")" 1
+check "running node instances" "$(jq length <<< "$i")" "$want_desired"
 check "IMDSv2 required, hop limit 1" "$(jq -r '[.[] | "\(.MetadataOptions.HttpTokens)/\(.MetadataOptions.HttpPutResponseHopLimit)"] | unique | join(",")' <<< "$i")" required/1
 check "node has a public IPv4 (public subnet, no NAT)" "$(jq -r '[.[] | has("PublicIpAddress")] | all' <<< "$i")" true
 
@@ -86,7 +102,7 @@ check "no NAT route anywhere" "$(jq '[.RouteTables[].Routes[] | select(.NatGatew
 # 8. Kubernetes API from this workstation: version, Ready nodes, system Pods.
 aws eks update-kubeconfig --name "$name" --region "$AWS_REGION" > /dev/null
 check "API server minor" "$(kubectl version -o json | jq -r '.serverVersion.minor' | tr -d '+')" 35
-check "Ready nodes" "$(kubectl get nodes -o json | jq '[.items[] | select(any(.status.conditions[]; .type == "Ready" and .status == "True"))] | length')" 1
+check "Ready nodes" "$(kubectl get nodes -o json | jq '[.items[] | select(any(.status.conditions[]; .type == "Ready" and .status == "True"))] | length')" "$want_desired"
 check "node OS is Amazon Linux 2023" "$(kubectl get nodes -o json | jq -r '[.items[].status.nodeInfo.osImage | startswith("Amazon Linux 2023")] | all')" true
 # CoreDNS Pods keep the historical label k8s-app=kube-dns.
 for app in coredns kube-proxy aws-node; do
