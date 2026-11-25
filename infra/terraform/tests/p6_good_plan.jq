@@ -15,7 +15,7 @@ def qarn(n): "arn:aws:sqs:us-east-1:" + acct + ":" + n;
 def tls(n): {Sid: "DenyInsecureTransport", Effect: "Deny", Principal: "*", Action: "sqs:*", Resource: qarn(n),
   Condition: {Bool: {"aws:SecureTransport": "false"}}};
 
-{resource_changes: ([
+{resource_changes: (([
   rc("aws_sqs_queue"; "main"; {name: "zero-drift-batch", visibility_timeout_seconds: 120, message_retention_seconds: 3600,
      sqs_managed_sse_enabled: true, redrive_policy: ({deadLetterTargetArn: qarn("zero-drift-batch-dlq"), maxReceiveCount: 3} | tojson)}),
   rc("aws_sqs_queue"; "dlq"; {name: "zero-drift-batch-dlq", visibility_timeout_seconds: 30, message_retention_seconds: 3600, sqs_managed_sse_enabled: true}),
@@ -50,4 +50,4 @@ def tls(n): {Sid: "DenyInsecureTransport", Effect: "Deny", Principal: "*", Actio
         | kar("aws_cloudwatch_event_rule"; $d; {event_pattern: ({source: [$s], "detail-type": [$d]} | tojson)}),
           kar("aws_cloudwatch_event_target"; $d; {arn: qarn("zero-drift-karpenter")}))))
 + [$ok | to_entries[] | rc("aws_iam_role_policy"; .key; {name: .key, policy: ({Version: "2012-10-17", Statement: .value} | tojson)})]
-}
+)}
