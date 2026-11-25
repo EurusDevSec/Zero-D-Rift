@@ -30,7 +30,8 @@ LAB="${LAB:-0}"
 
 die() { echo "FAIL  $*"; exit 1; }
 need_run_vars() {
-  [[ "${RUN_ID:-}" =~ ^P4-L3-[0-9]{8}-[0-9]{2}$ ]] || die "export RUN_ID=P4-L3-YYYYMMDD-NN (window request)"
+  # P5 reuses this script inside its own L3 window (SPEC-P5 P5-T4.2), so both phase prefixes are valid.
+  [[ "${RUN_ID:-}" =~ ^P[45]-L3-[0-9]{8}-[0-9]{2}$ ]] || die "export RUN_ID=P4-L3-YYYYMMDD-NN or P5-L3-YYYYMMDD-NN (window request)"
   [[ "${EXPIRES_AT:-}" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$ ]] || die "export EXPIRES_AT=YYYY-MM-DDTHH:MM:SSZ"
 }
 tags() { echo "Project=Zero-D-Rift,Owner=HoangLV,Environment=PoC,ManagedBy=RAGSandbox,RunId=$RUN_ID,ExpiresAt=$EXPIRES_AT"; }
