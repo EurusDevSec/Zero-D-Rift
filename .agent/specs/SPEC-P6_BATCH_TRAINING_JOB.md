@@ -1,7 +1,7 @@
 ---
 id: SPEC-P6
 title: BatchTrainingJob — SQS, KEDA ScaledJob, Karpenter CPU NodePool, checkpoint and node reclamation
-status: CANDIDATE_20261125_R4 (three Codex rounds 25/11, all REQUEST CHANGES, findings applied; awaiting Codex round 4 and owner approval)
+status: CANDIDATE_20261125_R4 (Codex APPROVE in round 4 at fdedcac, 25/11; awaiting owner approval of D1–D14)
 phase: P6
 start: 2026-11-25 (owner rebaseline, D13)
 deadline: 2026-11-26 target (owner, D13); a step that does not fit moves to 27/11, it is never cut
@@ -292,6 +292,9 @@ Gate: no Terraform, manifest or image change merges before D1–D14 are approved
       only `caller_role_match=true|false` against an expected role name passed
       in; it never prints the ARN or account. B12 and B14 use it, so their probe Pods pass the same Kyverno
       digest policy as training.
+- [ ] Conditional write check (§9.3 L2): against MinIO and the real S3 API, a
+      second `If-None-Match: *` write of `submit-started` returns `412` and the
+      first value stays.
 - [ ] Unit tests with in-memory fakes for SQS and S3: resume, foreign message,
       SIGTERM, double delivery, duplicate submit, `ALREADY_DONE`, receive
       markers, heartbeat, fail profile.
@@ -364,6 +367,8 @@ checked only at L3.
 - [ ] Training end to end against MinIO; kill the Pod mid-run; resume from the
       checkpoint; one artifact.
 - [ ] kro graph with a `ScaledJob` node becomes Active (A5).
+- [ ] Runbook step 5 reads the replacement Job with a guarded read and stops
+      if no Job name came back, before `kubectl wait` (§9.3 L1).
 
 kind proves nothing about SQS, IRSA, Karpenter or EC2. Karpenter has no
 published kind provider (S5), so Karpenter is L3 only.
@@ -598,7 +603,17 @@ R1, R3 and old 5 partly. Applied 25/11 (R4 of this SPEC):
 | C3 | Submit role could list every object name | `ListObjectsV2` limited by `s3:prefix`, no `GetObject` (P6-T2.1, P6-T3) |
 | C4 | `; echo` hid a failed read | `&& echo` (L3 runbook B) |
 
-Codex round 4: not yet done.
+Codex round 4 at `fdedcac`: **APPROVE**. All earlier findings closed; no finding
+blocks the owner's decision on D1–D14. Two LOW, non-blocking items are carried
+into the implementation tasks:
+
+| # | Item | Carried to |
+|---|---|---|
+| L1 | L2 step 5: `tail -1` can hide a failed Job read before `wait` | P6-T2.2 B: check the read succeeded and a Job name exists before `wait` |
+| L2 | MinIO image in the lab not yet shown to honour `If-None-Match: *` | P6-T2.1 / T2.2: write the same key twice, expect `412` and the first value kept |
+
+Review was read-only (Git Bash stubs for E2 and the ConfigMap check); no AWS,
+EKS or kind run.
 
 ## 9.4. Linear tracking
 
