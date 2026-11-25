@@ -1,7 +1,7 @@
 ---
 id: SPEC-P6
 title: BatchTrainingJob — SQS, KEDA ScaledJob, Karpenter CPU NodePool, checkpoint and node reclamation
-status: CANDIDATE_20261125_R2 (Codex review 25/11 REQUEST CHANGES applied; awaiting Codex re-review and owner approval)
+status: CANDIDATE_20261125_R3 (two Codex reviews 25/11, both REQUEST CHANGES, findings applied; awaiting Codex re-review and owner approval)
 phase: P6
 start: 2026-11-25 (owner rebaseline, D13)
 deadline: 2026-11-26 target (owner, D13); a step that does not fit moves to 27/11, it is never cut
@@ -248,10 +248,19 @@ Gate: no Terraform, manifest or image change merges before D1–D14 are approved
       S3 prefix `runs/<requestId>/<runAttempt>/` holds every checkpoint, marker
       and the artifact of that attempt. A new attempt never reads or counts
       another attempt's objects.
-- [ ] `submit`: if `submitted` exists under the attempt prefix, exits 0 without
-      sending. Otherwise sends one message `{requestId, tenant, runAttempt, steps}`
-      and then writes `submitted`. A crash between the two can send a duplicate
-      with the same key; `train` makes that harmless.
+- [ ] `submit`, in this order:
+      1. `HeadObject` on `runs/<requestId>/<runAttempt>/submitted`. `200` →
+         exits 0 without sending. `404` → continues. Any other result (`403`,
+         timeout) → `READ_FAILED`, exits non-zero, sends nothing. The submit
+         role has `s3:ListBucket` on batch buckets, so a missing key reads as
+         `404`, not `403` (S3 HeadObject behaviour).
+      2. Writes `submit-started` (time) under the attempt prefix **before**
+         sending. This is the freshness mark B04 compares against; the worker
+         may start before step 4 finishes.
+      3. Sends one message `{requestId, tenant, runAttempt, steps}`.
+      4. Writes `submitted`.
+      A crash between 3 and 4 can send a duplicate with the same key; `train`
+      makes that harmless.
 - [ ] `train`: receives one message and writes `RECEIVED-<n>` with the SQS
       `ApproximateReceiveCount` n. If the attempt already has `SUCCEEDED`, it
       deletes the message, logs `ALREADY_DONE` and exits 0 without training. It
@@ -263,8 +272,11 @@ Gate: no Terraform, manifest or image change merges before D1–D14 are approved
       labels, so the worker records no capacity type or instance type and the
       tenant gets no right to read Nodes. It trains a small synthetic model
       (NumPy logistic regression) for a fixed number of steps, checkpoints every
-      K steps, writes the final artifact and `SUCCEEDED`, deletes the message and
-      exits 0.
+      K steps, writes the final artifact and `SUCCEEDED`, then deletes the
+      message. Only when `DeleteMessage` succeeds does it write
+      `MESSAGE_DELETED` and exit 0. If the delete fails it exits non-zero; the
+      message comes back and the next receive ends in `ALREADY_DONE`, which
+      also writes `MESSAGE_DELETED` after a successful delete.
 - [ ] On SIGTERM: writes a checkpoint, leaves the message, exits non-zero.
 - [ ] Failure profile `fail-always` for the dead-letter scenario. It fails after
       `RECEIVED-<n>`, so every receive is recorded.
@@ -272,7 +284,9 @@ Gate: no Terraform, manifest or image change merges before D1–D14 are approved
       filter) and finished Jobs of the request.
 - [ ] `probe`: one S3 or IMDS call (`head`, `get`, `put` on a given bucket and
       key, or the IMDS token call) that prints only the outcome and the AWS
-      error code. B12 and B14 use it, so their probe Pods pass the same Kyverno
+      error code. Before any S3 call it runs STS `GetCallerIdentity` and prints
+      only `caller_role_match=true|false` against an expected role name passed
+      in; it never prints the ARN or account. B12 and B14 use it, so their probe Pods pass the same Kyverno
       digest policy as training.
 - [ ] Unit tests with in-memory fakes for SQS and S3: resume, foreign message,
       SIGTERM, double delivery, duplicate submit, `ALREADY_DONE`, receive
@@ -286,7 +300,8 @@ Gate: no Terraform, manifest or image change merges before D1–D14 are approved
 **A. Manifests (3 h)**
 
 - [ ] `gitops/platform/rgd/batch-training-job.yaml`, nodes in order:
-      `platformConfig` (externalRef, queue URL and region from `zdr-platform`),
+      `platformConfig` (externalRef to ConfigMap `batch-config` in
+      `zdr-platform`, keys `queueUrl`, `region`),
       `bucket` (Crossplane, `zero-drift-batch-<tenant>-<name>`), `scaledJob`,
       `submit` (Job in `zdr-platform`, named with `spec.runAttempt`). Status:
       queue name, bucket, run attempt, submit state, outcome pointer.
@@ -296,7 +311,15 @@ Gate: no Terraform, manifest or image change merges before D1–D14 are approved
       identity outlives a disabled request and B12 has a real second tenant. The
       role ARN annotation holds the account ID, so the window adds it with
       kubectl and the Application ignores that field (same pattern as
-      `rag-db-admin`).
+      `rag-db-admin`). The ScaledJob Job template and every probe Pod set
+      `serviceAccountName: batch-train` and `automountServiceAccountToken: false`
+      (P5 D2); IRSA mounts its own projected web identity token.
+- [ ] ConfigMap `batch-config` in `zdr-platform` is **not in Git**: the queue URL
+      holds the account ID. `infra/p6-window/window.sh batch-config` writes it
+      from Terraform outputs, as `window.sh platform-config` does in P4, and the
+      `zdr-tenants` Application ignores it. Until it exists the graph waits at
+      `platformConfig` and creates no ScaledJob or submit Job; that wait is the
+      gate. The same script's `annotate` step adds the IRSA annotations.
 - [ ] `ScaledJob`: `aws-sqs-queue` trigger, `queueLength: "1"`,
       `scaleOnInFlight: "true"`, `maxReplicaCount: 1`, `pollingInterval: 10`,
       `successfulJobsHistoryLimit: 1`, `failedJobsHistoryLimit: 1`; Job template
@@ -345,7 +368,9 @@ published kind provider (S5), so Karpenter is L3 only.
       timeout and `maxReceiveCount` per D8, SSE-SQS, project tags.
 - [ ] IRSA roles (exact `sub` and `aud`): KEDA operator (`sqs:GetQueueAttributes`
       on the one queue); `zero-drift-batch-submit` in `zdr-platform` (send to the
-      queue; write the `submitted/` marker in batch buckets);
+      queue; `s3:GetObject` and `s3:PutObject` only on
+      `zero-drift-batch-*/runs/*/submitted` and `.../submit-started`;
+      `s3:ListBucket` on `zero-drift-batch-*` so a missing marker reads as `404`);
       `zero-drift-batch-tenant-a` and `-tenant-b`, trusted only by
       `system:serviceaccount:<tenant>:batch-train` (receive, delete, change
       visibility on the queue; list, get, put, delete on that tenant's
@@ -381,6 +406,11 @@ published kind provider (S5), so Karpenter is L3 only.
 
 ### P6-T4.1 — Batch suite (1.5 h)
 
+Also `infra/p6-window/window.sh` with `annotate` (IRSA annotations on the
+`batch-train` and submit ServiceAccounts), `batch-config` (ConfigMap from
+Terraform outputs, refuses to run if the queue does not exist) and
+`purge` (queue and DLQ, then waits 60 s).
+
 `gitops/tests/batch-suite.sh` (L3, read-mostly). Counts and verdicts only. Every
 AWS or Kubernetes read is guarded: a failed read gives `READ_FAILED`, never `0`.
 
@@ -389,7 +419,7 @@ AWS or Kubernetes read is guarded: a failed read gives `READ_FAILED`, never `0`.
 | B01 | Empty queue → no Job, no node. Runs **after** the first run, so a working scaler is proven | the ScaledJob is `Ready` and has already started a Job from this queue; `visible=0 inflight=0` over at least three polls; then 0 new Jobs, 0 NodeClaims, 0 Karpenter instances. A missing ScaledJob is `FAIL`, not an empty result |
 | B02 | One message → one Job | exactly one Job for this run key |
 | B03 | In-flight → no second Job | still one Job after three polls |
-| B04 | Outcome of the current attempt | `TRAINING_STARTED`, at least one checkpoint, `SUCCEEDED` and exactly one artifact under this attempt's prefix, written after this attempt's `submitted`. While the Pod runs, the suite reads Pod → `spec.nodeName` → Node labels `karpenter.sh/capacity-type` and `node.kubernetes.io/instance-type` and stores them with the run key. No label read means no capacity claim |
+| B04 | Outcome of the current attempt | the attempt's training Job is `Complete`; under this attempt's prefix there are `TRAINING_STARTED`, at least one checkpoint, `SUCCEEDED`, exactly one artifact and `MESSAGE_DELETED`, all written after this attempt's `submit-started`; after one visibility timeout the queue shows `visible=0 inflight=0`. Files present with a failed delete is `FAIL`. While the Pod runs, the suite reads Pod → `spec.nodeName` → Node labels `karpenter.sh/capacity-type` and `node.kubernetes.io/instance-type` and stores them with the run key. No label read means no capacity claim |
 | B05 | Node reclaimed | the Node is gone from Kubernetes and the instance is `terminated` on AWS, counted by tag |
 | B06 | Resume after Pod delete | new Job for the same run key; `resumed from step N`, N > 0 |
 | B07 | Resume after NodeClaim delete | as B06, labelled "simulated disruption" (D11) |
@@ -397,7 +427,7 @@ AWS or Kubernetes read is guarded: a failed read gives `READ_FAILED`, never `0`.
 | B09 | Second message → no second node | one Job and one NodeClaim |
 | B10 | Pod without toleration | not on a batch node |
 | B11 | Quotas (P5 audit §3.1) | separate rejections for `pods` and for `count/jobs.batch` at the D9 values, each denial message naming that resource, plus one Pod above `requests.cpu`. A generic error is `FAIL` |
-| B12 | Cross-tenant bucket | an object that exists in tenant-a's bucket; a probe Pod with `tenant-a/batch-train` reads it (positive control); a probe Pod with `tenant-b/batch-train` gets `AccessDenied` for get and put on the same key. `NoSuchBucket`, a timeout or any other code is `FAIL` |
+| B12 | Cross-tenant bucket | an object that exists in tenant-a's bucket; **both** probes first report `caller_role_match=true` (tenant-a probe → `zero-drift-batch-tenant-a`, tenant-b probe → `zero-drift-batch-tenant-b`); then the tenant-a probe reads the object (positive control) and the tenant-b probe gets `AccessDenied` for get and put on the same key. A caller mismatch, `NoSuchBucket`, a timeout or any other code is `FAIL` |
 | B13 | KEDA and Karpenter identity limits | simulation (`batch_iam_check.sh`) plus one denied real call each |
 | B14 | IMDS from a batch Pod | the probe gets no token (hop limit 1) |
 
@@ -408,12 +438,20 @@ AWS or Kubernetes read is guarded: a failed read gives `READ_FAILED`, never `0`.
 - [ ] Bootstrap with `enable_rag_platform` and `enable_batch_platform`; platform
       sync; P5 guardrails on (Kyverno, NetworkPolicy).
 - [ ] KEDA and Karpenter sync; NodePools. Both requests are disabled at this
-      point. Purge the queue and the DLQ, then enable `tenant-a-batch` by PR.
+      point. `window.sh annotate` and `window.sh batch-config`; check that
+      `batch-config` has keys `queueUrl` and `region` (key names only). Purge
+      the queue and the DLQ, wait **60 s after the last successful purge**
+      (SQS deletes asynchronously for up to 60 s and allows one purge per
+      60 s), then enable `tenant-a-batch` by PR.
 - [ ] Suite order: B02–B05 on the first run, then B01, then B06–B14.
 - [ ] Both tenants complete one run, one after the other; one run on On-Demand
-      by pausing the Spot pool, labelled `on-demand`. The second tenant's
-      request is enabled only when the queue shows `visible=0 inflight=0` and no
-      batch Job is active, so no worker releases a foreign message (D3).
+      by pausing the Spot pool, labelled `on-demand`. The switch takes two PRs.
+      PR 1 disables `tenant-a-batch` and sets the Spot pool's limit to 0. Then
+      check: no ScaledJob and no Job of tenant-a remain, the queue shows
+      `visible=0 inflight=0`, `batch-spot` reads `limits.cpu: "0"` from the
+      cluster, and no NodeClaim exists. Only then PR 2 enables
+      `tenant-b-batch`, so no tenant-a worker can receive and release a
+      tenant-b message (D3) and no Spot node can start for it.
 - [ ] Owner micro-lab: follow one NodeClaim from creation to termination.
 - [ ] Smoke timings: sync, message, Job, NodeClaim, instance running, node Ready,
       image pulled, `TRAINING_STARTED`; scale-down time. Smoke values only.
@@ -528,7 +566,19 @@ CHANGES**, five HIGH and four MEDIUM findings. Claude applied all nine on 25/11:
 | 8 | L2 `kubectl wait` by label; spike reads only one namespace | L2 runbook steps 5 and 8 |
 | 9 | SPEC said kind runs every P5 guardrail | P6-T2.2 B, §12 |
 
-Codex re-review of these changes: not yet done.
+Codex re-review 25/11 at `1c24bda`: **REQUEST CHANGES**. Seven of the nine
+closed, 5 and 7 partly; five new findings (three HIGH, two MEDIUM). Claude
+applied them on 25/11 (R3):
+
+| # | Finding | Applied in |
+|---|---|---|
+| R1 | Submit role cannot read the marker; B04 passes with a failed delete; worker can start before `submitted` | P6-T2.1 submit order with `submit-started` and `READ_FAILED`, `MESSAGE_DELETED`; submit role in P6-T3; B04 |
+| R2 | The RGD waits on a config object no step creates | `batch-config` ConfigMap and `window.sh batch-config` in P6-T2.2; P6-T4.2; L3 runbook B |
+| R3 | Tenant switch races the old scaler and the Spot limit | two PRs with checks between them, P6-T4.2; L3 runbook E |
+| R4 | `AccessDenied` can come from a wrong role; SA token mount | `serviceAccountName`, `automountServiceAccountToken: false`; `caller_role_match` in `probe` and B12 |
+| R5 | Purge is asynchronous | 60 s wait after the last purge, P6-T4.2; L3 runbook B |
+
+Second Codex re-review: not yet done.
 
 ## 9.4. Linear tracking
 

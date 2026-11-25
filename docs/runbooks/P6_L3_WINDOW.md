@@ -51,7 +51,8 @@ tức khoảng 0,1 USD. Nên chọn có nếu bạn muốn bằng chứng rằng
 
 | # | Việc | Xong khi |
 |---|---|---|
-| P1 | Soạn sẵn PR "window: tenant-b On-Demand": chuyển `tenant-b-batch.yaml` từ `gitops/requests/disabled/` lên `gitops/requests/`, chuyển `tenant-a-batch.yaml` xuống `disabled/`, đặt `limits.cpu: "0"` cho `batch-spot`. **Không merge trước window** | PR mở ở dạng draft; bạn merge ở bước E1 |
+| P1 | Soạn sẵn PR "window: tắt tenant-a, khoá Spot": chuyển `tenant-a-batch.yaml` xuống `disabled/`, đặt `limits.cpu: "0"` cho `batch-spot`. **Không merge trước window** | PR draft; bạn merge ở bước E1 |
+| P1c | Soạn sẵn PR "window: bật tenant-b": chuyển `tenant-b-batch.yaml` từ `disabled/` lên `gitops/requests/`. Tách riêng khỏi P1 để giữa hai PR có bước kiểm | PR draft; bạn merge ở bước E3 |
 | P1b | Soạn sẵn PR "window: bật tenant-a": chuyển `tenant-a-batch.yaml` từ `disabled/` lên `gitops/requests/`. Argo chỉ đọc file nằm **ngay** trong `gitops/requests/`, không đọc thư mục con | PR draft; bạn merge ở bước C1 |
 | P2 | Lab kind `P6_L2_KIND_KEDA.md` đạt, có dự đoán của bạn | Có evidence `P6-T2.2_L2_KIND_KEDA_<date>.md` |
 | P3 | Batch suite (`gitops/tests/batch-suite.sh`) đã merge và đã chạy trên kind: các ca cần EKS ghi `SKIPPED_NEEDS_EKS` | Có `acceptance.json` của lần chạy kind |
@@ -79,11 +80,12 @@ Làm như `P4_RAG_SANDBOX.md` mục C (gồm `P2_L3_WINDOW.md` C), rồi kiểm 
 
 ```
 B Dựng (1 g)        apply → smoke P2 → Argo CD → platform (P4, P5) → KEDA → Karpenter → NodePool
-                    → hai request batch đều tắt → purge queue và DLQ
+                    → hai request batch đều tắt → annotate + batch-config → purge, đợi 60 s
 C Một run (1 g)     merge PR P1b (bật tenant-a) → B02, B03 → node Spot lên → B04 → B05 node bị thu hồi
                     → B01 (queue rỗng, scaler đã chứng minh chạy: 0 Job mới, 0 node)
 D Sự cố (1 g)       B06 xoá Pod → B07 xoá NodeClaim → B08 DLQ → B09–B14 ca âm
-E Tenant-b (0,5 g)  queue rỗng → bạn merge PR P1 → run của tenant-b trên On-Demand → micro-lab
+E Tenant-b (0,5 g)  merge P1 (tắt tenant-a, Spot 0) → kiểm scaler cũ hết, queue rỗng, limit Spot = 0
+                    → merge P1c (bật tenant-b) → run trên On-Demand → micro-lab
 F Dọn (0,5 g)       tắt request + cleanup → dừng root → xoá NodePool → 0 NodeClaim + 0 instance trên AWS
                     (cả hai lệnh đọc được) → EC2NodeClass → Karpenter, KEDA → P5 E → P4 J → destroy → inventory
 ```
@@ -98,12 +100,20 @@ Trước một bước dài (một run khoảng 8 phút, `terraform destroy` kho
 2. `zdr-keda`, `zdr-karpenter`, `zdr-karpenter-nodepools` `Synced Healthy`. Pod Karpenter nằm trên node system
    (`kubectl -n karpenter get pods -o wide` cho thấy tên node thuộc node group, không phải node do Karpenter tạo; chỉ ghi "system", không ghi tên node).
 3. `kubectl get nodepools` có `batch-spot` (weight 100) và `batch-ondemand` (weight 10); `kubectl get ec2nodeclass batch` `Ready=True`.
-   Gắn annotation IRSA cho ServiceAccount `batch-train` của hai tenant từ output Terraform bằng kubectl, như `rag-db-admin` ở P4.
-   Annotation chứa account ID nên không nằm trong Git; không in giá trị ra chat.
+   Chạy `bash infra/p6-window/window.sh annotate` rồi `bash infra/p6-window/window.sh batch-config`, như `window.sh platform-config` ở P4.
+   Lệnh đầu gắn annotation IRSA cho ServiceAccount `batch-train` của hai tenant và cho ServiceAccount submit. Lệnh sau tạo ConfigMap
+   `batch-config` trong `zdr-platform` từ output Terraform. Cả hai chứa account ID nên không nằm trong Git; không in giá trị ra chat.
+   Kiểm (chỉ in tên key):
+   ```bash
+   kubectl -n zdr-platform get cm batch-config -o go-template='{{range $k, $v := .data}}{{$k}} {{end}}'; echo
+   ```
+   **Phải thấy:** `queueUrl region`. Thiếu ConfigMap này thì graph đứng ở `waiting for external reference "platformConfig"`
+   và không tạo ScaledJob hay Job submit nào: đó là cổng, không phải lỗi.
 4. Hai request batch vẫn nằm trong `gitops/requests/disabled/`: `kubectl get batchtrainingjob -A` ra `No resources found`,
    chưa có ScaledJob nào, nên chưa có Job submit nào gửi message.
-5. Purge queue và DLQ (lệnh `aws sqs purge-queue` nằm trong `batch-suite.sh preflight`). Một message cũ sót lại sẽ dựng máy
-   ngay khi có ScaledJob. Purge xong mới sang C1.
+5. `bash infra/p6-window/window.sh purge`: purge queue và DLQ, rồi đợi **60 giây sau lần purge thành công cuối cùng**.
+   `PurgeQueue` trả thành công trước khi SQS xoá xong (việc xoá kéo dài tới 60 giây). Bật request sớm hơn thì purge có thể
+   xoá luôn message đầu tiên. Một message cũ sót lại sẽ dựng máy ngay khi có ScaledJob. Đợi đủ 60 giây mới sang C1.
 
 B01 (queue rỗng thì 0 Job, 0 node) **không** chạy ở đây. Lúc này chưa có ScaledJob, nên "0 Job" vẫn đúng kể cả khi scaler
 hỏng hoặc thiếu hẳn. B01 chạy ở C6, sau khi scaler đã tạo được một Job thật.
@@ -116,8 +126,10 @@ hỏng hoặc thiếu hẳn. B01 chạy ở C6, sau khi scaler đã tạo đư�
    Ghi các mốc thời gian vào bảng smoke: sync, message gửi, Job tạo, NodeClaim tạo, instance running, node Ready, image pulled, `TRAINING_STARTED`.
 4. **B04**, khi Pod còn đang chạy: suite đọc Pod → `spec.nodeName` → hai nhãn của Node (`karpenter.sh/capacity-type`,
    `node.kubernetes.io/instance-type`) và lưu kèm run key. Worker không tự ghi capacity type: Downward API không cho Pod đọc nhãn Node.
-   Sau khi xong: dưới prefix của attempt này có `TRAINING_STARTED` (`device=cpu`), checkpoint, `SUCCEEDED` và đúng một artifact,
-   tất cả ghi sau marker `submitted` của chính attempt này. Phải thấy capacity type `spot`.
+   Sau khi xong: Job của attempt `Complete`; dưới prefix của attempt này có `TRAINING_STARTED` (`device=cpu`), checkpoint,
+   `SUCCEEDED`, đúng một artifact và `MESSAGE_DELETED`, tất cả ghi sau marker `submit-started` (ghi **trước** khi gửi message);
+   sau một visibility timeout queue `visible=0 inflight=0`. Đủ file mà thiếu `MESSAGE_DELETED` là `FAIL`: message chưa bị xoá
+   sẽ quay lại. Phải thấy capacity type `spot`.
 5. **B05**: sau khi Job xong, đo **scale-down time** từ lúc Job hoàn tất tới lúc Node biến mất khỏi Kubernetes,
    rồi tới lúc instance `terminated` trên AWS (đếm theo tag, không ghi instance ID). `consolidateAfter: 60s` nên kỳ vọng vài phút.
 6. **B01**: ScaledJob `Ready` và vừa tạo được Job ở bước 2, tức scaler đọc được queue. Queue `visible=0 inflight=0` qua ít nhất
@@ -137,21 +149,35 @@ hỏng hoặc thiếu hẳn. B01 chạy ở C6, sau khi scaler đã tạo đư�
    - B10: Pod không có toleration không lên node batch.
    - B11: hai lần từ chối riêng cho `pods` và `count/jobs.batch` ở mức D9, mỗi thông báo phải nêu đúng tên quota đó,
      cộng một Pod vượt `requests.cpu`. Lỗi chung chung là `FAIL`.
-   - B12: dùng artifact có thật trong bucket của tenant-a (từ run ở C). Pod probe với ServiceAccount `tenant-a/batch-train`
-     đọc được (đối chứng). Pod probe với `tenant-b/batch-train` phải nhận đúng `AccessDenied` khi get và put cùng key.
-     `NoSuchBucket`, timeout hay mã khác là `FAIL`. ServiceAccount `batch-train` do platform tạo sẵn cho cả hai tenant,
+   - B12: dùng artifact có thật trong bucket của tenant-a (từ run ở C). Trước tiên **cả hai** Pod probe in
+     `caller_role_match=true` (STS GetCallerIdentity, chỉ in kết quả so khớp, không in ARN). Rồi Pod probe với
+     ServiceAccount `tenant-a/batch-train` đọc được (đối chứng), còn Pod probe với `tenant-b/batch-train` phải nhận đúng
+     `AccessDenied` khi get và put cùng key. Hai Pod probe đặt `automountServiceAccountToken: false`.
+     Caller không khớp, `NoSuchBucket`, timeout hay mã khác là `FAIL`. ServiceAccount `batch-train` do platform tạo sẵn cho cả hai tenant,
      nên tenant-b có danh tính thật dù request của nó đang tắt.
    - B13: KEDA chỉ đọc được thuộc tính queue; Karpenter không có quyền IAM write.
    - B14: Pod batch không lấy được credential của node qua IMDS.
 
 **E. Tenant-b trên On-Demand.**
 
-1. Trước khi merge: queue `visible=0 inflight=0` và không còn Job batch nào đang chạy. Nếu worker của tenant-a còn sống,
-   nó có thể nhận message của tenant-b rồi trả lại; lần nhận đó vẫn bị đếm vào `maxReceiveCount` (D3).
-   Rồi bạn merge PR P1. `batch-spot` có `limits.cpu: "0"`, nên Karpenter chỉ còn `batch-ondemand`.
-2. Run của tenant-b chạy xong. Suite đọc nhãn Node của Pod thật và thấy capacity type `on-demand`. Run này mang nhãn
+1. Bạn merge PR P1 (tắt tenant-a, `batch-spot` `limits.cpu: "0"`). Chưa bật tenant-b.
+2. Kiểm trước khi bật tenant-b. Cả năm dòng phải đúng; một dòng sai hoặc lệnh lỗi thì chưa sang bước 3:
+   ```bash
+   cnt(){ local o; o=$("$@") || { echo READ_FAILED; return; }; printf '%s' "$o" | grep -c .; }
+   echo "scaledjob_a: $(cnt kubectl -n tenant-a get scaledjob -o name)"
+   echo "jobs_a: $(cnt kubectl -n tenant-a get jobs -l app.kubernetes.io/name=batch-train -o name)"
+   echo "spot_limit: $(kubectl get nodepool batch-spot -o jsonpath='{.spec.limits.cpu}' || echo READ_FAILED)"
+   echo "nodeclaims: $(cnt kubectl get nodeclaims -o name)"
+   bash gitops/tests/batch-suite.sh stats
+   ```
+   **Phải thấy:** `scaledjob_a: 0`, `jobs_a: 0`, `spot_limit: 0`, `nodeclaims: 0` và `visible=0 inflight=0`.
+   `READ_FAILED` không phải `0`: đọc lại. Lý do: nếu ScaledJob của tenant-a còn sống, worker của nó có thể
+   nhận message của tenant-b rồi trả lại, và lần nhận đó vẫn bị đếm vào `maxReceiveCount` (D3). Nếu limit Spot chưa về 0,
+   Karpenter có thể dựng node Spot cho run lẽ ra phải chạy On-Demand.
+3. Bạn merge PR P1c (bật tenant-b). Karpenter chỉ còn `batch-ondemand`.
+4. Run của tenant-b chạy xong. Suite đọc nhãn Node của Pod thật và thấy capacity type `on-demand`. Run này mang nhãn
    `on-demand`, không bao giờ được tính là Spot (biên âm 7).
-3. Micro-lab ở mục 5b.
+5. Micro-lab ở mục 5b.
 
 **F. Dọn** (từ giờ freeze, hoặc sớm hơn nếu đã xong). Theo đúng SPEC §9.5:
 
@@ -177,7 +203,7 @@ hỏng hoặc thiếu hẳn. B01 chạy ở C6, sau khi scaler đã tạo đư�
 
 ### 5b. Micro-lab: bạn tự gõ, theo một NodeClaim từ lúc sinh tới lúc mất
 
-Gõ ở bước E2, khi run của tenant-b đang chạy. Điền cột dự đoán **trước** window. Chỉ đọc tên NodeClaim trên màn hình,
+Gõ ở bước E4, khi run của tenant-b đang chạy. Điền cột dự đoán **trước** window. Chỉ đọc tên NodeClaim trên màn hình,
 không dán tên node hay instance ID vào chat.
 
 | # | Lệnh | Hỏi | Dự đoán của bạn | Phải thấy |

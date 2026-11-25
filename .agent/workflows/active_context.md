@@ -78,8 +78,9 @@ P6 started 25/11 (owner: "mai là xong phase 6"). Owner rebaseline recorded as
 SPEC-P6 D13 and ROADMAP "Rebaseline 25/11": P6 25–26/11 (overflow 27/11), P7
 27–28/11, P8 29/11–01/12 (freeze), P9 02–07/12, P10 08–11/12, P11 12–14/12;
 Linear milestone targets match. SPEC-P6 candidate from the Fable draft, CPU per
-ADR-0009, one L3 window. Codex 25/11 REQUEST CHANGES (9 findings), all applied
-(SPEC §9.3, R2); awaiting Codex re-review and owner approval of D1–D14.
+ADR-0009, one L3 window. Codex 25/11: review (9 findings) and re-review at
+`1c24bda` (5 more), both REQUEST CHANGES, all applied (SPEC §9.3, R3); PR #90
+awaits another Codex re-review and owner approval of D1–D14.
 Linear: DRF-73 (T1), DRF-74 → 75/76 (T2), DRF-77 (T3), DRF-78 → 79/80/81 (T4);
 DRF-19/20 cancelled. Runbooks `docs/runbooks/P6_L2_KIND_KEDA.md` and
 `docs/runbooks/P6_L3_WINDOW.md` are plans until the code of T2/T3 exists.
