@@ -1,7 +1,7 @@
 ---
 id: SPEC-P6
 title: BatchTrainingJob — SQS, KEDA ScaledJob, Karpenter CPU NodePool, checkpoint and node reclamation
-status: CANDIDATE_20261125_R4 (Codex APPROVE in round 4 at fdedcac, 25/11; awaiting owner approval of D1–D14)
+status: OWNER_APPROVED_20261125 (owner approved D1–D14 on 25/11 after Codex APPROVE in round 4 at fdedcac)
 phase: P6
 start: 2026-11-25 (owner rebaseline, D13)
 deadline: 2026-11-26 target (owner, D13); a step that does not fit moves to 27/11, it is never cut
@@ -11,7 +11,7 @@ mode: Pair (Claude implements, owner predicts, runs the labs and explains); Coac
 canonical_scope: docs/de_cuong_tot_nghiep_ver3.md
 governing_adr: ADR-0009 (P6 on CPU nodes under the G/VT quota denial)
 linear: DRF-73..DRF-81 (§9.4); DRF-19, DRF-20 cancelled as superseded 25/11
-authority: CONTRACT_CANDIDATE_NO_INSTALL_NO_AWS_UNTIL_TASK_GATES
+authority: CONTRACT_APPROVED_NO_INSTALL_NO_AWS_UNTIL_TASK_GATES
 drafted_from: Fable 5.2 draft of 16/11 (branch claude/specs-p5-p9-draft-ecc762, status DRAFT_FABLE_20261116)
 rechecked_at: main at d527307 (2026-11-25), after the P5 technical gate
 ---
@@ -224,8 +224,8 @@ Scenario: Delete and teardown are complete
 
 ## P6-T1 — Contract: decisions, pins, prices (2 h)
 
-- [ ] Recheck §2 (done 25/11 in this file), second-agent review, owner decides
-      D1–D14.
+- [x] Recheck §2 (done 25/11 in this file), second-agent review (Codex, four
+      rounds, APPROVE at `fdedcac`), owner decides D1–D14 (approved 25/11, §9.1).
 - [ ] Pins (§11): KEDA chart and app 2.21.1, Karpenter chart and app 1.15.3,
       ElasticMQ 1.7.1 for kind only. Image digests read and recorded in
       `docs/evidence/p6/P6-T1_PINS_<date>.md` and VERSION_MATRIX "P6 pins".
@@ -525,7 +525,13 @@ checkpointing. Every batch result is labelled `CPU_SUBSTITUTE_FOR_GPU`
 
 # 9. Decisions, traceability and tracking
 
-## 9.1. Decisions (D1–D14) — proposals for the owner
+## 9.1. Decisions (D1–D14) — approved by the owner 25/11
+
+Owner, 25/11, after Claude explained the decisions grouped by who should decide
+(D1, D3, D10, D11, D14 as the owner's own calls; D13 already decided; D2, D4–D9,
+D12 as technical choices): "duyệt". Every row below is approved as proposed.
+The accepted limits carried into the thesis: soft isolation on the shared queue
+(D3) and simulated, not real, Spot disruption (D11).
 
 | ID | Decision | Proposal | Why | Alternative |
 |---|---|---|---|---|

@@ -32,7 +32,7 @@ Bỏ qua: `infra/terraform/.terraform/` (module tải về, Git bỏ qua, hơn 1
 | P3 controller | `.agent/specs/SPEC-P3_*` | `P3_RESOURCE_GRAPH`, `P3_L2_KIND_LAB` | `evidence/p3/` |
 | P4 RAG sandbox | `.agent/specs/SPEC-P4_*` | `P4_L2_KIND_LAB`, `P4_TERRAFORM_RAG`, `P4_RAG_IMAGE` | `evidence/p4/` |
 | P5 tenant guardrails | `.agent/specs/SPEC-P5_*` (owner duyệt 22/11) | `P5_PINS`, `P5_L2_KIND_BASELINE`, `P5_L2_KIND_KYVERNO`, `P5_ISOLATION_SUITE` | `evidence/p5/` |
-| P6 batch (CPU, ADR-0009) | `.agent/specs/SPEC-P6_*` (candidate 25/11) | `P6_L2_KIND_KEDA`, `P6_L3_WINDOW` (bản kế hoạch) | `evidence/p6/` (chưa có) |
+| P6 batch (CPU, ADR-0009) | `.agent/specs/SPEC-P6_*` (duyệt 25/11) | `P6_L2_KIND_KEDA`, `P6_L3_WINDOW` (bản kế hoạch) | `evidence/p6/` (chưa có) |
 
 **Bản nháp SPEC P7–P9 đã có sẵn, đừng viết mới từ đầu.** Claude Fable 5.2 phác thảo ngày 16/11 theo yêu cầu
 của owner, nằm trên nhánh `claude/specs-p5-p9-draft-ecc762` (chưa merge). SPEC-P6 đã được lấy từ nhánh này ngày 25/11

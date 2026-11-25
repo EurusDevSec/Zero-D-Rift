@@ -1,6 +1,6 @@
 ---
 project: Zero D-Rift
-status: P6_SPEC_CANDIDATE
+status: P6_SPEC_APPROVED
 active_phase: P6 (P5 technically done 25/11; inventory and Bills 26/11)
 active_task: P6-T1 contract (DRF-73); P5-T4.3 close-out (DRF-72) on 26/11
 active_feature: BatchTrainingJob on CPU (SPEC-P6, ADR-0009)
@@ -77,16 +77,15 @@ gross on 26/11, then Linear DRF-69/71/72 Done.
 P6 started 25/11 (owner: "mai là xong phase 6"). Owner rebaseline recorded as
 SPEC-P6 D13 and ROADMAP "Rebaseline 25/11": P6 25–26/11 (overflow 27/11), P7
 27–28/11, P8 29/11–01/12 (freeze), P9 02–07/12, P10 08–11/12, P11 12–14/12;
-Linear milestone targets match. SPEC-P6 candidate from the Fable draft, CPU per
-ADR-0009, one L3 window. Codex 25/11: review (9 findings) and re-review at
-`1c24bda` (5 more) and round 3 at `2662398` (4 more), all applied (SPEC §9.3,
-R4); round 4 at `fdedcac` APPROVE, two LOW items carried to T2.1/T2.2. PR #90
-awaits owner approval of D1–D14 and merge.
+Linear milestone targets match. SPEC-P6 (Fable draft, CPU per ADR-0009, one L3
+window): Codex four rounds, APPROVE at `fdedcac` (SPEC §9.3); owner approved
+D1–D14 on 25/11 ("duyệt"). PR #90 awaits merge.
 Linear: DRF-73 (T1), DRF-74 → 75/76 (T2), DRF-77 (T3), DRF-78 → 79/80/81 (T4);
 DRF-19/20 cancelled. Runbooks `docs/runbooks/P6_L2_KIND_KEDA.md` and
 `docs/runbooks/P6_L3_WINDOW.md` are plans until the code of T2/T3 exists.
-Next: owner approves D1–D14, then P6-T2.1 (worker and image) and P6-T3
-(Terraform) in parallel, then T2.2 (RGD, KEDA, kind lab).
+Next: merge PR #90; finish P6-T1 (pins and digests, prices, KEDA scaler IAM
+action, Karpenter policy, ADR-0009 wording); then P6-T2.1 (worker and image)
+and P6-T3 (Terraform) in parallel, then T2.2 (RGD, KEDA, kind lab).
 
 ## Context expansion
 

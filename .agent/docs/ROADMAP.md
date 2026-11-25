@@ -40,7 +40,7 @@ extra agent activity.
 | P3 | 03–05/11 | COMPLETE (14/11) | First control-plane vertical slice | GitOps, CRDs, reconciliation, Crossplane before kro | One CR produces a stable S3 + Deployment resource graph |
 | P4 | 06–08/11 | COMPLETE (24/11) | RAGSandbox end-to-end | IRSA, Secrets, RDS/pgvector, readiness | RAG application passes DB and AWS-access checks |
 | P5 | 09–10/11 | TECHNICALLY COMPLETE 25/11; inventory and Bills 26/11 | Tenant and policy guardrails | RBAC, quotas, NetworkPolicy, Pod Security, Kyverno | Negative security suite passes |
-| P6 | 11–14/11 → 25–26/11 | ACTIVE; SPEC candidate 25/11 | BatchTrainingJob and node lifecycle (CPU, ADR-0009) | SQS, KEDA, Karpenter, Spot, checkpointing | Batch runs and the Karpenter node is reclaimed (CPU, ADR-0009) |
+| P6 | 11–14/11 → 25–26/11 | ACTIVE; SPEC approved 25/11 | BatchTrainingJob and node lifecycle (CPU, ADR-0009) | SQS, KEDA, Karpenter, Spot, checkpointing | Batch runs and the Karpenter node is reclaimed (CPU, ADR-0009) |
 | P7 | 15–16/11 | PLANNED; detailed phase SPEC pending | Cost and utilization instrumentation | Prometheus, OpenCost, AWS billing and FinOps math | Dashboard and raw cost/utilization evidence exist |
 | P8 | 17–19/11 | PLANNED; detailed phase SPEC pending | Drift remediation and controlled data recovery | Reconciliation, RDS snapshot, RTO/RPO | Both independent scenarios pass; campaign preconditions and freeze record ready |
 | P9 | 20–25/11; billing 26–28/11 | PLANNED; detailed phase SPEC pending | Official trials and frozen dataset | Test harness, p50/p95, reproducibility | Run manifests, raw dataset and analysis script are locked after sufficient samples and billing evidence |
@@ -122,8 +122,8 @@ dates follow this table.
 
 ## Active detailed contract
 
-[P6 specification](../specs/SPEC-P6_BATCH_TRAINING_JOB.md) (candidate 25/11,
-from the Fable 5.2 draft, CPU per ADR-0009) governs current work. P5
+[P6 specification](../specs/SPEC-P6_BATCH_TRAINING_JOB.md) (owner-approved
+25/11, from the Fable 5.2 draft, CPU per ADR-0009) governs current work. P5
 ([SPEC-P5](../specs/SPEC-P5_TENANT_GUARDRAILS.md)) is technically done
 (audit `docs/evidence/p5/P5_ACCEPTANCE_AUDIT_20261125.md`). Fable drafts P7–P9
 stay on branch `claude/specs-p5-p9-draft-ecc762` until their phase gate.
