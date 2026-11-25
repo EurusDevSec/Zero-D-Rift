@@ -208,12 +208,21 @@ Scenario: Guardrails do not break the golden path
   When both RAGSandbox requests are deleted and created again
   Then both become Ready and the independent check passes
 
-Scenario: Admission failure is understood
-  Given the Kyverno admission controller scaled to zero
-  When a compliant Pod is created in a tenant namespace
-  Then the observed behaviour matches the configured failurePolicy
-  And platform namespaces are not affected
+# Split 25/11 (§10 F1-F2, delegated to Claude by the owner): one scenario per failure mode.
+Scenario: Admission fails closed when Kyverno cannot be reached
+  Given the Kyverno webhook configurations are registered with failurePolicy Fail
+  And the admission controller cannot be reached (crash or network loss)
+  When a Pod is created in a tenant namespace
+  Then it is rejected, compliant or not
+  And a Pod in a platform namespace is still admitted
   And the cluster can still be torn down
+
+Scenario: A graceful scale-down is an admin-only bypass
+  Given the Kyverno admission controller is scaled to zero
+  When a Pod that breaks a Kyverno policy is created in a tenant namespace
+  Then it is admitted, because Kyverno removed its own webhook configurations
+  And the bypass needs platform-admin rights on the kyverno namespace, which tenants do not have
+  And it is recorded as a limit of T15, not as fail closed
 
 Scenario: Teardown is complete
   When requests, guardrails, controllers and the bootstrap are removed in order
@@ -628,7 +637,7 @@ Created after the owner approves the SPEC, parents just before their sub-tasks
   its Pods are rejected. F6: the internal webhook `protect-generation-labels`
   is `Fail` in all namespaces but only matches objects with the label
   `generate.kyverno.io/policy-name`; P5 has no generate policy.
-  **Proposed, owner decides:** §4 "Admission failure is understood" splits into
+  **Decided 25/11 (owner delegated the choice to Claude; applied in §4):** §4 "Admission failure is understood" splits into
   "controller unreachable → tenant Pods rejected, platform Pods admitted" and
   "controller scaled to zero → webhooks removed, admission open; recorded as an
   admin-only bypass for T15".

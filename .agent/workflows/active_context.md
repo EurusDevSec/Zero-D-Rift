@@ -64,8 +64,8 @@ Follow [context governance](../references/context-governance.md).
    CLEAN 24/11 06:20Z (audit §6.2), Linear P4 issues Done 24/11. RDS 0.12 and
    Glue to inspect, not gating.
 6. Kyverno findings F1–F6 (SPEC-P5 §10): a graceful scale-down removes the
-   webhooks (admission open); only "unreachable" fails closed. The owner
-   decides the proposed split of §4 "Admission failure is understood".
+   webhooks (admission open); only "unreachable" fails closed. Decided 25/11
+   (owner delegated to Claude): §4 split into two scenarios, both met on EKS.
 3. Carried from P3 (not gates): re-ask teach-back Q3–Q5 at P11; endpoint check 7
    only type-checks `aws:ResourceAccount` (fix with R1).
 4. ADR-0005 still PROPOSED (owner review).
@@ -89,9 +89,12 @@ CLEAN (`docs/evidence/p5/P5-T4.2_L3_WINDOW_20261125.md`). Post-window fixes
 PR #85, #86, #87 merged (`010c49b`). Acceptance draft
 `docs/evidence/p5/P5_ACCEPTANCE_AUDIT_20261125.md`. Codex review of
 `ae20196..010c49b` on 25/11: REQUEST CHANGES, 5 findings fixed; third pass
-APPROVE on the uncommitted fixes (audit §5.4); no RGD change. Open for P5-T4.3: delayed inventory and Bills gross
-on 26/11, owner teach-back SPEC §7. The owner has not decided the SPEC §10
-split of "Admission failure is understood".
+APPROVE on the uncommitted fixes (audit §5.4); no RGD change. Teach-back SPEC §7 done 25/11: 7/7 plus a quota question
+(`docs/evidence/p5/P5-T4.3_TEACHBACK_20261125.md`); learning P5 `PRACTICED` +
+`EXPLAINED`. Open for P5-T4.3: delayed inventory and Bills gross on 26/11, then
+Linear DRF-69/71/72 Done. 25/11: SPEC-P5 §4 admission scenario split (Claude, by
+owner delegation); two partial scenarios accepted as limits, object-count quota
+moves to the P6 suite (audit §3.1).
 
 ## Context expansion
 
