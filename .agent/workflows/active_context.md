@@ -2,13 +2,13 @@
 project: Zero D-Rift
 status: P5_SPEC_OWNER_APPROVED
 active_phase: P5 (P4 closed 24/11)
-active_task: P5 L2 labs closed 24/11 (DRF-66, DRF-67); next Codex review of P5 code, then L3 window request (P5-T4.2)
+active_task: P5-T4.3 acceptance (DRF-72); L3 window P5-L3-20261125-01 done 25/11
 active_feature: Tenant guardrails (SPEC-P5)
 active_spec: .agent/specs/SPEC-P5_TENANT_GUARDRAILS.md
 current_learning: .agent/learning/CURRENT_STATUS.md
 mode: Coach
 authority: NO_INSTALL_NO_AWS_APPLY_UNTIL_TASK_GATES
-last_reviewed: 2026-11-24
+last_reviewed: 2026-11-25
 ---
 
 # Active Context
@@ -81,9 +81,17 @@ predictions; every step matched (`docs/evidence/p5/P5-T2.1_L2_KIND_BASELINE_2026
 `docs/evidence/p5/P5-T2.2_L2_KIND_KYVERNO_20261124.md`; T2.1 B API call and
 reference image via step 0b, `labs/p5-kind/api-call.sh`). Codex light review
 of PR #71 asked for step 2b of the Kyverno runbook; the owner ran it on 24/11
-and Enforce is closed. Next: Codex review of the P5 candidate, then the P5 L3 window (P5-T4.2) on
-its own approval.
-Overflow moves to 25/11 (D11).
+and Enforce is closed.
+
+25/11: L3 window `P5-L3-20261125-01` on EKS (DRF-71): suite 82/82 at
+`ded7014`, Kyverno outage D2, owner micro-lab, `65 destroyed`, inventory
+CLEAN (`docs/evidence/p5/P5-T4.2_L3_WINDOW_20261125.md`). Post-window fixes
+PR #85, #86, #87 merged (`010c49b`). Acceptance draft
+`docs/evidence/p5/P5_ACCEPTANCE_AUDIT_20261125.md`. Codex review of
+`ae20196..010c49b` on 25/11: REQUEST CHANGES, 5 findings fixed; third pass
+APPROVE on the uncommitted fixes (audit §5.4); no RGD change. Open for P5-T4.3: delayed inventory and Bills gross
+on 26/11, owner teach-back SPEC §7. The owner has not decided the SPEC §10
+split of "Admission failure is understood".
 
 ## Context expansion
 

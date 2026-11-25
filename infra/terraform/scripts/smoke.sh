@@ -26,9 +26,21 @@ ami_pin="$(sed -nE 's/^ *default *= *"(1[.]35[.][0-9]+-[0-9]{8})".*/\1/p' "$here
 # nodes; window P5-L3-20261125-01 F8). Only these two numbers are read from
 # run.tfvars. NODES=<n> overrides both, for a run.tfvars kept elsewhere.
 size() { # VARIABLE DEFAULT_IF_UNSET
-    local v=""
-    [[ -f "$here/run.tfvars" ]] && v="$(sed -nE "s/^[[:space:]]*$1[[:space:]]*=[[:space:]]*([0-9]+)[[:space:]]*(#.*)?\$/\1/p" "$here/run.tfvars" | tail -1)"
-    [[ -n "$v" ]] || v="$(awk -v n="$1" '$0 ~ "variable \"" n "\"" {f=1} f && /^ *default *=/ {print $3; exit}' "$here/variables.tf")"
+    local line="" v="" rc=0
+    if [[ -e "$here/run.tfvars" ]]; then
+        # grep: 0 found, 1 not set (use the default), 2+ unreadable (stop).
+        line="$(grep -E "^[[:space:]]*$1[[:space:]]*=" "$here/run.tfvars")" || rc=$?
+        if (( rc > 1 )); then echo "unreadable"; return; fi
+        line="$(tail -1 <<< "$line")"
+    fi
+    if [[ -n "$line" ]]; then
+        # Set in run.tfvars: it must be a plain number. Anything else (-1, "2",
+        # a variable) prints "invalid" so the guard below stops, never the default.
+        v="$(sed -nE "s/^[[:space:]]*$1[[:space:]]*=[[:space:]]*([0-9]+)[[:space:]]*(#.*)?\$/\1/p" <<< "$line")"
+        echo "${v:-invalid}"
+        return
+    fi
+    v="$(awk -v n="$1" '$0 ~ "variable \"" n "\"" {f=1} f && /^ *default *=/ {print $3; exit}' "$here/variables.tf")"
     echo "${v:-$2}"
 }
 want_desired="${NODES:-$(size system_node_desired_size 1)}"

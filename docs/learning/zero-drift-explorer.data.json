@@ -157,7 +157,7 @@
    "p": "P5",
    "st": "now",
    "t": "Governance: RBAC, quota, NetworkPolicy, Pod Security, Kyverno",
-   "d": "Code đã merge (PR 66, 70). Owner làm hai lab trên kind 24/11, kể cả bước 2b; còn: Codex review, window L3 trên EKS, acceptance, teach-back.",
+   "d": "Code đã merge. Owner làm hai lab kind 24/11. Window L3 trên EKS 25/11: suite 82/82, Kyverno sập, micro-lab 6 lớp do owner gõ, teardown CLEAN. Còn: Codex review, inventory trễ và Bills (26/11), teach-back §7.",
    "exit": "Negative security/isolation suite pass; không tuyên bố hard tenancy.",
    "k": "RBAC, Pod Security, Kyverno, ResourceQuota/LimitRange, NetworkPolicy, test âm, fail closed"
   },
@@ -759,7 +759,7 @@
    ],
    "vv": "Số tổng đài cố định",
    "what": "Địa chỉ ổn định rag-docs-qa.tenant-a.svc:8080 trỏ tới Pod app (Pod đổi IP liên tục).",
-   "lab": "q tenant-a /readyz gọi qua Service này.",
+   "lab": "q tenant-a /readyz gọi qua Service này. P5 (25/11): selector có thêm nhãn tenant, vì VPC CNI chỉ thêm ClusterIP vào luật egress khi selector của Service chứa nhãn của podSelector (PR #80).",
    "cmd": "kubectl -n tenant-a get svc",
    "emoji": "🌐",
    "icon": "k8s-svc.svg"
@@ -778,7 +778,7 @@
    ],
    "vv": "Bức tường giữa hai phòng",
    "what": "Chặn mặc định mọi vào/ra của Pod tenant (default-deny), rồi chỉ mở: DNS tới CoreDNS; Postgres 5432 tới hai subnet DB; 443 ra ngoài VPC (trừ dải VPC và metadata 169.254); 8080 giữa các Pod cùng tenant. Luật chọn Pod theo nhãn tenant, nhãn mà Kyverno giữ cho đúng. VPC CNI trên EKS thực thi (standard mode).",
-   "lab": "Đã viết (gitops/platform/tenants/networkpolicy.yaml, check.sh rule 18). Chưa chạy trên EKS: window L3 P5.",
+   "lab": "EKS 25/11 (window P5-L3-20261125-01): lượt control không có policy thì 4 đường đều mở; có policy thì a→b, b→a, metadata bị chặn (timeout), app gọi chính nó vẫn được. Owner tự gõ micro-lab a→b: RESULT TIMEOUT.",
    "cmd": "kubectl get networkpolicy -A",
    "emoji": "🧱",
    "icon": "k8s-netpol.svg",
@@ -1021,7 +1021,7 @@
    "vv": "Bảo vệ riêng ở cửa từng căn hộ tenant",
    "what": "Admission webhook với 3 luật (ValidatingPolicy, viết bằng CEL), chỉ cho namespace có nhãn rag.zero-drift.io/tenant: (1) container phải khai requests và memory limit; (2) image từ ghcr.io/eurusdevsec/zero-d-rift/ và pin @sha256; (3) nhãn tenant của Pod bằng tên namespace. Bắt đầu ở Audit (chỉ ghi), chuyển Deny bằng PR khi báo cáo sạch.",
    "notdo": "Không lặp lại luật của Pod Security (D6). Không canh namespace nền tảng (zdr-platform, kube-system). Không xét Deployment (autogen tắt), chỉ xét Pod.",
-   "lab": "Runbook P5_L2_KIND_KYVERNO: owner chạy trọn trên kind 24/11 (P5-T2.2 B), kể cả bước 2b tách ba case chặn.",
+   "lab": "Runbook P5_L2_KIND_KYVERNO: owner chạy trọn trên kind 24/11 (P5-T2.2 B), kể cả bước 2b tách ba case chặn. EKS 25/11: 3 policy ở Deny; scale về 0 → fail open; Service hỏng + 150 s không request → fail closed ở tenant; xoá app qua Argo vẫn sót 8 webhook (G2).",
    "cmd": "kubectl get validatingpolicies; kubectl get policyreport -A"
   },
   {
@@ -1073,7 +1073,7 @@
    "vv": "Đội thử cửa: mỗi người thử một cửa và ghi lại lớp nào chặn mình",
    "what": "tests/isolation/run.sh: 31 case cho các threat T03–T15, ghi acceptance.json (case, threat, lớp mong đợi, kết quả thật, giờ UTC). Bị chặn đúng nhưng sai lớp cũng là FAIL. Mode kind: case cần AWS ghi SKIPPED_NEEDS_EKS; mode eks: không case nào được skip.",
    "notdo": "Chạy trên kind thì không chứng minh gì về EKS. Không tạo tài nguyên AWS.",
-   "lab": "Claude chạy trên kind 24/11: 24 PASS, 0 FAIL, 7 SKIPPED_NEEDS_EKS; hạ một policy về Audit thì exit 1.",
+   "lab": "Kind 24/11: 24 PASS, 7 SKIPPED_NEEDS_EKS. EKS 25/11: lượt 1 73/82 FAIL (MFA làm mới giữa chừng, CRLF của Python Windows), lượt 2 82/82 PASS ở main ded7014, cleanup verified-empty.",
    "cmd": "MODE=kind CTX=kind-zdr-p5-iso bash tests/isolation/run.sh",
    "ls": "Test suite"
   }
@@ -2414,14 +2414,14 @@
     },
     {
      "t": "P5: governance",
-     "proof": "plan",
-     "d": "RBAC, ResourceQuota/LimitRange, Pod Security, Kyverno, NetworkPolicy; bộ <b>test âm</b> ghi lớp nào chặn. Code đã merge và chạy thử trên kind; window EKS <b>kế hoạch</b>. Không tuyên bố hard tenancy.",
+     "proof": "aws",
+     "d": "RBAC, ResourceQuota/LimitRange, Pod Security, Kyverno, NetworkPolicy; bộ <b>test âm</b> ghi lớp nào chặn. <b>Đã chạy</b> trên EKS (window 25/11, suite 82/82); nghiệm thu còn chờ review, inventory trễ, teach-back. Chỉ là cô lập mềm, không tuyên bố hard tenancy.",
      "set": {
-      "netpol": "plan",
-      "kyv": "plan",
-      "role": "plan",
-      "quota": "plan",
-      "suite": "plan"
+      "netpol": "ok",
+      "kyv": "ok",
+      "role": "ok",
+      "quota": "ok",
+      "suite": "ok"
      },
      "on": [
       "adm",
@@ -2431,10 +2431,15 @@
      ],
      "ev": [
       [
-       "SPEC-P5",
-       "../../.agent/specs/SPEC-P5_TENANT_GUARDRAILS.md"
+       "Window L3 P5 (25/11)",
+       "../evidence/p5/P5-T4.2_L3_WINDOW_20261125.md"
+      ],
+      [
+       "Audit nghiệm thu P5 (nháp)",
+       "../evidence/p5/P5_ACCEPTANCE_AUDIT_20261125.md"
       ]
-     ]
+     ],
+     "e": []
     },
     {
      "t": "P6: batch + autoscaling",
@@ -2703,6 +2708,10 @@
     [
      "SPEC-P5 §10 (F1–F3)",
      "../../.agent/specs/SPEC-P5_TENANT_GUARDRAILS.md"
+    ],
+    [
+     "Window L3 P5 (25/11)",
+     "../evidence/p5/P5-T4.2_L3_WINDOW_20261125.md"
     ]
    ],
    "init": {
@@ -2748,7 +2757,7 @@
      "set": {
       "kyv": "ghost"
      },
-     "d": "Admin scale admission controller về 0. Kyverno <b>tự gỡ webhook của mình</b> trước khi tắt, nên cả Pod hợp lệ lẫn Pod sai đều được tạo: cửa mở (F1). Việc này cần quyền admin nền tảng trên namespace kyverno; tenant chỉ có quyền đọc."
+     "d": "Admin scale admission controller về 0. Kyverno <b>tự gỡ webhook của mình</b> trước khi tắt, nên cả Pod hợp lệ lẫn Pod sai đều được tạo: cửa mở (F1). Việc này cần quyền admin nền tảng trên namespace kyverno; tenant chỉ có quyền đọc. <b>EKS 25/11:</b> giống kind, 0 webhook, Pod tag busybox được tạo."
     },
     {
      "t": "Bật lại",
@@ -2785,7 +2794,7 @@
        "connection refused"
       ]
      ],
-     "d": "Controller vẫn chạy nhưng Service trỏ vào hư không (giống crash hay đứt mạng). Webhook còn, failurePolicy Fail: Pod hợp lệ ở tenant-a <b>bị từ chối</b> (fail closed, D8). Pod ở kube-system vẫn tạo được (F2)."
+     "d": "Controller vẫn chạy nhưng Service trỏ vào hư không (giống crash hay đứt mạng). Webhook còn, failurePolicy Fail: Pod hợp lệ ở tenant-a <b>bị từ chối</b> (fail closed, D8). Pod ở kube-system vẫn tạo được (F2). <b>EKS 25/11:</b> thử sau 13 s Kyverno vẫn trả lời; chờ 150 s không request thì Pod tenant bị <code>InternalError</code>, kube-system vẫn tạo được. Claude đoán API server dùng lại kết nối cũ (chưa kiểm chứng)."
     },
     {
      "t": "Gỡ đúng thứ tự",
@@ -2795,22 +2804,26 @@
      "set": {
       "kyv": "ghost"
      },
-     "d": "Xoá policy → scale về 0 → xoá Kyverno → kiểm không còn webhook. Xoá thẳng mà không scale: còn sót <b>8 webhook configuration</b> không còn chủ (F3). Đó là điều kiện dừng của window L3."
+     "d": "Xoá policy → scale về 0 → xoá Kyverno → kiểm không còn webhook. Xoá thẳng mà không scale: còn sót <b>8 webhook configuration</b> không còn chủ (F3). Đó là điều kiện dừng của window L3. <b>EKS 25/11:</b> xoá app Kyverno qua Argo (cascade) vẫn sót 8 webhook do Kyverno tự tạo; xoá theo nhãn <code>webhook.kyverno.io/managed-by=kyverno</code> rồi mới destroy."
     }
    ]
   },
   {
-   "name": "⑩ Mạng tenant trên EKS (kế hoạch)",
+   "name": "⑩ Mạng tenant trên EKS (window 25/11)",
    "mode": "aws",
-   "proof": "plan",
+   "proof": "aws",
    "ev": [
+    [
+     "Window L3 P5 (25/11)",
+     "../evidence/p5/P5-T4.2_L3_WINDOW_20261125.md"
+    ],
+    [
+     "Runbook window L3 P5",
+     "../runbooks/P5_L3_WINDOW.md"
+    ],
     [
      "NetworkPolicy",
      "../../gitops/platform/tenants/networkpolicy.yaml"
-    ],
-    [
-     "SPEC-P5 P5-T3, T4.2",
-     "../../.agent/specs/SPEC-P5_TENANT_GUARDRAILS.md"
     ]
    ],
    "init": {
@@ -2829,11 +2842,12 @@
     "rds": "ok",
     "s3": "ok",
     "sm": "ok",
-    "netpol": "ghost"
+    "netpol": "ok"
    },
    "learn": [
     "NetworkPolicy chặn theo cái gì",
-    "Vì sao kind không chứng minh được phần này"
+    "Vì sao kind không chứng minh được phần này",
+    "Vì sao Service phải mang nhãn tenant trên VPC CNI"
    ],
    "steps": [
     {
@@ -2846,11 +2860,11 @@
       [
        "tf",
        "vpc",
-       "plan",
+       "ok",
        "enableNetworkPolicy"
       ]
      ],
-     "d": "Terraform đặt <code>configuration_values</code> cho add-on vpc-cni: enableNetworkPolicy \"true\", standard mode, ngay lúc tạo cluster (bật sau thì aws-node restart). <code>plan_assert.sh</code> check 18 chặn plan thiếu nó. Code và test static đã có."
+     "d": "Terraform đặt <code>configuration_values</code> cho add-on vpc-cni: enableNetworkPolicy \"true\", standard mode, ngay lúc tạo cluster (bật sau thì aws-node restart). <code>plan_assert.sh</code> check 18 chặn plan thiếu nó. Code và test static đã có. EKS 25/11: node agent <code>aws-eks-nodeagent</code> chạy với <code>--enable-network-policy=true</code>, mode standard."
     },
     {
      "t": "Khoá hết",
@@ -2858,9 +2872,9 @@
       "netpol"
      ],
      "set": {
-      "netpol": "plan"
+      "netpol": "ok"
      },
-     "d": "<code>default-deny</code> cho cả vào lẫn ra trong mỗi namespace tenant. Từ đây Pod tenant không nói chuyện được với ai."
+     "d": "<code>default-deny</code> cho cả vào lẫn ra trong mỗi namespace tenant. Từ đây Pod tenant không nói chuyện được với ai. Lượt control trước đó (xoá hết policy): a→b, b→a, metadata đều mở, để chứng minh lớp chặn là NetworkPolicy."
     },
     {
      "t": "Mở đúng đường cần",
@@ -2873,25 +2887,25 @@
       [
        "app",
        "rds",
-       "plan",
+       "ok",
        "5432",
        "data"
       ],
       [
        "app",
        "s3",
-       "plan",
+       "ok",
        "443",
        "data"
       ],
       [
        "app",
        "svc",
-       "plan",
+       "ok",
        "8080"
       ]
      ],
-     "d": "Mở DNS, 5432 tới subnet DB, 443 ra ngoài VPC (trừ dải VPC và 169.254), 8080 giữa Pod cùng tenant."
+     "d": "Mở DNS, 5432 tới subnet DB, 443 ra ngoài VPC (trừ dải VPC và 169.254), 8080 giữa Pod cùng tenant. Lỗi gặp trong window: app gọi chính nó qua Service bị timeout. VPC CNI xét egress trước khi đổi IP Service sang IP Pod, và chỉ thêm ClusterIP vào luật khi selector Service chứa nhãn tenant. PR #80 thêm nhãn; sau đó probe PASS."
     },
     {
      "t": "tenant-a → tenant-b: bị chặn",
@@ -2903,11 +2917,11 @@
       [
        "app",
        "svcb",
-       "plan",
+       "ok",
        "8080"
       ]
      ],
-     "d": "Suite T10 dùng Pod Python thật, chờ 20 s trước khi thử (standard mode để Pod mới thông suốt một lúc cho tới khi luật được nạp). Kỳ vọng: tenant-a gọi app của mình được, gọi tenant-b thì không."
+     "d": "Suite T10 dùng Job Python thật, chờ trước khi thử (standard mode để Pod mới thông suốt một lúc). EKS 25/11: tenant-a gọi app của mình được; a→b và b→a <b>timeout</b>. Owner tự gõ micro-lab: <code>RESULT TIMEOUT</code>."
     },
     {
      "t": "Pod → metadata 169.254.169.254",
@@ -2919,11 +2933,11 @@
       [
        "app",
        "vpc",
-       "plan",
+       "ok",
        "IMDS"
       ]
      ],
-     "d": "Suite T06: Pod tenant không được lấy credential của node qua instance metadata."
+     "d": "Suite T06: Pod tenant gọi 169.254.169.254 bị <b>timeout</b> (control: mở). Probe P4 IMDS ×2 PASS."
     },
     {
      "t": "SA sai tên dùng role tenant",
@@ -2935,11 +2949,11 @@
       [
        "sa",
        "iam",
-       "plan",
+       "ok",
        "AssumeRoleWithWebIdentity"
       ]
      ],
-     "d": "Suite T07: ServiceAccount <code>zdr-iso-other</code> (ngoài mẫu <code>rag-*</code>) mang annotation role của tenant-a; STS phải trả <b>AccessDenied</b>. Cùng window: probe P4 (secret, schema, bucket của tenant kia) chạy lại trong suite."
+     "d": "Suite T07: ServiceAccount <code>zdr-iso-other</code> (ngoài mẫu <code>rag-*</code>) mang annotation role của tenant-a; STS trả <b>AccessDenied</b> trên EKS 25/11. Probe P4 cross ×2 (secret, schema, bucket của tenant kia) PASS."
     }
    ]
   }

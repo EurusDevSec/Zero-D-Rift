@@ -37,13 +37,17 @@ helm template kyverno "$LAB/chart/kyverno-3.10.0.tgz" -n kyverno -f "$LAB/values
 $K create namespace kyverno
 $K apply -n kyverno --server-side -f "$LAB/kyverno.yaml" > /dev/null
 $K -n kyverno wait --for=condition=Available deploy --all --timeout=300s
+# Bước 1 cần policy ở Audit, nhưng main ở Deny từ PR #76 (25/11). Lấy policy từ 5b56624,
+# bản Audit cuối trên main (chỉ khác dòng validationActions).
+mkdir -p "$LAB/audit" && git archive 5b56624 gitops/platform/policies | tar -x -C "$LAB/audit"
+grep -h validationActions "$LAB/audit/gitops/platform/policies/"*.yaml
 # "Available" chưa chắc webhook đã nhận kết nối: thử lại tới khi Kyverno nhận policy
-until $K apply -f gitops/platform/policies/; do sleep 5; done
+until $K apply -f "$LAB/audit/gitops/platform/policies/"; do sleep 5; done
 POD=labs/p5-kind/pod.sh
 export IMAGE=ghcr.io/eurusdevsec/zero-d-rift/rag-sandbox@sha256:850c77c200a798b5706ce56c7878164d4887fcf3661bbec91b2d8564df735263
 ```
 
-**Phải thấy:** `55961392…: OK`; ba Deployment `condition met` (admission, background, reports; không có cleanup);
+**Phải thấy:** `55961392…: OK`; ba dòng `validationActions: [Audit]`; ba Deployment `condition met` (admission, background, reports; không có cleanup);
 ba `validatingpolicy … created`. Có thể thấy trước đó một lần `failed calling webhook "validate-policy.kyverno.svc" …
 connection refused`: Deployment đã `Available` nhưng webhook chưa nhận kết nối (Claude gặp 24/11); vòng `until` tự thử lại.
 
@@ -201,7 +205,7 @@ $K delete -f gitops/platform/policies/
 $K -n kyverno scale deploy kyverno-admission-controller --replicas=0
 sleep 40
 $K delete -n kyverno -f "$LAB/kyverno.yaml" --wait=true > /dev/null
-$K get validatingwebhookconfigurations,mutatingwebhookconfigurations -o name | grep kyverno || echo "không còn webhook kyverno"
+if w="$($K get validatingwebhookconfigurations,mutatingwebhookconfigurations -o name)"; then grep kyverno <<< "$w" || echo "không còn webhook kyverno"; else echo "LỖI: không đọc được webhook"; fi
 ```
 
 **Dự đoán trước:** nếu bỏ dòng `scale … --replicas=0` thì sao?
