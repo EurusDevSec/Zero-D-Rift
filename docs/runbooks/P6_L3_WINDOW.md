@@ -105,7 +105,7 @@ Trước một bước dài (một run khoảng 8 phút, `terraform destroy` kho
    `batch-config` trong `zdr-platform` từ output Terraform. Cả hai chứa account ID nên không nằm trong Git; không in giá trị ra chat.
    Kiểm (chỉ in tên key):
    ```bash
-   kubectl -n zdr-platform get cm batch-config -o go-template='{{range $k, $v := .data}}{{$k}} {{end}}'; echo
+   kubectl -n zdr-platform get cm batch-config -o go-template='{{range $k, $v := .data}}{{$k}} {{end}}' && echo
    ```
    **Phải thấy:** `queueUrl region`. Thiếu ConfigMap này thì graph đứng ở `waiting for external reference "platformConfig"`
    và không tạo ScaledJob hay Job submit nào: đó là cổng, không phải lỗi.
@@ -165,7 +165,7 @@ hỏng hoặc thiếu hẳn. B01 chạy ở C6, sau khi scaler đã tạo đư�
    ```bash
    cnt(){ local o; o=$("$@") || { echo READ_FAILED; return; }; printf '%s' "$o" | grep -c .; }
    echo "scaledjob_a: $(cnt kubectl -n tenant-a get scaledjob -o name)"
-   echo "jobs_a: $(cnt kubectl -n tenant-a get jobs -l app.kubernetes.io/name=batch-train -o name)"
+   echo "jobs_a: $(cnt kubectl -n tenant-a get jobs -l scaledjob.keda.sh/name -o name)"
    echo "spot_limit: $(kubectl get nodepool batch-spot -o jsonpath='{.spec.limits.cpu}' || echo READ_FAILED)"
    echo "nodeclaims: $(cnt kubectl get nodeclaims -o name)"
    bash gitops/tests/batch-suite.sh stats

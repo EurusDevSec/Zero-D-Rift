@@ -1,7 +1,7 @@
 ---
 id: SPEC-P6
 title: BatchTrainingJob — SQS, KEDA ScaledJob, Karpenter CPU NodePool, checkpoint and node reclamation
-status: CANDIDATE_20261125_R3 (two Codex reviews 25/11, both REQUEST CHANGES, findings applied; awaiting Codex re-review and owner approval)
+status: CANDIDATE_20261125_R4 (three Codex rounds 25/11, all REQUEST CHANGES, findings applied; awaiting Codex round 4 and owner approval)
 phase: P6
 start: 2026-11-25 (owner rebaseline, D13)
 deadline: 2026-11-26 target (owner, D13); a step that does not fit moves to 27/11, it is never cut
@@ -249,14 +249,18 @@ Gate: no Terraform, manifest or image change merges before D1–D14 are approved
       and the artifact of that attempt. A new attempt never reads or counts
       another attempt's objects.
 - [ ] `submit`, in this order:
-      1. `HeadObject` on `runs/<requestId>/<runAttempt>/submitted`. `200` →
-         exits 0 without sending. `404` → continues. Any other result (`403`,
-         timeout) → `READ_FAILED`, exits non-zero, sends nothing. The submit
-         role has `s3:ListBucket` on batch buckets, so a missing key reads as
-         `404`, not `403` (S3 HeadObject behaviour).
+      1. `ListObjectsV2` with `Prefix=runs/<requestId>/<runAttempt>/submitted`.
+         A successful call that returns exactly that key → exits 0 without
+         sending. A successful call without that key → continues. A failed
+         call (`403`, timeout) → `READ_FAILED`, exits non-zero, sends nothing.
+         The submit role may list only that prefix (P6-T3), so it never sees
+         the names of tenant objects.
       2. Writes `submit-started` (time) under the attempt prefix **before**
-         sending. This is the freshness mark B04 compares against; the worker
-         may start before step 4 finishes.
+         sending, with a conditional write (`If-None-Match: *`). If it already
+         exists (`412 PreconditionFailed`) the first value is kept and submit
+         continues. A retry never moves the mark, so checkpoints a worker wrote
+         after the first send still count. This is the freshness mark B04
+         compares against; the worker may start before step 4 finishes.
       3. Sends one message `{requestId, tenant, runAttempt, steps}`.
       4. Writes `submitted`.
       A crash between 3 and 4 can send a duplicate with the same key; `train`
@@ -325,7 +329,11 @@ Gate: no Terraform, manifest or image change merges before D1–D14 are approved
       `successfulJobsHistoryLimit: 1`, `failedJobsHistoryLimit: 1`; Job template
       with `activeDeadlineSeconds: 2700`, `backoffLimit: 0`, toleration and node
       selector for the batch pool, `restricted` security context, requests and
-      limits per D9, tenant label, digest-pinned image.
+      limits per D9, tenant label, digest-pinned image. The **Pod** template
+      carries `app.kubernetes.io/name: batch-train`; Pod selectors use it.
+      KEDA sets the **Job** labels itself (`app.kubernetes.io/name` = the
+      ScaledJob name, plus `scaledjob.keda.sh/name`), so every Job count in the
+      suite, the lab helper and the runbooks selects on `scaledjob.keda.sh/name`.
 - [ ] `ClusterTriggerAuthentication` `zdr-sqs` (platform-owned, not per request)
       using the KEDA operator's IRSA identity.
 - [ ] kro RBAC: ClusterRole for `ScaledJob` and `Job`; AppProject `zdr-requests`
@@ -368,9 +376,10 @@ published kind provider (S5), so Karpenter is L3 only.
       timeout and `maxReceiveCount` per D8, SSE-SQS, project tags.
 - [ ] IRSA roles (exact `sub` and `aud`): KEDA operator (`sqs:GetQueueAttributes`
       on the one queue); `zero-drift-batch-submit` in `zdr-platform` (send to the
-      queue; `s3:GetObject` and `s3:PutObject` only on
-      `zero-drift-batch-*/runs/*/submitted` and `.../submit-started`;
-      `s3:ListBucket` on `zero-drift-batch-*` so a missing marker reads as `404`);
+      queue; `s3:PutObject` only on `zero-drift-batch-*/runs/*/submitted` and
+      `.../submit-started`; `s3:ListBucket` on `zero-drift-batch-*` only with
+      condition `StringLike s3:prefix = runs/*/submitted`, so it can check a
+      marker but cannot list tenant object names; no `s3:GetObject`);
       `zero-drift-batch-tenant-a` and `-tenant-b`, trusted only by
       `system:serviceaccount:<tenant>:batch-train` (receive, delete, change
       visibility on the queue; list, get, put, delete on that tenant's
@@ -396,8 +405,9 @@ published kind provider (S5), so Karpenter is L3 only.
 
 - [ ] `plan_assert.sh` behind `P6_WINDOW=1`, with guard tests on synthetic
       plans: no wildcard resource on IAM, no IAM write for Karpenter, tenant-a
-      role cannot name a tenant-b bucket, queue not public, `enable_batch_platform`
-      off by default.
+      role cannot name a tenant-b bucket, submit role's `s3:ListBucket` carries
+      the `s3:prefix` condition and it has no `s3:GetObject`, queue not public,
+      `enable_batch_platform` off by default.
 - [ ] `batch_iam_check.sh`: simulation matrix for the new roles (allowed and denied).
 - [ ] `inventory.sh` counts Karpenter-tagged instances, launch templates, Spot
       requests, P6 queues, roles and instance profiles. Counts only.
@@ -578,7 +588,17 @@ applied them on 25/11 (R3):
 | R4 | `AccessDenied` can come from a wrong role; SA token mount | `serviceAccountName`, `automountServiceAccountToken: false`; `caller_role_match` in `probe` and B12 |
 | R5 | Purge is asynchronous | 60 s wait after the last purge, P6-T4.2; L3 runbook B |
 
-Second Codex re-review: not yet done.
+Codex round 3 at `2662398`: **REQUEST CHANGES**. R2, R4, R5 and old 7 closed;
+R1, R3 and old 5 partly. Applied 25/11 (R4 of this SPEC):
+
+| # | Finding | Applied in |
+|---|---|---|
+| C1 | E2 counted Jobs by a label KEDA does not set to `batch-train` | Job counts on `scaledjob.keda.sh/name` (P6-T2.2; L3 E2; L2 step 5) |
+| C2 | A submit retry overwrote `submit-started` | conditional write, first value kept (P6-T2.1) |
+| C3 | Submit role could list every object name | `ListObjectsV2` limited by `s3:prefix`, no `GetObject` (P6-T2.1, P6-T3) |
+| C4 | `; echo` hid a failed read | `&& echo` (L3 runbook B) |
+
+Codex round 4: not yet done.
 
 ## 9.4. Linear tracking
 

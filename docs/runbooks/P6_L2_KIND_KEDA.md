@@ -135,7 +135,8 @@ Dự đoán trước: khi train xong, `stats` còn gì, và KEDA còn tạo Job 
 
 ```bash
 # Chờ đúng Job thay thế (Job mới nhất). Chờ theo label sẽ chờ cả Job cũ đã Failed tới hết timeout.
-J=$($K -n tenant-a get jobs -l app.kubernetes.io/name=batch-train --sort-by=.metadata.creationTimestamp -o name | tail -1)
+# Job do KEDA gắn nhãn scaledjob.keda.sh/name; nhãn app.kubernetes.io/name=batch-train chỉ nằm trên Pod
+J=$($K -n tenant-a get jobs -l scaledjob.keda.sh/name=batch-lab --sort-by=.metadata.creationTimestamp -o name | tail -1)
 echo "$J"
 $K -n tenant-a wait --for=condition=complete "$J" --timeout=600s
 $B marks lab-1; $B stats; sleep 30; $B jobs
