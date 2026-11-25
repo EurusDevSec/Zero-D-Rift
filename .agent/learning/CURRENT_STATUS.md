@@ -1,8 +1,8 @@
 ---
-as_of: 2026-11-24
+as_of: 2026-11-25
 active_phase: P5
-active_task: P5 owner L2 labs done (DRF-66, DRF-67)
-task_status: P5_L2_LABS_PRACTICED
+active_task: P5-T4.3 teach-back done (DRF-72)
+task_status: P5_TEACHBACK_EXPLAINED
 history: .agent/learning/LEARNING_LOG.md
 ---
 
@@ -21,9 +21,15 @@ in `LEARNING_LOG.md`; this file must not invent mastery from generated artifacts
 | Terraform applied use | `PRACTICED` + `EXPLAINED` (05/11/2026) | Local `terraform_data` lab with predictions (dependency order, NOOP/exit code, update vs replace); one L3 EKS create/verify/destroy window; own-words answers to SPEC-P2 §7 (state sensitivity, no-NAT trade-off, failure localization, NOOP limits, teardown inventory). Gaps: losing state and plaintext secrets in state; ECR API still needs Internet without interface endpoints |
 | Argo CD, kro, Crossplane | `PRACTICED` + `EXPLAINED` (14/11/2026), with a provenance limit | Kind lab parts 0–7 run by the owner. SPEC-P3 §7: Git → Argo (tracking-id) → kro renders the RGD into the MR → provider via IRSA; Argo green means only cluster = Git; selfHeal vs prune through Git and `managementPolicies: "*"`; DRC → SA → EKS webhook → STS and trust/permission layers; provider removed before MRs leaves finalizers and orphans; Terraform owns the role, Crossplane the bucket. Limit: Q3–Q6 were a pasted block close to Claude's wording; re-ask Q3–Q5 orally at P11 |
 | P4 RAGSandbox: IRSA workload, secret flow, PostgreSQL credential tiers | `PRACTICED` + `EXPLAINED` (22/11/2026) | kind graph lab and two EKS micro-labs; the owner kept the `sts` line. Typed answers, no hints: the bucket waits for bootstrap through a graph reference; retry is `bootstrapAttempt` in Git; `db-init` is idempotent. Two transfer cases (a leaked sandbox password, a Secret committed to GitOps) were derived correctly. Gaps: RDS ingress is the node SG only; Secrets Manager force delete; `ALTER ROLE` keeps open sessions; no branch protection; `propagationPolicy` unverified |
-| P5 tenant guardrails: RBAC, Pod Security, quota/LimitRange, AppProject, Kyverno | `PRACTICED` on kind (24/11/2026), not yet `EXPLAINED` | Owner ran both L2 labs end to end, without predictions, reading each output with Claude. Own words so far: `big` is refused per container; `noreq` passes because LimitRange fills resources before Kyverno. Not yet in own words: how quota differs from LimitRange (namespace total), when `zdr-require-resources` matters, fail open vs fail closed. NetworkPolicy and IRSA not practiced (EKS only). SPEC-P5 §7 teach-back not started |
+| P5 tenant guardrails: RBAC, Pod Security, NetworkPolicy, quota/LimitRange, AppProject, Kyverno | `PRACTICED` + `EXPLAINED` (25/11/2026) | Kind labs 24/11 and EKS micro-lab 25/11 typed by the owner, no predictions. SPEC-P5 §7 teach-back 7/7 plus a quota question, typed answers with a hint line per question: Pod Security owns `hostNetwork` and Kyverno has no rule for it; NetworkPolicy not programmed (PolicyEndpoint) versus written wrong; 443 stays open because NetworkPolicy knows only IP and port, IAM decides what a reached API allows; impersonation tests authorization, not login (D1); Kyverno scale-to-zero fails open, unreachable fails closed, platform namespaces outside the selector, orphan webhooks (G2); any Pod in a namespace can use any SA there, so platform SAs stay in `zdr-platform`; shared RDS, nodes and platform keep isolation soft; LimitRange per container versus quota per namespace. Gaps: a→b also needs tenant-a egress checked; the 443 rule also excludes the VPC range; when `zdr-require-resources` matters not yet in own words |
 
-## Current P4 learning gate
+## Current P5 learning gate
+
+As of 25/11/2026, SPEC-P5 §8 learning is met: RBAC, Pod Security, NetworkPolicy, quota and Kyverno
+are `PRACTICED` + `EXPLAINED`. Evidence: `docs/evidence/p5/P5-T4.3_TEACHBACK_20261125.md` and the
+2026-11-25 entry in `LEARNING_LOG.md`. Limit: no predictions before the labs (owner's choice).
+
+## P4 learning gate (closed)
 
 As of 22/11/2026, SPEC-P4 §8 learning is met: IRSA, the secret flow and the PostgreSQL
 credential tiers are `PRACTICED` + `EXPLAINED`. The last two now rest on transfer cases, not on recall.

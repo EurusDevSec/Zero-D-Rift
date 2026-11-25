@@ -1,8 +1,8 @@
 # DRF-72 (P5-T4.3): bản audit nghiệm thu P5 (bản nháp 25/11/2026)
 
-> **TL;DR** · Window `P5-L3-20261125-01`, suite **82/82** ở `ded7014`; 6/9 kịch bản §4 đạt trên EKS, 2 một phần, 1 lệch SPEC hiện tại ·
+> **TL;DR** · Window `P5-L3-20261125-01`, suite **82/82** ở `ded7014`; 8/10 kịch bản §4 đạt trên EKS, 2 một phần (chấp nhận là giới hạn) ·
 > Đã xong: suite, Kyverno sập, micro-lab, teardown `CLEAN`, 3 PR sửa sau window (#85, #86, #87), Codex review (REQUEST CHANGES → 5 finding sửa → **APPROVE**) ·
-> **Chưa xong (P5 chưa hoàn thành theo §8):** inventory trễ và Bills gross (26/11), teach-back §7, owner quyết kịch bản admission ·
+> **Chưa xong (P5 chưa hoàn thành theo §8):** inventory trễ và Bills gross (26/11) · Teach-back §7: **đạt** (25/11) · Kịch bản admission: đã tách (25/11) ·
 > Mục lục: 1 Quy tắc §8 · 2 Run và phiên bản · 3 Kịch bản §4 · 4 Cô lập mềm và giới hạn · 5 Review độc lập ·
 > 6 Inventory trễ và billing · 7 Teach-back · 8 Việc sau window
 
@@ -16,13 +16,13 @@
 
 | Điều kiện §8 | Trạng thái | Bằng chứng |
 |---|---|---|
-| Mọi kịch bản §4 có bằng chứng L3 trên EKS | **chưa trọn**: 2 kịch bản một phần, 1 kịch bản lệch SPEC hiện tại (mục 3) | window §11 |
+| Mọi kịch bản §4 có bằng chứng L3 trên EKS | đạt với giới hạn: 8/10 đạt; 2 một phần được chấp nhận là giới hạn (mục 3.1) | window §11 |
 | Hai sandbox RAG PASS với mọi guardrail ở `Enforce` | đạt | window §4 C4: tạo lại dưới `Deny`, Ready, `probe sandbox` ×2 PASS |
 | Suite PASS từ checkout sạch ở revision đã ghi | đạt một phần | lượt 2 PASS trên `main` `ded7014`. `acceptance.json` không ghi revision hay trạng thái `git status`; revision lấy từ dòng thời gian của window |
 | Teardown và inventory trễ sạch | teardown đạt; **inventory trễ chờ 26/11** | window §8; mục 6 |
 | Billing đã đọc | **chờ owner 26/11** | mục 6 |
 | Review độc lập ghi finding và giới hạn | Codex REQUEST CHANGES 25/11; kiểm lại 4/5 đóng; kiểm lần ba **APPROVE**, cả 5 finding đóng | mục 5 |
-| Owner đạt `PRACTICED` + `EXPLAINED` cho RBAC, Pod Security, NetworkPolicy, quota, Kyverno | **chưa**: `PRACTICED` trên kind (24/11) và micro-lab EKS (25/11); `EXPLAINED` chưa có | mục 7 |
+| Owner đạt `PRACTICED` + `EXPLAINED` cho RBAC, Pod Security, NetworkPolicy, quota, Kyverno | **đạt** 25/11: `PRACTICED` (lab kind 24/11, micro-lab EKS 25/11) + `EXPLAINED` (teach-back 7/7 và câu quota) | mục 7 |
 | Văn bản nghiệm thu nói rõ cô lập mềm và giới hạn | đạt | mục 4 |
 
 ## 2. Run, revision và phiên bản
@@ -51,8 +51,20 @@
 | Mạng mặc định chặn | — (kind không có VPC CNI) | control 4 đường `allow` → enforced a→b, b→a, metadata `deny`; own-app `allow`; DNS, DB, AWS API của sandbox PASS | đạt |
 | Cô lập phía AWS vẫn giữ | — | probe P4 cross ×2, `T07-other-sa` `AccessDenied` | đạt |
 | Guardrail không làm gãy golden path | — | C4 tạo lại hai sandbox dưới `Deny` | đạt, **sau** PR #80 sửa RGD trong window |
-| Hiểu khi admission hỏng | F1–F6 trên kind | D2: scale về 0 → webhook bị gỡ, fail open; Service hỏng + 150 giây → fail closed ở tenant, `kube-system` không ảnh hưởng; cluster vẫn dọn được | **lệch SPEC hiện tại**: §4 nói "scaled to zero … matches the configured failurePolicy", nhưng scale về 0 cho 0 webhook và Pod sai được nhận; chỉ sự cố "không gọi được" mới fail closed. Giữ cả hai kết quả; đề xuất tách kịch bản ở SPEC §10 **owner chưa quyết** |
+| Admission fail closed khi Kyverno không gọi được (tách 25/11) | F2 trên kind | D2 3b: Service hỏng + 150 giây → `ok` và `bad` đều `InternalError` ở tenant; `sys` ở `kube-system` được nhận; cluster vẫn dọn được (mục 8) | đạt; cách giải thích độ trễ 150 giây chưa kiểm chứng (F6) |
+| Scale về 0 là đường vòng chỉ admin có (tách 25/11) | F1 trên kind | D2 3a: 0 webhook, Pod `bad` được nhận; tenant không có quyền trên namespace `kyverno` (D1, `T04`) | đạt; ghi thành giới hạn T15 (mục 4 giới hạn 2) |
 | Teardown đầy đủ | thứ tự teardown kind (F3) | `65 destroyed`, inventory `CLEAN` | đạt **có điều kiện dừng G2**: 8 webhook Kyverno sống sót sau khi xoá app, Claude xoá theo nhãn trước destroy. Runbook E2 đã có bước này (PR #87) |
+
+### 3.1. Hai quyết định ngày 25/11
+
+Owner giao Claude chọn cách tối ưu để hoàn thành dự án (chat 25/11: "bạn cứ chọn cách tối ưu nhất là được để hoàn thành dự án"). Claude chọn:
+
+1. **Tách kịch bản "Admission failure is understood"** thành hai kịch bản trong SPEC §4, theo đề xuất có từ lab kind 24/11 (SPEC §10 F1–F2), tức là **trước** window EKS.
+   - Lý do: câu cũ gộp hai sự cố cho hai kết quả ngược nhau. Cả hai đã quan sát trên kind và EKS.
+   - Đây là sửa câu chữ của tiêu chí nghiệm thu sau khi có kết quả. Để minh bạch, hai kết quả 3a/3b giữ nguyên, finding 4 của Codex vẫn ghi ở mục 5, và lần sửa SPEC này **chưa được Codex xem**.
+2. **Hai kịch bản "một phần" được chấp nhận là giới hạn**, không mở window mới:
+   - `zdr-require-resources` trên EKS: LimitRange điền resources trước Kyverno, nên Pod thiếu resources không bao giờ tới luật này. Luật đã được chứng minh trên kind (`noreq2`, LimitRange gỡ tạm) và bằng `kyverno test` trong CI.
+   - Quota số Pod và số object: cùng cơ chế ResourceQuota với ca GPU đã chạy trên EKS. Mang sang suite P6, vì `BatchTrainingJob` tạo Job và `count/jobs` khi đó có ý nghĩa thật.
 
 ## 4. Cô lập mềm và giới hạn
 
@@ -163,9 +175,12 @@ APPROVE này áp dụng cho bản sửa chưa commit. Commit gộp các file đ�
 
 ## 7. Teach-back §7
 
-**Chưa bắt đầu.** Owner trả lời 7 câu hỏi SPEC §7 bằng lời của mình; Claude chỉ ghi lại, không viết hộ.
-Trạng thái học hiện tại (`.agent/learning/CURRENT_STATUS.md`): `PRACTICED` trên kind 24/11, chưa `EXPLAINED`.
-Micro-lab EKS 25/11 do owner gõ nhưng không có dự đoán trước, nên chỉ cho thấy owner tự gõ và đọc được output.
+**Đạt (25/11).** Owner trả lời 7 câu SPEC §7 và một câu bổ sung về quota bằng lời của mình. Mỗi câu hỏi có một dòng gợi ý.
+Claude chép nguyên văn và đối chiếu từng ý với bằng chứng: `docs/evidence/p5/P5-T4.3_TEACHBACK_20261125.md`.
+- Kết quả: 8/8 đạt. Hai chỗ thiếu nhỏ: câu 2 chỉ xem `tenant-b` (cần cả egress của `tenant-a`); câu 3 bỏ sót dải VPC trong `except`.
+- Chưa nói bằng lời: khi nào `zdr-require-resources` thật sự có tác dụng.
+- Trạng thái học (`.agent/learning/CURRENT_STATUS.md`): RBAC, Pod Security, NetworkPolicy, quota, Kyverno `PRACTICED` + `EXPLAINED`.
+- Giới hạn: không có dự đoán trước lab nào của P5 (owner chọn).
 
 ## 8. Việc sau window (đã xong)
 

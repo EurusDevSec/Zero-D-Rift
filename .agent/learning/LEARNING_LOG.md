@@ -375,3 +375,19 @@ Status meanings:
   - NetworkPolicy and IRSA (EKS only);
   - SPEC-P5 §7 teach-back not started.
 - Status: PRACTICED
+
+### 2026-11-25 — P5 EKS micro-lab and SPEC-P5 §7 teach-back (DRF-71, DRF-72)
+- Phase/task: P5-T4.2 D3 and P5-T4.3.
+- Learning objective: explain each P5 guardrail layer, its limits and its failure modes in own words.
+- Source(s) consulted: SPEC-P5 §7; the L3 window evidence; Claude asked one question at a time with a hint line, and gave feedback and an analogy after each answer.
+- Prediction before lab: none (owner's choice for the window).
+- Micro-lab/change performed: the owner typed one forbidden request per layer on EKS (RBAC, Pod Security, quota, Kyverno, AppProject, NetworkPolicy); every output matched.
+- Expected vs actual: teach-back Q1–Q7 and a quota question all met; two small corrections (Q2 tenant-a egress, Q3 VPC range in the 443 `except`).
+- Evidence path: `docs/evidence/p5/P5-T4.3_TEACHBACK_20261125.md`, `docs/evidence/p5/P5-T4.2_L3_WINDOW_20261125.md` §7.
+- Explain in my own words (typed; quoted verbatim in the evidence file):
+  - "mạng chỉ quyết no có đi tới được hay không , iam quyết định được làm gì sau khi đã tới nơi";
+  - "tenant chỉ cần tạo một pod cdùng service accoutn name đó là mượn được quyền platform";
+  - "limit range nhìn vào từng container hoặc pod còn resource quota là tổng cả namespace".
+- Failure I can now diagnose: tenant-a still reaches tenant-b (PolicyEndpoint missing versus a wrong policy); Kyverno outage (scale to zero opens admission, unreachable closes it for tenants only).
+- Remaining gap: when `zdr-require-resources` matters (LimitRange fills defaults first); no prediction-based evidence for P5.
+- Status: PRACTICED + EXPLAINED
