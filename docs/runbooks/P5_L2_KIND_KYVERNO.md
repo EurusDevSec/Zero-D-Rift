@@ -187,6 +187,8 @@ $K -n kyverno patch svc kyverno-svc --type json -p '[{"op":"remove","path":"/spe
   nên cửa mở (fail open).
 - 3b: `ok` ở `tenant-a` → `failed calling webhook "vpol.validate.kyverno.svc-fail" … connection refused` (fail closed);
   `sys` ở `kube-system` → `created`.
+- Trên EKS (window 25/11) 3b ra cùng kết quả, nhưng chỉ khi đợi 150 giây không có request admission nào sau khi phá Service.
+  Thử sau 13 giây thì Kyverno vẫn trả lời. Xem `P5_L3_WINDOW.md` mục 5 D2.
 
 Nghĩa là D8 "fail closed" đúng khi Kyverno **không gọi được** (crash, mạng), **không** đúng khi ai đó **tắt êm** nó.
 Tắt êm cần quyền admin nền tảng trên namespace `kyverno`; tenant chỉ có quyền đọc (D1), nên tenant không tự làm được.
