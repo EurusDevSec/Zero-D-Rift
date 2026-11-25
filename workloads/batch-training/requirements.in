@@ -1,0 +1,5 @@
+# Direct runtime dependencies. requirements.txt is generated from this file by
+# lock.sh (pip-compile --generate-hashes); edit here, then run lock.sh.
+# boto3 matches the RAGSandbox image; If-None-Match on PutObject needs >=1.35.
+boto3==1.44.4
+numpy==2.5.5
