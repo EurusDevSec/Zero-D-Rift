@@ -94,13 +94,19 @@ D Suite (1 g)       suite enforced (mọi case PASS, không SKIPPED) → Kyverno
 E Dọn (0,5 g)       request + cleanup → policy → Kyverno → webhook = 0 → P4 J → destroy → inventory
 ```
 
+**Làm mới MFA (cả window).** Phiên MFA kéo dài 1 giờ. Chỉ làm mới khi Claude báo **không còn lệnh nào đang chạy**.
+Lệnh làm mới xoá cache CLI. Một lệnh AWS hay `terraform` đang chạy lúc đó sẽ đứng chờ mã MFA mãi mãi, vì không có ai nhập.
+Window 25/11 (F4): làm mới trong lúc suite chạy làm `terraform output` và `aws.exe` treo 13 phút, suite lượt 1 FAIL và phải chạy lại.
+Trước một bước dài (suite khoảng 10 phút, `terraform destroy` khoảng 15 phút), làm mới trước nếu phiên còn dưới 30 phút.
+
 **B. Dựng.** Làm `P4_RAG_SANDBOX.md` từ mục D tới hai sandbox Ready (P4 F). Thêm:
 
 - Đo A6 (Claude đọc, ghi vào evidence): số Pod đang chạy so với allocatable `pods`, và tổng memory request so với allocatable memory của từng node.
 - `zdr-kyverno` và `zdr-kyverno-policies` `Synced Healthy`. Ba policy ở `Audit`. Webhook `Fail` và chỉ bắt namespace tenant (như lab kind bước 0).
-- NetworkPolicy của VPC CNI đã bật. Container `aws-network-policy-agent` có sẵn từ VPC CNI v1.14 dù tính năng bật hay tắt, nên phải xem **cờ**, không chỉ tên container:
-  `kubectl -n kube-system get ds aws-node -o jsonpath='{.spec.template.spec.containers[?(@.name=="aws-network-policy-agent")].args}'`.
-  Phải thấy `--enable-network-policy=true`. Tên cờ này chưa được kiểm trên cluster của dự án; nếu output khác, ghi nguyên văn vào evidence và dựa vào điều kiện G5 (PolicyEndpoint).
+- NetworkPolicy của VPC CNI đã bật. Container node agent có sẵn từ VPC CNI v1.14 dù tính năng bật hay tắt, nên phải xem **cờ**, không chỉ tên container.
+  Container tên `aws-eks-nodeagent`, còn image của nó tên `aws-network-policy-agent` (window 25/11, F9):
+  `kubectl -n kube-system get ds aws-node -o jsonpath='{.spec.template.spec.containers[?(@.name=="aws-eks-nodeagent")].args}'`.
+  Phải thấy `--enable-network-policy=true` (đã thấy trên `v1.22.4-eksbuild.10`, image `aws-network-policy-agent:v1.4.0-eksbuild.1`). Nếu output khác, ghi nguyên văn vào evidence và dựa vào điều kiện G5 (PolicyEndpoint).
 
 > **Lưu ý VPC CNI (SPEC-P5 P5-T3 A, D5).** Bật `enableNetworkPolicy` làm add-on `vpc-cni` cập nhật, và
 > DaemonSet `aws-node` restart trên mọi node. Trong lúc restart, Pod mới có thể chưa có mạng. Vì vậy
@@ -121,14 +127,23 @@ E Dọn (0,5 g)       request + cleanup → policy → Kyverno → webhook = 0 �
 1. Chạy suite pha enforced theo `P5_ISOLATION_SUITE.md` §5, với `CONTROL=control.json` và `RUN_ID=P5-L3-YYYYMMDD-01`. Phải thấy exit 0, không case nào `SKIPPED`, cleanup `verified-empty`. Mỗi ca âm quan sát tối đa 10 phút, tổng cộng 900 giây.
 2. Kyverno sập, làm như lab kind bước 3, sau khi đã tạm dừng `zdr-root`, `zdr-kyverno` và `zdr-kyverno-policies`:
    - 3a: scale admission controller về 0.
-   - 3b: làm Service không gọi được.
+   - 3b: làm Service không gọi được, rồi **đợi 150 giây mà không gửi request admission nào** vào namespace tenant.
+     Trên EKS, thử sau 13 giây thì Kyverno vẫn trả lời (Pod sai vẫn bị `Deny`). Thử sau 150 giây thì mới thấy `failed calling webhook` (window 25/11, F6).
+     Claude đoán là API server giữ kết nối cũ tới Pod Kyverno; điều này chưa kiểm chứng. Trên kind thì lỗi hiện ra ngay.
    - Thử một Pod hợp lệ ở `tenant-a` và một Pod ở `kube-system`. Ghi kết quả, rồi khôi phục và bật lại sync.
+   - Thêm lượt đối chứng lúc Kyverno còn sống, trước 3a: Pod hợp lệ được tạo, Pod `busybox:1.37` bị `Deny`. Không có lượt này thì "được tạo" ở 3a không nói lên gì.
 3. Micro-lab: bạn tự gõ lệnh ở mục 5b, mỗi lớp một request bị cấm.
 
 **E. Dọn** (từ giờ freeze, hoặc sớm hơn nếu đã xong).
 
 1. Làm `P4_RAG_SANDBOX.md` J bước 1–2: xoá request (cascade), chạy cleanup, xoá secret bootstrap.
 2. Gỡ guardrail trước controller P4. Xoá app `zdr-kyverno-policies`, rồi `zdr-kyverno` (cascade). Sau đó chạy `kubectl get validatingwebhookconfigurations,mutatingwebhookconfigurations -o name | grep -ci kyverno`, phải ra `0`.
+   Window 25/11 (F7, điều kiện G2): sau 3 phút vẫn ra `8`. Các webhook này do Kyverno tự tạo lúc chạy, nên không thuộc chart, và xoá app không xoá chúng.
+   Webhook `Fail` mồ côi sẽ chặn mọi Pod ở tenant. Làm theo G2: xoá theo nhãn, ghi thành lỗi, đếm lại phải ra `0`, rồi mới làm bước 3:
+
+   ```bash
+   kubectl delete validatingwebhookconfigurations,mutatingwebhookconfigurations -l webhook.kyverno.io/managed-by=kyverno
+   ```
 3. Làm tiếp P4 J bước 3–4: gỡ các app còn lại theo thứ tự ngược wave, gỡ Argo CD, `terraform destroy`, rồi chạy `inventory.sh`, phải ra `RESULT: CLEAN`.
 4. Inventory trễ vào ngày hôm sau (A16).
 
