@@ -1,15 +1,15 @@
 ---
 project: Zero D-Rift
-roadmap_version: 1.4
+roadmap_version: 1.5
 canonical_scope: docs/de_cuong_tot_nghiep_ver3.md
 planning_method: rolling-wave
-rebaseline_date: 2026-10-29
+rebaseline_date: 2026-11-25 (owner, SPEC-P6 D13; previous 2026-10-29)
 start_date: 2026-10-29
-campaign_freeze_target: 2026-11-19
-technical_execution_end_target: 2026-11-25
-final_dataset_freeze_target: 2026-11-28
-target_defense_assets: 2026-11-29
-rehearsal_end_target: 2026-12-02
+campaign_freeze_target: 2026-12-01
+technical_execution_end_target: 2026-12-07
+final_dataset_freeze_target: 2026-12-10
+target_defense_assets: 2026-12-11
+rehearsal_end_target: 2026-12-14
 school_defense_date: UNCONFIRMED
 baseline: OWNER_REQUESTED_RECOVERY_2026-10-29
 ---
@@ -36,11 +36,11 @@ extra agent activity.
 |---|---|---|---|---|---|
 | P0 | 23/08 | COMPLETE | Project-specific Eurus planning state | Evidence-based agent workflow | Root constitution, roadmap, active context, workflow, learning plan and P1 spec exist |
 | P1 | 24–30/08 | COMPLETE (actual 29/09) | Architecture and experiment foundation | EKS architecture, IAM, reconciliation, experimental design | ADRs, baseline, threat model, cost plan, quota and version matrix reviewed |
-| P2 | 29/10–02/11 | TASK 1 COMPLETE_WITH_L3_BLOCKERS; TASK 2 NOT STARTED | Reproducible EKS bootstrap and teardown | Terraform state/modules, VPC, EKS, OIDC | EKS can be created and deleted from documented commands |
-| P3 | 03–05/11 | PLANNED; detailed phase SPEC pending | First control-plane vertical slice | GitOps, CRDs, reconciliation, Crossplane before kro | One CR produces a stable S3 + Deployment resource graph |
-| P4 | 06–08/11 | PLANNED; detailed phase SPEC pending | RAGSandbox end-to-end | IRSA, Secrets, RDS/pgvector, readiness | RAG application passes DB and AWS-access checks |
-| P5 | 09–10/11 | PLANNED; detailed phase SPEC pending | Tenant and policy guardrails | RBAC, quotas, NetworkPolicy, Pod Security, Kyverno | Negative security suite passes |
-| P6 | 11–14/11 | PLANNED; detailed phase SPEC pending | BatchTrainingJob and GPU lifecycle | SQS, KEDA, Karpenter, Spot, checkpointing | Batch runs and GPU node is reclaimed |
+| P2 | 29/10–02/11 | COMPLETE (accepted 05/11) | Reproducible EKS bootstrap and teardown | Terraform state/modules, VPC, EKS, OIDC | EKS can be created and deleted from documented commands |
+| P3 | 03–05/11 | COMPLETE (14/11) | First control-plane vertical slice | GitOps, CRDs, reconciliation, Crossplane before kro | One CR produces a stable S3 + Deployment resource graph |
+| P4 | 06–08/11 | COMPLETE (24/11) | RAGSandbox end-to-end | IRSA, Secrets, RDS/pgvector, readiness | RAG application passes DB and AWS-access checks |
+| P5 | 09–10/11 | TECHNICALLY COMPLETE 25/11; inventory and Bills 26/11 | Tenant and policy guardrails | RBAC, quotas, NetworkPolicy, Pod Security, Kyverno | Negative security suite passes |
+| P6 | 11–14/11 → 25–26/11 | ACTIVE; SPEC candidate 25/11 | BatchTrainingJob and node lifecycle (CPU, ADR-0009) | SQS, KEDA, Karpenter, Spot, checkpointing | Batch runs and the Karpenter node is reclaimed (CPU, ADR-0009) |
 | P7 | 15–16/11 | PLANNED; detailed phase SPEC pending | Cost and utilization instrumentation | Prometheus, OpenCost, AWS billing and FinOps math | Dashboard and raw cost/utilization evidence exist |
 | P8 | 17–19/11 | PLANNED; detailed phase SPEC pending | Drift remediation and controlled data recovery | Reconciliation, RDS snapshot, RTO/RPO | Both independent scenarios pass; campaign preconditions and freeze record ready |
 | P9 | 20–25/11; billing 26–28/11 | PLANNED; detailed phase SPEC pending | Official trials and frozen dataset | Test harness, p50/p95, reproducibility | Run manifests, raw dataset and analysis script are locked after sufficient samples and billing evidence |
@@ -52,6 +52,33 @@ observed completion or a confirmed school defense date. The prior 02/10 baseline
 and its October-only execution requirement are superseded for scheduling; the
 existing scope, samples, acceptance, learning, cost and cleanup gates survive.
 Historical approval/preflight records keep their actual dates.
+
+## Rebaseline 25/11 (owner, SPEC-P6 D13)
+
+The 29/10 working targets above are history. Actual: P2 05/11, P3 14/11, P4
+24/11, P5 technically 25/11 (delayed inventory and Bills on 26/11). On 25/11
+the owner ordered P6 to start the same day and finish on 26/11. The rest follows
+the ROADMAP allocations, with Claude implementing and the owner approving
+(speed mode). Nothing in trials, acceptance, learning gate or teardown is cut
+(ver3 §12.1); a step that does not fit moves to the next day.
+
+| Phase | Working target | Allocation | Note |
+|---|---|---:|---|
+| P5 close | 26/11 | — | delayed inventory, Bills gross, Linear Done |
+| P6 | 25–26/11, overflow 27/11 | 24–28 h | one L3 window (CPU, ADR-0009) |
+| P7 | 27–28/11 | 16 h | Prometheus, OpenCost, manual baseline |
+| P8 | 29/11–01/12 | 24 h | remediation, RDS recovery, pilot, **campaign freeze 01/12** |
+| P9 | 02–07/12 | 48 h | official campaign; cycle time from the P8 pilot decides the fit |
+| P9 cost append | 08–10/12 | — | delayed billing appended before the final dataset freeze |
+| P10 | 08–11/12 | 32 h | acceptance audit, report, slides, video |
+| P11 | 12–14/12 | 24 h | fixes in scope, retest, rehearsal |
+
+The internal "defense-ready 02/12" target of 29/10 cannot hold without cutting a
+phase; the owner chose not to cut. The school's submission and defense dates are
+still `UNCONFIRMED`. If the school fixes a date before 14/12, the owner decides
+again: the ADR-0009 cut order (P6 → P8 → P5) is the documented fallback, and P6
+is already in progress, so P8 is the first candidate. Linear milestone target
+dates follow this table.
 
 ## Capacity and daily execution
 
@@ -95,12 +122,12 @@ Historical approval/preflight records keep their actual dates.
 
 ## Active detailed contract
 
-[P2 specification](../specs/SPEC-P2_REPRODUCIBLE_EKS_BOOTSTRAP.md) governs current
-implementation. Task 1 COMPLETE_WITH_L3_BLOCKERS; Task 2 READY_NOT_STARTED and
-still requires separate exact CLI install/verification and local-lab authority.
-Source pins are STATIC_SOURCE_COMPATIBLE, not fresh runtime compatibility.
+[P6 specification](../specs/SPEC-P6_BATCH_TRAINING_JOB.md) (candidate 25/11,
+from the Fable 5.2 draft, CPU per ADR-0009) governs current work. P5
+([SPEC-P5](../specs/SPEC-P5_TENANT_GUARDRAILS.md)) is technically done
+(audit `docs/evidence/p5/P5_ACCEPTANCE_AUDIT_20261125.md`). Fable drafts P7–P9
+stay on branch `claude/specs-p5-p9-draft-ecc762` until their phase gate.
 
-[P1 closed contract](../specs/SPEC-P1_FOUNDATION_AND_COMPATIBILITY.md) and accepted
-ADRs remain inputs, not instructions to rerun or a claim of current AWS inventory.
-NCKH Evidence Graph remains a separate parked research outcome.
-
+Closed contracts P1–P5 and accepted ADRs remain inputs, not instructions to
+rerun or a claim of current AWS inventory. NCKH Evidence Graph remains a
+separate parked research outcome.

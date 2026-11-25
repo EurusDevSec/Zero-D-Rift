@@ -1,10 +1,10 @@
 ---
 project: Zero D-Rift
-status: P5_SPEC_OWNER_APPROVED
-active_phase: P5 (P4 closed 24/11)
-active_task: P5-T4.3 acceptance (DRF-72); L3 window P5-L3-20261125-01 done 25/11
-active_feature: Tenant guardrails (SPEC-P5)
-active_spec: .agent/specs/SPEC-P5_TENANT_GUARDRAILS.md
+status: P6_SPEC_CANDIDATE
+active_phase: P6 (P5 technically done 25/11; inventory and Bills 26/11)
+active_task: P6-T1 contract (DRF-73); P5-T4.3 close-out (DRF-72) on 26/11
+active_feature: BatchTrainingJob on CPU (SPEC-P6, ADR-0009)
+active_spec: .agent/specs/SPEC-P6_BATCH_TRAINING_JOB.md
 current_learning: .agent/learning/CURRENT_STATUS.md
 mode: Coach
 authority: NO_INSTALL_NO_AWS_APPLY_UNTIL_TASK_GATES
@@ -30,12 +30,7 @@ Follow [context governance](../references/context-governance.md).
   CLEAN; Codex APPROVE at `70ad8d8` (audit 5.4); `fec7847` (Copilot follow-up)
   not Codex-checked. Teach-back: all SPEC-P4 §8 targets met, including transfer
   cases A and B (`P4-T4.2_TEACHBACK_20261121.md`, PR #60).
-- **SPEC-P5** merged (PR #61, #62, `183a553`): Fable 5.2 draft of 16/11 kept as
-  first commit, rechecked 22/11 against P4 (A8 false → same-namespace ingress
-  and egress on 8080; A6 unmeasured). Codex review 1 REQUEST CHANGES fixed;
-  review 2 APPROVE at `26d3481` (SPEC §9.3). Owner 22/11: D1–D10 as proposed,
-  D11 rebaseline (P5 on 23/11, overflow moves a day, never cut), D12 deferred.
-  Status `OWNER_APPROVED_20261122`.
+- **SPEC-P5** `OWNER_APPROVED_20261122` (PR #61, #62); Codex APPROVE at `26d3481`.
 - [Linear routing](../docs/LINEAR_DELIVERY.md): P4 = 10 issues, DRF-40,
   DRF-44 → 45/46, DRF-49 → 50/51, DRF-55 → 56/57. P5 = 9 issues created 22/11:
   DRF-64 (T1), DRF-65 → 66/67, DRF-68 (T3), DRF-69 → 70/71/72, due 23/11;
@@ -57,7 +52,8 @@ Follow [context governance](../references/context-governance.md).
 
 ## Open decisions and blockers
 
-1. Owner rebaselines P6–P11 before the P6 gate (D11); ver3 §12.1 forbids
+1. Rebaseline done 25/11 (SPEC-P6 D13, ROADMAP); the internal 02/12 target
+   moved to 14/12 and the school dates are still UNCONFIRMED; ver3 §12.1 forbids
    cutting trials, acceptance, learning gate or teardown. D12 (branch
    protection) deferred by the owner, so T01 stays an open limit.
 2. P4 closed: billing (Bills gross 0.73 USD, audit §6.1), delayed inventory
@@ -74,32 +70,26 @@ Follow [context governance](../references/context-governance.md).
 
 ## Next safe action
 
-P5-T2.1 A merged (PR #66). Kyverno, tenant NetworkPolicies, vpc-cni
-NetworkPolicy in Terraform and the isolation suite merged as PR #70
-(`05afd58`). On 24/11 the owner ran both L2 labs on kind end to end, without
-predictions; every step matched (`docs/evidence/p5/P5-T2.1_L2_KIND_BASELINE_20261124.md`,
-`docs/evidence/p5/P5-T2.2_L2_KIND_KYVERNO_20261124.md`; T2.1 B API call and
-reference image via step 0b, `labs/p5-kind/api-call.sh`). Codex light review
-of PR #71 asked for step 2b of the Kyverno runbook; the owner ran it on 24/11
-and Enforce is closed.
+P5: technical gate met 25/11 (audit `docs/evidence/p5/P5_ACCEPTANCE_AUDIT_20261125.md`,
+Codex APPROVE, teach-back 8/8). Open for DRF-72: delayed inventory and Bills
+gross on 26/11, then Linear DRF-69/71/72 Done.
 
-25/11: L3 window `P5-L3-20261125-01` on EKS (DRF-71): suite 82/82 at
-`ded7014`, Kyverno outage D2, owner micro-lab, `65 destroyed`, inventory
-CLEAN (`docs/evidence/p5/P5-T4.2_L3_WINDOW_20261125.md`). Post-window fixes
-PR #85, #86, #87 merged (`010c49b`). Acceptance draft
-`docs/evidence/p5/P5_ACCEPTANCE_AUDIT_20261125.md`. Codex review of
-`ae20196..010c49b` on 25/11: REQUEST CHANGES, 5 findings fixed; third pass
-APPROVE on the uncommitted fixes (audit §5.4); no RGD change. Teach-back SPEC §7 done 25/11: 7/7 plus a quota question
-(`docs/evidence/p5/P5-T4.3_TEACHBACK_20261125.md`); learning P5 `PRACTICED` +
-`EXPLAINED`. Open for P5-T4.3: delayed inventory and Bills gross on 26/11, then
-Linear DRF-69/71/72 Done. 25/11: SPEC-P5 §4 admission scenario split (Claude, by
-owner delegation); two partial scenarios accepted as limits, object-count quota
-moves to the P6 suite (audit §3.1).
+P6 started 25/11 (owner: "mai là xong phase 6"). Owner rebaseline recorded as
+SPEC-P6 D13 and ROADMAP "Rebaseline 25/11": P6 25–26/11 (overflow 27/11), P7
+27–28/11, P8 29/11–01/12 (freeze), P9 02–07/12, P10 08–11/12, P11 12–14/12;
+Linear milestone targets match. SPEC-P6 candidate from the Fable draft, CPU per
+ADR-0009, one L3 window. Codex 25/11 REQUEST CHANGES (9 findings), all applied
+(SPEC §9.3, R2); awaiting Codex re-review and owner approval of D1–D14.
+Linear: DRF-73 (T1), DRF-74 → 75/76 (T2), DRF-77 (T3), DRF-78 → 79/80/81 (T4);
+DRF-19/20 cancelled. Runbooks `docs/runbooks/P6_L2_KIND_KEDA.md` and
+`docs/runbooks/P6_L3_WINDOW.md` are plans until the code of T2/T3 exists.
+Next: owner approves D1–D14, then P6-T2.1 (worker and image) and P6-T3
+(Terraform) in parallel, then T2.2 (RGD, KEDA, kind lab).
 
 ## Context expansion
 
-Use SPEC-P5, THREAT_MODEL §6–7 and §12, ver3 §9.5 and §12, ADR-0006/0008/0009,
-P4 audit, LEARNING_ROADMAP row P5. Live Git overrides this file.
+Use SPEC-P6, ADR-0009, THREAT_MODEL §6.4 and §11, ver3 §6.5, §9.2 and §12,
+ADR-0003/0006/0008, P5 audit §3.1 and §4, LEARNING_ROADMAP row P6. Live Git overrides this file.
 
 ## Checkpoint rule
 

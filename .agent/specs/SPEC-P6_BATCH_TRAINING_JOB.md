@@ -1,35 +1,47 @@
 ---
 id: SPEC-P6
-title: BatchTrainingJob — KEDA ScaledJob, Karpenter GPU NodePool, checkpoint and node reclamation
-status: DRAFT_FABLE_20261116
+title: BatchTrainingJob — SQS, KEDA ScaledJob, Karpenter CPU NodePool, checkpoint and node reclamation
+status: CANDIDATE_20261125_R2 (Codex review 25/11 REQUEST CHANGES applied; awaiting Codex re-review and owner approval)
 phase: P6
-start: TBD (owner rebaseline)
-deadline: TBD (owner rebaseline)
-schedule_baseline: ver3 §12 window 11–14/11 and the P6 gate of 14/11 already missed; owner rebaseline open
-estimated_effort: 36-42 hours (ROADMAP allocates 32 h)
-mode: Coach for SQS/KEDA/Karpenter (KEDA first, Karpenter CPU second, GPU last), then Pair
+start: 2026-11-25 (owner rebaseline, D13)
+deadline: 2026-11-26 target (owner, D13); a step that does not fit moves to 27/11, it is never cut
+schedule_baseline: ver3 §12 window 11–14/11 missed; owner rebaselined P6–P11 on 25/11 (D13, ROADMAP "Rebaseline 25/11")
+estimated_effort: 24-28 hours (ROADMAP allocates 32 h); GPU windows removed by ADR-0009
+mode: Pair (Claude implements, owner predicts, runs the labs and explains); Coach for the Karpenter micro-lab
 canonical_scope: docs/de_cuong_tot_nghiep_ver3.md
-linear: DRF-19 (contract), DRF-20 (outcome); outline issues, split into P6-T tasks at the phase gate
-authority: DRAFT_ONLY_NO_INSTALL_NO_AWS_NO_QUOTA_REQUEST_NO_LINEAR_CHANGE
-drafted_from: main at df275e4 (2026-11-16); P4 and P5 runtime on EKS are UNVERIFIED
+governing_adr: ADR-0009 (P6 on CPU nodes under the G/VT quota denial)
+linear: DRF-73..DRF-81 (§9.4); DRF-19, DRF-20 cancelled as superseded 25/11
+authority: CONTRACT_CANDIDATE_NO_INSTALL_NO_AWS_UNTIL_TASK_GATES
+drafted_from: Fable 5.2 draft of 16/11 (branch claude/specs-p5-p9-draft-ecc762, status DRAFT_FABLE_20261116)
+rechecked_at: main at d527307 (2026-11-25), after the P5 technical gate
 ---
 
-# 0. Draft status
+# 0. Status and what changed from the draft
 
-Early draft written on 16/11/2026 at the owner's request. It is **not** the
-active contract (AGENTS §7, `.agent/docs/FEATURES.md`). Before P6 starts: recheck
-§2, refresh every dated fact in §12, let the second agent review the candidate
-revision and get the owner's decisions on §9.1. Nothing in ver3 is reduced.
+This SPEC starts from the Fable 5.2 draft of 16/11 and is rechecked against
+`main` at `d527307` (P4 and P5 done on EKS). Three facts changed the draft:
 
-One item cannot wait for the phase gate and is listed first on purpose:
-**the account's GPU quota is 0** for both On-Demand and Spot (§2 A1, §10.1).
-Until both are raised, no GPU node can start and P6 cannot reach its exit
-criterion. The request is free, changes no resource, and its lead time is not
-under the project's control. It still needs the owner's explicit approval.
+1. **ADR-0009 (accepted 17/11).** AWS denied the G/VT quota twice. Batch runs on
+   CPU nodes created by Karpenter. Every GPU item of the draft is removed: the
+   NVIDIA device plugin, GPU NodePools, the GPU quota task (old P6-T0), the two
+   GPU windows, the CUDA device check and the GPU cost envelope. The mechanism
+   (KEDA → pending Pod → Karpenter node → checkpoint in S3 → node reclaimed) and
+   the thresholds of H2, H3, H5 and scale-down time are unchanged. Every batch
+   result carries the label `CPU_SUBSTITUTE_FOR_GPU`.
+2. **Quota.** The Standard On-Demand quota read in the P5 window on 25/11 is
+   8 vCPU, not 5 (P5-T4.2 evidence, preflight row). Two `m6i.large` system nodes
+   use 4, so a 2 vCPU On-Demand batch node fits beside them. The open point of
+   ADR-0009 §3 is closed by this reading; it is read again before the window.
+3. **P5 guardrails are live.** The training Pod runs in a tenant namespace, so
+   Pod Security `restricted`, the Kyverno policies (image from
+   `ghcr.io/eurusdevsec/zero-d-rift/` by digest, requests and memory limit,
+   tenant label), the ResourceQuota, the LimitRange and default-deny egress all
+   apply to it. P5 moved the object-count quota test into the P6 suite (P5 audit
+   §3.1).
 
-Per ver3 §12.1, until `RAGSandbox` runs end to end on EKS, Batch work stays a
-skeleton. In this SPEC "skeleton" means: P6-T0, P6-T1, the worker code with unit
-tests and the kind lab. No batch AWS window before P4 is accepted.
+The draft's three AWS windows become **one** L3 window. Nothing in ver3 is
+reduced (ver3 §12.1): P6 is a smoke phase; H2, H3, H5 and scale-down time are
+still measured in P9 with their full trial counts.
 
 # 1. Goal and boundaries
 
@@ -38,167 +50,167 @@ tests and the kind lab. No batch AWS window before P4 is accepted.
 Deliver the second golden path on EKS. One `BatchTrainingJob` request, merged in
 Git and synced by Argo CD, gives a tenant:
 
-- a training run started by an event in a shared SQS queue through a KEDA
+- a training run started by a message in a shared SQS queue through a KEDA
   `ScaledJob`;
-- a GPU node provisioned on demand by Karpenter (Spot first, bounded On-Demand
-  fallback) and used only by that run;
+- a CPU node provisioned on demand by Karpenter (Spot first, On-Demand fallback
+  with its own label) and used only by batch Pods;
 - checkpoints and a final artifact in the tenant's own S3 bucket, written by the
-  application, so that an interrupted run resumes;
-- an observable outcome, and a GPU node that is terminated after the run.
+  application, so an interrupted run resumes;
+- an observable outcome, and a node that is terminated after the run.
 
-This is the ver3 §12 exit criterion for P6: "Batch end-to-end, checkpoint và thu
-hồi Pod/GPU node có evidence". Runs in P6 are smoke runs (`official=false`); H2,
-H3, H5 and scale-down time are measured in P9.
+This is the ver3 §12 exit criterion for P6 ("Batch end-to-end, checkpoint và thu
+hồi Pod/GPU node có evidence"), read through ADR-0009 as "CPU node". Runs in P6
+are smoke runs (`official=false`).
 
 ## MUST deliverables
 
-- `SPEC-P6` approved by the owner with decisions D1–D15 (§9.1) resolved, and an
-  ADR recording ownership of the batch platform resources (SQS, Karpenter IAM,
-  KEDA identity) and the GPU capacity guard. It closes the `UNVERIFIED` rows
-  "Karpenter controller/node-role IAM boundary" (THREAT_MODEL §11) and
-  `provider-aws-sqs` "Conditional" (VERSION_MATRIX §3).
-- GPU quota evidence: applied values for both G/VT quotas at or above the
-  requirement, read on the day of the window.
-- Terraform: module `batch-platform` (queue, dead-letter queue, roles) and module
-  `karpenter` (controller role, node role, instance profile, access entry,
-  interruption queue, discovery tags), both off by default, with tests and plan
+- This SPEC approved by the owner with decisions D1–D14 (§9.1).
+- Terraform module `batch-platform` (queue, dead-letter queue, IRSA roles) and
+  module `karpenter` (controller role, node role, instance profile, access
+  entry, interruption queue and rules, discovery tags), both behind
+  `enable_batch_platform` (default false), with `terraform test` and plan
   assertions.
-- Reference workload under `workloads/batch-training/`: one image, entry points
-  `submit`, `train`, `cleanup`, pinned by digest.
-- GitOps: KEDA, Karpenter and the NVIDIA device plugin as pinned Argo CD
-  applications; `NodePool`s and `EC2NodeClass`; the `BatchTrainingJob`
-  ResourceGraphDefinition; one valid request per tenant; disabled negative
-  requests; static checks in CI.
-- Verification scripts: outcome check (markers, checkpoint, artifact), GPU node
-  lifecycle check on both Kubernetes and AWS, and the capacity-bound negatives.
-- Runbook `docs/runbooks/P6_BATCH_TRAINING.md`: prepare, verify, retry, delete,
-  teardown order, stop conditions, undo, "Tự thử".
-- Evidence under `docs/evidence/p6/`: kind lab, CPU window, GPU window(s),
-  positive and negative checks, inventory and cost.
+- Reference workload `workloads/batch-training/`: one image, entry points
+  `submit`, `train`, `cleanup`, unit tests, published to GHCR and pinned by digest.
+- GitOps: KEDA and Karpenter as pinned Argo CD applications; `NodePool`s and
+  `EC2NodeClass`; the `BatchTrainingJob` ResourceGraphDefinition; one request
+  per tenant (only one enabled); static checks in `gitops/check.sh`.
+- Verification: outcome check (markers, checkpoint, artifact), node lifecycle
+  check on Kubernetes **and** AWS, capacity and identity negatives, the
+  object-count quota test carried from P5.
+- Runbooks `docs/runbooks/P6_L2_KIND_KEDA.md` and `docs/runbooks/P6_L3_WINDOW.md`.
+- Evidence under `docs/evidence/p6/`: kind lab, L3 window, inventory, cost,
+  acceptance audit, teach-back.
 
 ## Negative boundaries
 
-1. Do not launch a GPU instance before the quota evidence, a priced estimate at
-   the On-Demand price and the owner's window approval exist.
-2. Do not allow more than one GPU node at a time. No wildcard GPU family, no
-   instance larger than the approved allowlist, no NodePool without `limits`
-   and a node expiry (COST_PLAN §9).
-3. Do not let Karpenter manage the system node group, and do not run the
-   Karpenter controller on a node it provisions.
-4. Do not give Karpenter rights to create or change IAM roles, policies or
-   instance profiles. `iam:PassRole` is limited to the one node role.
-5. Do not install a controller beyond KEDA, Karpenter and the NVIDIA device
-   plugin: no GPU operator, no DRA driver, no DCGM exporter, no
-   `provider-aws-sqs`, no cluster autoscaler, no AWS FIS.
-6. Do not make Karpenter responsible for training state. Checkpoints are the
+1. No GPU instance, GPU NodePool, NVIDIA device plugin, GPU AMI or GPU claim
+   (ADR-0009 §4). No result is extrapolated from CPU to GPU.
+2. No NodePool without an instance-type allowlist, `limits`, `expireAfter` and
+   project tags. At most one batch node per capacity type.
+3. Karpenter never manages the system node group, and its controller never runs
+   on a node it provisions.
+4. Karpenter gets no right to create or change IAM roles, policies or instance
+   profiles. `iam:PassRole` only for the one node role.
+5. No controller beyond KEDA and Karpenter: no cluster autoscaler, no
+   `provider-aws-sqs`, no AWS FIS, no Volcano or Kueue.
+6. Karpenter is not responsible for training state. Checkpoints are the
    application's job (ver3 §6.5).
-7. Do not report a run on On-Demand as Spot, and do not count a CPU-profile run
-   as a GPU run. Capacity type and device come from the node and the workload,
-   not from the request.
-8. Do not report `Synced`, a `Running` Pod or the instance's `Ready` as a
-   training outcome. `Ready` means "submitted" (D4).
-9. Do not train a real model, use a real dataset or call Bedrock. The workload
-   is synthetic and short.
-10. Do not put tenant data, account IDs, ARNs or queue URLs into Git, Linear,
-    evidence or SQS message bodies.
-11. Do not delete Karpenter, its NodePools or the cluster while a NodeClaim or a
-    Karpenter-launched instance exists.
-12. Do not run an AWS window without a separate execution approval, a fresh cost,
-    identity and quota check, a stop time and a teardown owner.
-13. Do not count a P6 run as an official H2, H3 or H5 trial.
+7. A run on On-Demand is never reported as Spot. Capacity type comes from the
+   label `karpenter.sh/capacity-type` of the Node that actually ran the Pod,
+   read by the suite while that Node exists. It never comes from the request
+   or from the worker.
+8. `Synced`, a `Running` Pod or the instance's `Ready` is not a training outcome.
+   `Ready` means "submitted" (D4).
+9. No real model, real dataset or Bedrock call. The workload is synthetic.
+10. No tenant data, account ID, ARN, queue URL or node name in Git, Linear,
+    evidence or a message body.
+11. Karpenter, its NodePools or the cluster are never deleted while a NodeClaim
+    or a Karpenter-launched instance exists (§9.5).
+12. No AWS window without its own execution approval, fresh cost, identity and
+    quota check, stop time and teardown owner.
+13. No P6 run counts as an official H2, H3 or H5 trial.
+14. No PolicyException and no weakening of a P5 guardrail to make the batch Pod
+    fit. A Pod that does not comply is changed; a quota is raised only by the
+    amount D9 states.
 
-# 2. Giả định từ phase trước (kiểm lại khi vào phase)
+# 2. Assumptions from earlier phases (rechecked 25/11)
 
-| # | Assumption | Source today | Recheck |
+| # | Assumption | Result 25/11 | Source |
 |---|---|---|---|
-| A1 | Applied quota "Running On-Demand G and VT instances" = **0** and "All G and VT Spot Instance Requests" = **0** in `us-east-1` | COST_PLAN §7.3, `ACCOUNT_VERIFIED` 2026-09-28 | `aws service-quotas list-service-quotas` in the owner's session; quota codes in §12 S2 |
-| A2 | Standard On-Demand vCPU quota 5 and Standard Spot vCPU quota 5 | COST_PLAN §7.3, 2026-09-28 | same command |
-| A3 | P4 is accepted: `RAGSandbox` runs end to end on EKS (ver3 §12.1 gate for Batch) | not built | P4 acceptance audit |
-| A4 | P5 is accepted: tenant namespaces enforce `restricted`, quota (GPU 0), default-deny NetworkPolicy and the Kyverno image/requests policies | SPEC-P5 draft | P5 acceptance audit; each of these constrains the batch Pod |
-| A5 | kro v0.9.4 can hold a KEDA `ScaledJob` and a cross-namespace Job in one graph, and removes a renamed child as in the P4 spike | spike covered Job and ConfigMap only | P6-T1 part C on kind |
-| A6 | Tenant identity pattern from ADR-0008 (Terraform pre-creates one role per tenant and workload type; Crossplane has no IAM right) carries over | ADR-0008, written for P4 | ADR for P6 |
-| A7 | The Crossplane S3 provider role can be extended to a second bucket prefix without a second role | `rag-identity` module not written yet | module as merged in P4 |
-| A8 | Node network baseline unchanged: public subnets, public IPv4, no NAT, S3 gateway endpoint with a bounded policy, IMDSv2 with hop limit 1 | ADR-0006, P2 cluster module | read the modules; the endpoint policy must admit every registry host used here |
-| A9 | The cluster uses `authentication_mode = "API"`, so a Karpenter node role needs an access entry of type `EC2_LINUX` | `modules/cluster/main.tf` at `df275e4` | module as it is then |
-| A10 | Two `m6i.large` system nodes have room for KEDA (three Pods), Karpenter (one) and the existing platform | SPEC-P5 §10 estimate | pod count and memory in the P5 window |
-| A11 | The service-linked role for EC2 Spot exists in the account, or the owner approves creating it | never checked | `aws iam get-role --role-name AWSServiceRoleForEC2Spot` (read-only) |
-| A12 | The P4 reference image pattern (public GHCR, built by GitHub Actions, pinned by digest) is accepted for a second image | SPEC-P4 D8 | owner decision D11 |
-| A13 | GPU envelope 15 USD and one GPU node at a time | ver3 §11, COST_PLAN §4 and §9 | unchanged unless the owner says otherwise |
+| A1 | G/VT quotas are 0 | **True**, and stays out of scope (ADR-0009) | COST_PLAN §7.3.1 |
+| A2 | Standard On-Demand 5 vCPU, Spot 5 vCPU | **Changed:** On-Demand read as 8 vCPU on 22/11 and 25/11. Spot not read since 28/09 | P5-T4.2 evidence §preflight; reread at T−30 |
+| A3 | P4 accepted (`RAGSandbox` end to end on EKS) | **True** (24/11) | P4 audit |
+| A4 | P5 accepted: `restricted`, quota (GPU 0), default-deny, Kyverno | **True technically** (25/11); delayed inventory and Bills on 26/11 | P5 audit §6 |
+| A5 | kro v0.9.4 can hold a KEDA `ScaledJob` and a Job in another namespace in one graph | **Unverified.** The P4 spike covered a Job and a ConfigMap; RAG uses a Job in `zdr-platform` | P6-T2.2 kind lab, step 1 |
+| A6 | ADR-0008 identity pattern (Terraform pre-creates one role per tenant and workload; Crossplane has no IAM right) carries over | **True**; `rag-identity` creates `zero-drift-rag-<tenant>` the same way. P6 also keeps the batch ServiceAccount platform-owned (P6-T2.2), so the identity does not depend on a request | `infra/terraform/modules/rag-identity/main.tf` |
+| A7 | Crossplane S3 role can take a second bucket prefix | **True with a change:** today the role is `zero-drift-rag-crossplane-s3` in `rag-identity`; batch buckets need prefix `zero-drift-batch-` added | P6-T3 A |
+| A8 | Network baseline: public subnets with `map_public_ip_on_launch`, no NAT, S3 gateway endpoint, IMDSv2 hop 1 | **True** | `modules/network/main.tf` |
+| A9 | `authentication_mode = "API"`; a Karpenter node role needs an `EC2_LINUX` access entry | **True** | `modules/cluster/main.tf:48` |
+| A10 | Two `m6i.large` system nodes have room for KEDA (3 Pods) and Karpenter (1) | **Unmeasured.** P5 window ran Kyverno too; Pod count read in the window | L3 preflight |
+| A11 | EC2 Spot service-linked role exists | **Unknown**; read-only check at T−30 | `aws iam get-role` |
+| A12 | Second image follows the P4 pattern (public GHCR, built by GitHub Actions, pinned by digest) | **True**; also required by Kyverno `zdr-image-digest` | `.github/workflows/rag-sandbox-image.yml` |
+| A13 | Tenant egress allows 443 outside the VPC (SQS) and the S3 gateway endpoint | **True** for SQS public endpoint; S3 path read in the kind lab and window | `gitops/platform/tenants/networkpolicy.yaml` |
+| A14 | Tenant quota is sized for two sandboxes only (400m CPU, 768Mi, 8 Pods, `count/jobs.batch` 4) | **True**; one training Pod does not fit beside two sandboxes, D9 | `gitops/platform/tenants/quota.yaml` |
 
 # 3. Learning objectives
 
-By the end of P6 the owner should be able to:
+By the end of P6 the owner can:
 
 1. Separate three scalers: KEDA creates Jobs from queue length, the scheduler
    places Pods, Karpenter creates nodes for Pods that cannot be placed.
 2. Trace one message: SQS → KEDA → Job → pending Pod → NodeClaim → EC2 instance →
-   kubelet → device plugin → container → S3, and say where each can stall.
+   kubelet → container → S3, and say where each step can stall.
 3. Explain visibility timeout, at-least-once delivery and the dead-letter queue,
    and why the worker deletes the message only after success.
 4. Explain why checkpointing belongs to the application and what Karpenter does
-   and does not do when a Spot instance is reclaimed.
-5. List every guard that keeps GPU spend bounded and say which one is
-   authoritative.
+   and does not do when a Spot node is reclaimed.
+5. List every guard that keeps batch spend bounded and say which one AWS enforces.
 6. Explain what the idle window of the baseline does to H5 before measuring it.
 
 # 4. Acceptance scenarios
 
 ```gherkin
-Scenario: Capacity is approved and bounded before any launch
-  Given applied G/VT quotas read on the day, a priced estimate at the On-Demand price
-        and an approved window
-  Then the NodePools allow only the approved instance types, zones and one GPU node
-  And every node carries an expiry and the project tags
+Scenario: Capacity is bounded before any launch
+  Given Standard quotas read on the day and an approved window
+  Then the batch NodePools allow only the allowlisted 2 vCPU types and two zones
+  And each NodePool has limits of one node and an expiry
+  And every Karpenter node carries the project tags and the batch taint
 
 Scenario: Events drive Jobs
-  Given the shared queue is empty
-  Then no training Job and no GPU node exists
+  Given a ScaledJob that is Ready and has already started a Job from this queue
+  And the shared queue has shown visible=0 and inflight=0 over at least three polls
+  Then no new training Job and no batch node exists
   When exactly one message is sent
   Then exactly one training Job is created
-  And no further Job is created while that message is in flight
+  And no second Job is created while that message is in flight
 
 Scenario: One request gives an observable outcome
   Given a merged BatchTrainingJob request in a tenant namespace
   When Argo CD syncs it
-  Then kro creates the checkpoint bucket, the ServiceAccount, the ScaledJob and the submit Job
+  Then kro creates the checkpoint bucket, the ScaledJob and the submit Job
   And the instance reports Ready only after the bucket is Ready and the message is sent
-  And Karpenter starts one GPU node of an approved type
-  And the training process writes a TRAINING_STARTED marker that names a CUDA device
-  And at least one checkpoint and the final artifact exist in the tenant's bucket
+  And Karpenter starts one node of an allowlisted type
+  And the training process writes TRAINING_STARTED with device=cpu, the run attempt and its node name
+  And the suite reads capacity type and instance type from that Node while it exists
+  And at least one checkpoint and the final artifact exist under this attempt's prefix
   And the Job completes and its message is gone from the queue
 
-Scenario: The GPU node is reclaimed
+Scenario: The node is reclaimed
   Given the training Job has completed
   Then within the scale-down stop no training Pod is running
-  And the GPU Node is gone from Kubernetes
+  And the Karpenter Node is gone from Kubernetes
   And the EC2 instance is terminated and its volume is gone
 
 Scenario: An interrupted run resumes
   Given a run that has written at least one checkpoint
-  When its Pod or node is removed before completion
+  When its Pod or its node is removed before completion
   Then the message becomes visible again and a new Job starts
-  And training continues from the last checkpoint
-  And one final artifact exists
+  And training continues from the last checkpoint, not from step 0
+  And exactly one final artifact exists
 
 Scenario: Failure is visible and bounded
-  Given no GPU capacity, or a request whose training always fails
+  Given a request whose training always fails
   Then the request never shows a successful outcome
   And the failing layer is visible in the Job, Pod, NodeClaim or queue
-  And after the configured number of receives the message is in the dead-letter queue
-  And no GPU node keeps running
+  And the attempt's RECEIVED markers show receive counts 1 to maxReceiveCount
+  And that attempt's message is in the dead-letter queue
+  And no batch node keeps running
 
 Scenario: Capacity and placement are bounded
   When a second message arrives while a run is active
-  Then no second GPU node is created
-  And a Pod without the GPU toleration never lands on the GPU node
-  And a GPU request above the tenant quota is rejected
+  Then no second batch Job and no second batch node is created
+  And a Pod without the batch toleration never lands on a batch node
+  And a batch Pod above the tenant quota is rejected
+  And an object above the pods or count/jobs.batch quota is rejected with that resource named
 
 Scenario: Identities are bounded
   Then the training Pod can use only its tenant's checkpoint buckets and the shared queue
-  And tenant-a cannot read or write tenant-b's checkpoint bucket
+  And the owning tenant can read an existing object in its bucket
+  And the other tenant gets AccessDenied reading or writing that same object
   And the KEDA identity can only read queue attributes
-  And the Karpenter identity cannot change IAM or touch the system node group
-  And a Pod on the GPU node cannot obtain node credentials from the metadata service
+  And the Karpenter identity cannot change IAM
+  And a Pod on a batch node cannot obtain node credentials from the metadata service
 
 Scenario: Delete and teardown are complete
   When a request is removed from Git and the cleanup is run
@@ -210,205 +222,226 @@ Scenario: Delete and teardown are complete
 
 # 5. Work breakdown
 
-## P6-T0 — GPU quota and Spot prerequisites (0.5 h of work, unknown waiting time)
+## P6-T1 — Contract: decisions, pins, prices (2 h)
 
-Owner action, needed as early as possible; independent of every other task.
+- [ ] Recheck §2 (done 25/11 in this file), second-agent review, owner decides
+      D1–D14.
+- [ ] Pins (§11): KEDA chart and app 2.21.1, Karpenter chart and app 1.15.3,
+      ElasticMQ 1.7.1 for kind only. Image digests read and recorded in
+      `docs/evidence/p6/P6-T1_PINS_<date>.md` and VERSION_MATRIX "P6 pins".
+- [ ] KEDA SQS scaler IAM action confirmed from the scaler source (S3); KEDA
+      2.21 audience change (S2) checked against the TriggerAuthentication shape.
+- [ ] Karpenter controller policy for 1.15.3 taken from the release's
+      CloudFormation reference, reduced per D6.
+- [ ] Prices: `m6i.large`, `m5.large`, `c6i.large` On-Demand from the Price List
+      API; Spot price history 7 days per type and zone (read-only). §10 updated.
+- [ ] ADR-0009 consequences applied where a P6 file says GPU: EXPERIMENT_PLAN §7
+      wording, COST_PLAN §5.3 batch line, ver3 P6 row note. Thresholds unchanged.
 
-- [ ] Read both G/VT quotas and the Standard quotas (read-only).
-- [ ] Owner approves and files the two quota increase requests per D1.
-      This is an account mutation; the agent does not file it.
-- [ ] Read whether the EC2 Spot service-linked role exists; if not, the owner
-      approves creating it.
-- [ ] Record request IDs' status only as `PENDING`/`APPROVED`/`DENIED` with dates;
-      no case ID or account data in Git.
-- [ ] If a request is denied or still pending when P6-T4 is due, follow §10.1.
+Gate: no Terraform, manifest or image change merges before D1–D14 are approved.
 
-## P6-T1 — Contract: decisions, pins, prices and spike (5 h)
+## P6-T2 — Workload and request path (9 h)
 
-**A. SPEC, review, approval (1.5 h)** — recheck §2; second-agent review; owner
-decides D1–D15 and the P6 gross cap; ADR drafted and accepted.
+### P6-T2.1 — Training application and image (4 h)
 
-**B. Pins and prices (2 h)**
+- [ ] **One run key.** `tenant/requestId/runAttempt` names the message, and the
+      S3 prefix `runs/<requestId>/<runAttempt>/` holds every checkpoint, marker
+      and the artifact of that attempt. A new attempt never reads or counts
+      another attempt's objects.
+- [ ] `submit`: if `submitted` exists under the attempt prefix, exits 0 without
+      sending. Otherwise sends one message `{requestId, tenant, runAttempt, steps}`
+      and then writes `submitted`. A crash between the two can send a duplicate
+      with the same key; `train` makes that harmless.
+- [ ] `train`: receives one message and writes `RECEIVED-<n>` with the SQS
+      `ApproximateReceiveCount` n. If the attempt already has `SUCCEEDED`, it
+      deletes the message, logs `ALREADY_DONE` and exits 0 without training. It
+      refuses a foreign `requestId` without deleting it (visibility set to 0),
+      extends visibility on a heartbeat and loads the newest checkpoint of the
+      attempt. It emits `TRAINING_STARTED` (one JSON line on stdout and one
+      marker in S3) with `device=cpu`, the run key, the Pod name and
+      `spec.nodeName` from the downward API. The downward API cannot expose Node
+      labels, so the worker records no capacity type or instance type and the
+      tenant gets no right to read Nodes. It trains a small synthetic model
+      (NumPy logistic regression) for a fixed number of steps, checkpoints every
+      K steps, writes the final artifact and `SUCCEEDED`, deletes the message and
+      exits 0.
+- [ ] On SIGTERM: writes a checkpoint, leaves the message, exits non-zero.
+- [ ] Failure profile `fail-always` for the dead-letter scenario. It fails after
+      `RECEIVED-<n>`, so every receive is recorded.
+- [ ] `cleanup`: deletes leftover messages of one `requestId` (receive and
+      filter) and finished Jobs of the request.
+- [ ] `probe`: one S3 or IMDS call (`head`, `get`, `put` on a given bucket and
+      key, or the IMDS token call) that prints only the outcome and the AWS
+      error code. B12 and B14 use it, so their probe Pods pass the same Kyverno
+      digest policy as training.
+- [ ] Unit tests with in-memory fakes for SQS and S3: resume, foreign message,
+      SIGTERM, double delivery, duplicate submit, `ALREADY_DONE`, receive
+      markers, heartbeat, fail profile.
+- [ ] Image: digest-pinned `python:3.12-slim` base, non-root UID, read-only root
+      filesystem, passes `restricted`; size recorded (pull time is part of H2).
+      Built by `.github/workflows/batch-training-image.yml`, same pattern as RAG.
 
-- [ ] KEDA, Karpenter, NVIDIA device plugin: release, Kubernetes 1.35 support,
-      chart version, every image digest (§12 S3–S5).
-- [ ] AL2023 NVIDIA AMI: the exact alias version Karpenter will resolve for
-      Kubernetes 1.35; NVIDIA driver version; root volume size it needs.
-- [ ] Prices from the Price List API for every instance type in the allowlist;
-      Spot price history for the last 7 days per type and zone
-      (`aws ec2 describe-spot-price-history`, read-only). §10.2 and COST_PLAN §5
-      and §9 are updated if any value differs.
-- [ ] Registry probe (`infra/terraform/scripts/registry_probe.sh`) for every
-      registry host of the new images against the S3 endpoint policy.
-- [ ] Karpenter controller policy for the pinned version, reduced per D6.
-- [ ] VERSION_MATRIX gets a "P6 pins" section.
-
-**C. kro spike on kind (1.5 h)** — same method as the P4 spike.
-
-- [ ] A `ScaledJob` as a graph node: RGD becomes Active only when the KEDA CRDs
-      exist; `readyWhen` on its Ready condition.
-- [ ] Submit Job in `zdr-platform` named with `spec.runAttempt`; behaviour on
-      retry as in the P4 spike.
-- [ ] Optional (D4): a child whose field is written by another actor and read
-      into instance status. If it fails, the documented outcome command is the
-      contract and the status carries pointers only.
-
-Gate: no code, image, Terraform or manifest change for P6 before part A is
-approved.
-
-## P6-T2 — Workload and request path (10 h)
-
-### P6-T2.1 — Training application and image (4.5 h)
-
-- [ ] `submit`: sends one message `{requestId, tenant, runAttempt, profile}` and
-      nothing else; idempotent per attempt.
-- [ ] `train`: receive one message; refuse a foreign `requestId` without deleting
-      it; extend visibility on a timer; load the newest checkpoint if any; emit
-      `TRAINING_STARTED` (one JSON line on stdout and one marker object in S3)
-      only after the device check; train a small synthetic model for a fixed
-      number of steps; checkpoint every K steps; write the final artifact and a
-      success marker; delete the message; exit 0.
-- [ ] On SIGTERM: write a checkpoint, leave the message, exit non-zero.
-- [ ] Device check per D12: profile `gpu` fails unless a CUDA device is present.
-      Profile `cpu-lab` is for kind and the CPU window and marks every marker
-      `device=cpu`.
-- [ ] `cleanup`: removes leftover messages of a request and old Job Pods.
-- [ ] Unit tests with fakes for SQS and S3: resume, foreign message, SIGTERM,
-      double delivery.
-- [ ] Image: digest-pinned base, non-root, passes `restricted`; size recorded
-      because pull time is part of H2.
-
-### P6-T2.2 — RGD, KEDA objects, requests and kind lab (5.5 h)
+### P6-T2.2 — RGD, KEDA objects, requests and kind lab (5 h)
 
 **A. Manifests (3 h)**
 
-- [ ] `gitops/platform/rgd/batch-training-job.yaml`: nodes `platformConfig`
-      (externalRef), `bucket` (Crossplane), `serviceAccount`, `scaledJob`,
-      `submit` (Job in `zdr-platform`). Status: queue name, bucket, run attempt,
-      submit state, outcome or outcome pointer.
-- [ ] `ScaledJob`: SQS trigger with queue length 1; `maxReplicaCount: 1`; polling
-      interval fixed in Git; history limits; Job template with
-      `activeDeadlineSeconds` 2,700, `backoffLimit: 0`, GPU limit 1, toleration
-      and node selector for the GPU pool, `restricted` security context,
-      requests and limits.
-- [ ] `TriggerAuthentication` using the KEDA operator's own identity.
-- [ ] Two valid requests and disabled negatives (unknown namespace, second
-      active request, profile not allowed).
-- [ ] `gitops/check.sh`: at most one enabled `BatchTrainingJob`; image digests;
-      no queue URL or ARN; provider allowlist unchanged.
-- [ ] Tenant quota raised for exactly one training Pod and one GPU; tenant
-      NetworkPolicy allows the same egress shape as RAG without the database.
+- [ ] `gitops/platform/rgd/batch-training-job.yaml`, nodes in order:
+      `platformConfig` (externalRef, queue URL and region from `zdr-platform`),
+      `bucket` (Crossplane, `zero-drift-batch-<tenant>-<name>`), `scaledJob`,
+      `submit` (Job in `zdr-platform`, named with `spec.runAttempt`). Status:
+      queue name, bucket, run attempt, submit state, outcome pointer.
+- [ ] ServiceAccount `batch-train` in each tenant namespace, owned by the
+      platform (`gitops/platform/tenants/serviceaccounts.yaml`), not by the RGD.
+      Its IRSA role `zero-drift-batch-<tenant>` exists for both tenants, so the
+      identity outlives a disabled request and B12 has a real second tenant. The
+      role ARN annotation holds the account ID, so the window adds it with
+      kubectl and the Application ignores that field (same pattern as
+      `rag-db-admin`).
+- [ ] `ScaledJob`: `aws-sqs-queue` trigger, `queueLength: "1"`,
+      `scaleOnInFlight: "true"`, `maxReplicaCount: 1`, `pollingInterval: 10`,
+      `successfulJobsHistoryLimit: 1`, `failedJobsHistoryLimit: 1`; Job template
+      with `activeDeadlineSeconds: 2700`, `backoffLimit: 0`, toleration and node
+      selector for the batch pool, `restricted` security context, requests and
+      limits per D9, tenant label, digest-pinned image.
+- [ ] `ClusterTriggerAuthentication` `zdr-sqs` (platform-owned, not per request)
+      using the KEDA operator's IRSA identity.
+- [ ] kro RBAC: ClusterRole for `ScaledJob` and `Job`; AppProject `zdr-requests`
+      admits `BatchTrainingJob` (SPEC-P5 D4).
+- [ ] Requests: `gitops/requests/disabled/tenant-a-batch.yaml` and
+      `gitops/requests/disabled/tenant-b-batch.yaml`. Both are **disabled when the
+      platform is built**. `zdr-requests` syncs only files directly in
+      `gitops/requests/` (no `directory.recurse`, P4), so enabling a request means
+      moving its file up one level in a PR, after the queue is purged. A file in
+      a subfolder such as `requests/tenant-a/` is never synced. Negatives in
+      `gitops/tests/` (second enabled request, unknown namespace, steps out of range).
+- [ ] `gitops/check.sh`: at most one `BatchTrainingJob` directly in
+      `gitops/requests/`; no `BatchTrainingJob` in any other subfolder than
+      `disabled/`; image digest; no queue URL or ARN in Git; Karpenter NodePools
+      have limits and expiry.
+- [ ] Tenant quota and LimitRange per D9.
 
-**B. L2 kind lab: KEDA behaviour without AWS (2.5 h)** — owner predicts first.
+**B. L2 kind lab (2 h)** — `docs/runbooks/P6_L2_KIND_KEDA.md`, owner predicts first.
+L2 covers Pod Security `restricted`, the tenant quota and LimitRange, KEDA and
+resume. It runs without Kyverno and without NetworkPolicy, and uses a locally
+built image by tag; the image-digest policy and the real network path are
+checked only at L3.
 
-- [ ] KEDA on kind with a lab-only SQS-compatible queue (`labs/p6-kind/`).
-- [ ] Zero messages → zero Jobs. One message → one Job. A message in flight →
-      no second Job. Message never deleted → what KEDA does after the visibility
-      timeout.
-- [ ] `cpu-lab` profile end to end against lab object storage or a fake.
-- [ ] Kill the Pod mid-run; observe redelivery and resume.
+- [ ] KEDA 2.21.1 on kind with ElasticMQ as the queue and MinIO as S3 (lab-only
+      images, lab namespace, not in Git requests).
+- [ ] Zero messages → zero Jobs. One message → one Job. Message in flight → no
+      second Job. Message never deleted → redelivery after the visibility timeout.
+- [ ] Training end to end against MinIO; kill the Pod mid-run; resume from the
+      checkpoint; one artifact.
+- [ ] kro graph with a `ScaledJob` node becomes Active (A5).
 
-Evidence: `docs/evidence/p6/P6-T2.2_L2_KIND_KEDA_<date>.md`. kind proves nothing
-about SQS, IRSA, Karpenter, EC2 or GPUs.
+kind proves nothing about SQS, IRSA, Karpenter or EC2. Karpenter has no
+published kind provider (S5), so Karpenter is L3 only.
 
-## P6-T3 — Terraform: batch platform and Karpenter prerequisites (7 h)
+## P6-T3 — Terraform: batch platform and Karpenter (6 h)
 
-**A. Module `batch-platform` (3 h)**
+**A. Module `batch-platform` (2.5 h)**
 
-- [ ] Queue and dead-letter queue: short retention, visibility timeout and
-      `maxReceiveCount` per D8, service-managed encryption, project tags.
-- [ ] Roles (IRSA, exact subject and audience unless stated): KEDA operator
-      (read attributes of the one queue); `batch-submit` in `zdr-platform`
-      (send to the one queue); `zero-drift-batch-tenant-a` and `-tenant-b`
-      (receive, delete, change visibility on the queue; list, get, put on that
-      tenant's `zero-drift-batch-<tenant>-*` buckets).
-- [ ] Crossplane S3 role: second bucket prefix (A7).
-- [ ] Root flag `enable_batch_platform` (default false).
+- [ ] Queue `zero-drift-batch` and dead-letter queue: retention 1 h, visibility
+      timeout and `maxReceiveCount` per D8, SSE-SQS, project tags.
+- [ ] IRSA roles (exact `sub` and `aud`): KEDA operator (`sqs:GetQueueAttributes`
+      on the one queue); `zero-drift-batch-submit` in `zdr-platform` (send to the
+      queue; write the `submitted/` marker in batch buckets);
+      `zero-drift-batch-tenant-a` and `-tenant-b`, trusted only by
+      `system:serviceaccount:<tenant>:batch-train` (receive, delete, change
+      visibility on the queue; list, get, put, delete on that tenant's
+      `zero-drift-batch-<tenant>-*` buckets only).
+- [ ] Crossplane S3 role: add prefix `zero-drift-batch-` (A7).
+- [ ] Root flag `enable_batch_platform` (default false); requires
+      `enable_rag_platform` for the Crossplane role, or the role moves (decided in
+      the module).
 
-**B. Module `karpenter` (2.5 h)**
+**B. Module `karpenter` (2 h)**
 
-- [ ] Controller role, node role, instance profile created here and referenced
-      by name; access entry for the node role; interruption queue and its event
-      rules; discovery tags on the subnets and the node security group.
-- [ ] No Karpenter permission on IAM beyond `iam:PassRole` for the node role.
+- [ ] Controller IRSA role (service account `karpenter/karpenter`), node role with
+      the three EKS worker policies and `AmazonSSMManagedInstanceCore` left out,
+      instance profile created here and named in the `EC2NodeClass`, access entry
+      `EC2_LINUX` for the node role, interruption queue with the four EventBridge
+      rules, discovery tag `karpenter.sh/discovery` on public subnets and the
+      node security group.
+- [ ] Controller policy: release policy reduced per D6; no IAM write;
+      `iam:PassRole` for the node role only; EC2 actions conditioned on the
+      cluster tag where the release policy does so.
 
 **C. Guards and inventory (1.5 h)**
 
-- [ ] `plan_assert.sh` behind `P6_WINDOW=1`, each with a synthetic-plan guard
-      test: no wildcard resource, exact action allowlists, no IAM write for
-      Karpenter, tenant-a cannot name a tenant-b bucket, platform roles not
-      assumable from a tenant namespace, queue not public.
-- [ ] IAM simulation script: allowed and denied matrix for the new roles.
-- [ ] `inventory.sh` learns Spot requests, Karpenter-tagged instances and launch
-      templates, P6 queues, buckets and roles. Counts only.
+- [ ] `plan_assert.sh` behind `P6_WINDOW=1`, with guard tests on synthetic
+      plans: no wildcard resource on IAM, no IAM write for Karpenter, tenant-a
+      role cannot name a tenant-b bucket, queue not public, `enable_batch_platform`
+      off by default.
+- [ ] `batch_iam_check.sh`: simulation matrix for the new roles (allowed and denied).
+- [ ] `inventory.sh` counts Karpenter-tagged instances, launch templates, Spot
+      requests, P6 queues, roles and instance profiles. Counts only.
 
-## P6-T4 — L3 windows on EKS (11 h)
+## P6-T4 — L3 window, suite and acceptance (7 h)
 
-Prerequisites: P4 accepted; P5 accepted; P6-T2 and P6-T3 merged; kind lab PASSED.
-GPU windows also need P6-T0 approved quotas. The RAG platform stays off in these
-windows unless the owner wants a regression check.
+### P6-T4.1 — Batch suite (1.5 h)
 
-### P6-T4.1 — Window 1: KEDA and Karpenter on CPU, no GPU (3.5 h)
+`gitops/tests/batch-suite.sh` (L3, read-mostly). Counts and verdicts only. Every
+AWS or Kubernetes read is guarded: a failed read gives `READ_FAILED`, never `0`.
 
-- [ ] Window request and approval as in P4.
-- [ ] Platform plus KEDA and Karpenter; real SQS queue.
-- [ ] CPU `NodePool` on Standard Spot quota, one small node, same limits and
-      expiry pattern as the GPU pool.
-- [ ] `cpu-lab` request end to end: message → Job → pending Pod → NodeClaim →
-      node → marker → checkpoint → completion → node gone on Kubernetes and AWS.
-- [ ] Interruption drill: remove the node mid-run; resume from checkpoint.
-- [ ] Negatives that need no GPU: second message, foreign `requestId`,
-      dead-letter queue, cross-tenant bucket, KEDA and Karpenter identity limits.
-- [ ] Teardown; inventory.
+| Case | Checks | PASS only if |
+|---|---|---|
+| B01 | Empty queue → no Job, no node. Runs **after** the first run, so a working scaler is proven | the ScaledJob is `Ready` and has already started a Job from this queue; `visible=0 inflight=0` over at least three polls; then 0 new Jobs, 0 NodeClaims, 0 Karpenter instances. A missing ScaledJob is `FAIL`, not an empty result |
+| B02 | One message → one Job | exactly one Job for this run key |
+| B03 | In-flight → no second Job | still one Job after three polls |
+| B04 | Outcome of the current attempt | `TRAINING_STARTED`, at least one checkpoint, `SUCCEEDED` and exactly one artifact under this attempt's prefix, written after this attempt's `submitted`. While the Pod runs, the suite reads Pod → `spec.nodeName` → Node labels `karpenter.sh/capacity-type` and `node.kubernetes.io/instance-type` and stores them with the run key. No label read means no capacity claim |
+| B05 | Node reclaimed | the Node is gone from Kubernetes and the instance is `terminated` on AWS, counted by tag |
+| B06 | Resume after Pod delete | new Job for the same run key; `resumed from step N`, N > 0 |
+| B07 | Resume after NodeClaim delete | as B06, labelled "simulated disruption" (D11) |
+| B08 | Dead letter after `fail-always` | the attempt has `RECEIVED-1` to `RECEIVED-3`, its message is in the DLQ, no `SUCCEEDED`. The number of Failed Jobs is not counted (`failedJobsHistoryLimit: 1` keeps one) |
+| B09 | Second message → no second node | one Job and one NodeClaim |
+| B10 | Pod without toleration | not on a batch node |
+| B11 | Quotas (P5 audit §3.1) | separate rejections for `pods` and for `count/jobs.batch` at the D9 values, each denial message naming that resource, plus one Pod above `requests.cpu`. A generic error is `FAIL` |
+| B12 | Cross-tenant bucket | an object that exists in tenant-a's bucket; a probe Pod with `tenant-a/batch-train` reads it (positive control); a probe Pod with `tenant-b/batch-train` gets `AccessDenied` for get and put on the same key. `NoSuchBucket`, a timeout or any other code is `FAIL` |
+| B13 | KEDA and Karpenter identity limits | simulation (`batch_iam_check.sh`) plus one denied real call each |
+| B14 | IMDS from a batch Pod | the probe gets no token (hop limit 1) |
 
-This window proves the mechanism and is the owner's Karpenter micro-lab. It is
-not GPU evidence.
+### P6-T4.2 — L3 window on EKS (4 h)
 
-### P6-T4.2 — Window 2: GPU bring-up (3.5 h)
+`docs/runbooks/P6_L3_WINDOW.md`. One window, approved separately:
 
-- [ ] Fresh quota read; window request priced at the On-Demand rate.
-- [ ] Device plugin; GPU `NodePool`s per D7.
-- [ ] One `gpu` request. Record each step time: sync, message, Job, NodeClaim,
-      instance running, node Ready, GPU allocatable, image pulled,
-      `TRAINING_STARTED`. These are smoke values for the H2 budget in §10.3.
-- [ ] Reclamation on both sides: Pod gone, Node gone, instance terminated, volume
-      gone. Record the scale-down time as a smoke value.
-- [ ] Owner-typed micro-lab: follow one NodeClaim from creation to termination.
+- [ ] Bootstrap with `enable_rag_platform` and `enable_batch_platform`; platform
+      sync; P5 guardrails on (Kyverno, NetworkPolicy).
+- [ ] KEDA and Karpenter sync; NodePools. Both requests are disabled at this
+      point. Purge the queue and the DLQ, then enable `tenant-a-batch` by PR.
+- [ ] Suite order: B02–B05 on the first run, then B01, then B06–B14.
+- [ ] Both tenants complete one run, one after the other; one run on On-Demand
+      by pausing the Spot pool, labelled `on-demand`. The second tenant's
+      request is enabled only when the queue shows `visible=0 inflight=0` and no
+      batch Job is active, so no worker releases a foreign message (D3).
+- [ ] Owner micro-lab: follow one NodeClaim from creation to termination.
+- [ ] Smoke timings: sync, message, Job, NodeClaim, instance running, node Ready,
+      image pulled, `TRAINING_STARTED`; scale-down time. Smoke values only.
+- [ ] Teardown per §9.5; immediate inventory.
 
-### P6-T4.3 — Window 3: full scenarios, negatives, teardown (4 h)
+Stop conditions: those of P5, plus a batch node alive more than 15 minutes with
+no batch Pod; a second batch node in one pool; capacity not obtained 20 minutes
+after the Pod went pending (record `FAILED_CAPACITY`, never widen the allowlist
+in the window); a NodeClaim that does not terminate 15 minutes after deletion;
+gross reaching the window cap.
 
-- [ ] Both tenants, one request each, one after the other.
-- [ ] Interruption drill on GPU (simulated disruption, labelled as such).
-- [ ] Capacity negatives: second message, tenant GPU quota, Pod without
-      toleration, non-GPU Pod.
-- [ ] On-Demand fallback exercised once if the window approval includes it; the
-      run is labelled `on-demand`.
-- [ ] Metadata check from a Pod on the GPU node.
-- [ ] Delete, cleanup, teardown in the order of §9.4; immediate inventory.
+### P6-T4.3 — Acceptance (1.5 h)
 
-Stop conditions for every window: those of SPEC-P4, plus: a GPU node alive more
-than 15 minutes with no training Pod on it; a second GPU instance; capacity not
-obtained 20 minutes after the Pod went pending (record `FAILED_CAPACITY`, do not
-widen the allowlist in the window); GPU spend in the window reaching its sub-cap;
-a NodeClaim that does not terminate 15 minutes after deletion.
-
-## P6-T5 — Acceptance: evidence, review, teach-back (3 h)
-
-- [ ] Acceptance audit in `docs/evidence/p6/`: run IDs, revisions, versions and
-      digests, capacity type and instance type of every run, scenario → evidence,
-      limits (smoke values, simulated disruption, fallback use).
-- [ ] Delayed inventory and billing read by the owner; GPU ledger updated.
-- [ ] Independent review by the second agent.
-- [ ] Owner teach-back on §7; learning status from demonstration only.
+- [ ] Audit `docs/evidence/p6/P6_ACCEPTANCE_AUDIT_<date>.md`: revisions,
+      versions and digests, capacity and instance type of every run, scenario →
+      evidence, limits.
+- [ ] Delayed inventory and Bills gross read by the owner the next day.
+- [ ] Second-agent review; owner teach-back on §7; learning status from
+      demonstration only.
 
 # 6. Verification tiers
 
 | Tier | P6 use | Evidence |
 |---|---|---|
-| L0 | Unit tests, YAML/static checks, Terraform fmt/validate/test, plan assertions, CI | commands, exit status |
+| L0 | Unit tests, YAML/static checks, `terraform fmt/validate/test`, plan assertions, CI | commands, exit status |
 | L1 | Rendered RGD and ScaledJob checked against the pinned CRDs | render output |
-| L2 | kind: kro graph with ScaledJob, KEDA queue behaviour, resume | run ID, predictions, observed |
-| L3 | EKS: SQS, IRSA, Karpenter CPU then GPU, device plugin, reclamation, negatives, teardown | approval, manifest, AWS and Kubernetes output, inventory |
+| L2 | kind: KEDA queue behaviour (ElasticMQ), resume (MinIO), kro graph with ScaledJob | run ID, predictions, observed |
+| L3 | EKS: SQS, IRSA, Karpenter Spot and On-Demand, reclamation, negatives, teardown | approval, AWS and Kubernetes output, inventory |
 
 # 7. Teach-back questions
 
@@ -416,12 +449,12 @@ a NodeClaim that does not terminate 15 minutes after deletion.
    you check at each step.
 2. Why does the worker delete the message at the end and not at the start? What
    happens to cost if it never deletes it?
-3. KEDA scaled the Job. Why is there still no node, and which controller acts next?
+3. KEDA created the Job. Why is there still no node, and which controller acts next?
 4. A Spot node is reclaimed 3 minutes into a run. What does Karpenter do, what
    does the application do, and where does the run continue from?
-5. Which guard actually stops a second GPU node: quota, NodePool limit,
+5. Which guard actually stops a second batch node: quota, NodePool limit,
    `maxReplicaCount` or the tenant quota? What if one of them is wrong?
-6. Pods are at zero and the GPU node is gone. What still costs money?
+6. Pods are at zero and the node is gone. What still costs money?
 7. The baseline keeps a node idle for 30 minutes. How does the length of the
    training run change the H5 result?
 8. In what order do you remove Karpenter and its nodes, and what is left behind
@@ -429,253 +462,183 @@ a NodeClaim that does not terminate 15 minutes after deletion.
 
 # 8. P6 completion rule
 
-P6 is complete only when every scenario in §4 has L3 evidence on EKS with a real
-GPU node, both tenants have completed one run, the node reclamation is shown on
-Kubernetes and on AWS, teardown and delayed inventory are clean, billing is read,
-an independent review has recorded findings and limits, and the owner reaches
-`PRACTICED` + `EXPLAINED` for SQS semantics, KEDA, Karpenter and checkpointing.
-A CPU-only result does not complete P6; it is recorded as the mechanism working
-with the GPU part open (§10.1).
+P6 is complete when every scenario in §4 has L3 evidence on EKS with a node
+created by Karpenter, both tenants have completed one run, reclamation is shown
+on Kubernetes and on AWS, teardown and delayed inventory are clean, billing is
+read, a second-agent review has recorded findings and limits, and the owner
+reaches `PRACTICED` + `EXPLAINED` for SQS semantics, KEDA, Karpenter and
+checkpointing. Every batch result is labelled `CPU_SUBSTITUTE_FOR_GPU`
+(ADR-0009); no GPU claim is made.
 
 # 9. Decisions, traceability and tracking
 
-## 9.1. Decisions for the owner (D1–D15) — proposals, not approved
+## 9.1. Decisions (D1–D14) — proposals for the owner
 
 | ID | Decision | Proposal | Why | Alternative |
 |---|---|---|---|---|
-| D1 | GPU quota request | 4 vCPUs for On-Demand G/VT and 4 vCPUs for Spot G/VT in `us-east-1`; filed by the owner as soon as approved | One `xlarge` GPU instance is 4 vCPUs; the quota itself becomes the hard cap of one node per capacity type. Both are needed: Spot for the optimized arm, On-Demand for the H5 baseline and the fallback | 8 each (room for a replacement node during disruption, weaker cap) |
-| D2 | Who owns the batch platform | Terraform: queue, dead-letter queue, every role, Karpenter prerequisites, behind `enable_batch_platform`. Crossplane: only the per-request checkpoint bucket | One owner per resource (ADR-0003); same reasoning as ADR-0008; no new provider CRDs | `provider-aws-sqs` and a queue per request |
-| D3 | Queue topology | One shared queue for the PoC, as ver3 §6.5 says. Message bodies carry identifiers only. Both tenants' workers can receive from it; recorded as a soft-isolation limit | Matches ver3; no tenant data in messages; a wrong tenant cannot write the other's bucket | One queue per tenant (two queues; stronger, small deviation from ver3 wording) |
-| D4 | Meaning of `Ready` and the outcome | `Ready` = bucket Ready and message submitted. Outcome = success marker and final artifact in S3, shown in status if the spike of P6-T1 C works, otherwise by a documented command | kro does not see Jobs that KEDA creates | A status-writer Job (more RBAC) |
-| D5 | Concurrency | One enabled `BatchTrainingJob` at a time in the PoC, enforced by the static check; `maxReplicaCount: 1` | One GPU node at a time (COST_PLAN §9); a shared queue cannot route messages to a specific ScaledJob | Queue per request |
-| D6 | Karpenter IAM | Instance profile pre-created by Terraform and named in the `EC2NodeClass`; controller policy from the pinned release with the instance-profile and role statements removed; `iam:PassRole` for the node role only; identity through IRSA | Closes the THREAT_MODEL row; Karpenter needs no IAM write | Let Karpenter manage the instance profile (upstream default) |
-| D7 | NodePools | `gpu-spot` (higher weight, Spot) and `gpu-ondemand` (lower weight, On-Demand, `g4dn.xlarge` only). Each: allowlisted types, two zones, GPU taint, limits of one node and one GPU, consolidation when empty after a fixed delay, node expiry of 2 h. `EC2NodeClass`: pinned AL2023 NVIDIA AMI alias, IMDSv2 hop limit 1, encrypted gp3 root, public IPv4, project tags | Explicit capacity type per pool; the On-Demand pool can be left out of a window; expiry is a cost guard that needs no human | One pool with both capacity types |
-| D8 | Queue settings | Visibility timeout 180 s extended by a worker heartbeat; `maxReceiveCount` 3 to the dead-letter queue; retention 1 h; purge at preflight | Redelivery within minutes after a lost node; a failing run cannot relaunch GPUs forever; no stale message in a later window | Long visibility timeout without heartbeat |
-| D9 | Spot instance types | Start with `g4dn.xlarge` only. Add `g5.xlarge` and `g6.xlarge` to the Spot pool only if P6-T1 B prices them and the window cap is recomputed | Cheapest priced type; more types raise Spot availability but also the worst-case price and vary the instance across trials | Three types from the start |
-| D10 | Fallback | The On-Demand pool exists; every GPU window is priced and approved at the On-Demand rate, so a fallback stays inside the cap. Each run records its real capacity type | ver3 §6.5 and §12.1 | No fallback in P6; add it in P8 |
-| D11 | Workload and image | Small PyTorch model on synthetic tensors, about 5 minutes on one T4, checkpoint every K steps; image public on GHCR by digest | Short, repeatable, shows GPU use; no dataset, no licence issue | A minimal CUDA program without a framework (smaller image, less like training) |
-| D12 | Proof of GPU use | `TRAINING_STARTED` and the success marker carry the device name; profile `gpu` fails without CUDA | H2 ends at a GPU training process, not at `Running` | Trust the resource limit |
-| D13 | GPU device management | NVIDIA device plugin DaemonSet on GPU nodes only | The AL2023 NVIDIA AMI ships drivers and toolkit but not the plugin (§12 S6); the plugin gives `nvidia.com/gpu` | DRA driver (recommended by AWS for new work, needs Karpenter 1.15+ feature gates) |
-| D14 | Disruption test | Operator removes the Pod or the NodeClaim mid-run; labelled "simulated disruption" | A real Spot interruption cannot be ordered without AWS FIS | AWS FIS Spot interruption action (new service, extra cost) |
-| D15 | P6 gross cap and windows | 8 USD for all P6 windows and retries, of which at most 3 USD GPU; three windows planned, a fourth only on new approval | §10.2 | — |
+| D1 | Capacity | CPU only (ADR-0009). Batch NodePools allow `m6i.large`, `m5.large`, `c6i.large` (2 vCPU) in `us-east-1a`/`b` | Fits Standard quotas; three types raise Spot availability with one size, so trials stay comparable | `m6i.large` only (uniform, lower Spot availability) |
+| D2 | Who owns the batch platform | Terraform: queue, DLQ, every role, Karpenter prerequisites, behind `enable_batch_platform`. Crossplane: only the per-request checkpoint bucket | One owner per resource (ADR-0003, ADR-0008); no new provider | `provider-aws-sqs` and a queue per request |
+| D3 | Queue topology | One shared queue (ver3 §6.5). Bodies carry identifiers only. Both tenants' workers may receive from it; a foreign `requestId` is released, not deleted. Recorded as soft isolation. A release still counts as a receive toward `maxReceiveCount`, so the enabled request changes only after the queue has drained | Matches ver3; no tenant data in messages; a wrong tenant still cannot write the other's bucket | One queue per tenant |
+| D4 | Meaning of `Ready` and the outcome | `Ready` = bucket Ready and submit Job complete. Outcome = `SUCCEEDED` marker and artifact in S3, read by the suite (B04); status carries the bucket and attempt as pointers | kro does not own the Jobs KEDA creates | A status-writer Job (more RBAC) |
+| D5 | Concurrency | One enabled `BatchTrainingJob` at a time, enforced by `check.sh`; `maxReplicaCount: 1` | A shared queue cannot route a message to one ScaledJob; keeps one node per window | Queue per request |
+| D6 | Karpenter IAM | IRSA (the cluster uses IRSA, no Pod Identity agent). Instance profile pre-created by Terraform and named in `EC2NodeClass.spec.instanceProfile`; release controller policy without the instance-profile statements; `iam:PassRole` for the node role only | Karpenter needs no IAM write; closes THREAT_MODEL §11 row | Let Karpenter manage the instance profile (upstream default) |
+| D7 | NodePools | `batch-spot` (weight 100, Spot) and `batch-ondemand` (weight 10, On-Demand). Each: D1 types, taint `zero-drift.io/batch=true:NoSchedule`, label `zero-drift.io/pool=batch`, `limits.cpu: "2"` (one node), `consolidationPolicy: WhenEmpty`, `consolidateAfter: 60s`, `expireAfter: 2h`. `EC2NodeClass`: alias `al2023@<pinned>` matching the system node AMI release, IMDSv2 required with hop limit 1, encrypted gp3 20 Gi root, `associatePublicIPAddress: true`, project tags | Explicit capacity type per pool; the On-Demand run is forced by setting the Spot pool's limit to 0, not by editing labels; expiry needs no human | One pool with both capacity types (Karpenter picks Spot first) |
+| D8 | Queue settings | Visibility timeout 120 s, heartbeat every 40 s; `maxReceiveCount` 3 to the DLQ; retention 1 h; purge at preflight, before any request is enabled | Redelivery within two minutes after a lost node; a failing run that has received its message cannot relaunch nodes forever; no stale message in a later window. The DLQ counts receives only: a Job that fails before `ReceiveMessage` (image pull, crash at start) is bounded by stop condition H5 of the window runbook, not by the DLQ | Long visibility timeout without heartbeat |
+| D9 | Tenant quota and Pod size | Training container requests `500m` CPU, `384Mi` memory, memory limit `512Mi` (inside LimitRange max). Tenant quota raised by exactly one training Pod and its Jobs: `pods` 8→10, `requests.cpu` 400m→900m, `requests.memory` 768Mi→1152Mi, `limits.memory` 1536Mi→2048Mi, `count/jobs.batch` 4→6. GPU stays 0 | A14; smallest change that fits one run beside two sandboxes; the batch node is dedicated by taint, so the request only sizes the Pod | Separate batch namespace per tenant |
+| D10 | Workload | NumPy logistic regression on synthetic data, `steps` from the request (default 300, about 5 min with a fixed per-step pause), checkpoint every 25 steps; image on GHCR by digest | Short, repeatable, small image (H2 pull time); no dataset, no licence | PyTorch CPU (GB image, closer to real training) |
+| D11 | Disruption test | Operator deletes the Pod (B06) and the NodeClaim (B07) mid-run; labelled "simulated disruption" | A real Spot interruption cannot be ordered without AWS FIS (boundary 5) | AWS FIS (new service, extra cost) |
+| D12 | Kind lab substitutes | ElasticMQ 1.7.1 for SQS, MinIO for S3, static lab keys in a lab Secret; never in `gitops/requests` | Same boto3 code path with `endpoint_url`; no AWS cost | LocalStack (larger, more services than needed) |
+| D13 | Schedule | **Owner 25/11: rebaseline, P6 runs 25–26/11.** Overflow moves to 27/11, never cut. P7–P11 per ROADMAP "Rebaseline 25/11" | Owner directive 25/11; ver3 §12.1 forbids cutting trials, acceptance, learning gate or teardown | Keep 02/12 and cut P8 per the ADR-0009 cut order |
+| D14 | P6 gross cap and windows | 4 USD for the window and retries; one window planned, a second only on new approval | §10 estimate about 2.5 USD for 5 h | — |
 
 ## 9.2. Traceability
 
 | Source requirement | Covered by |
 |---|---|
-| ver3 §6.5 KEDA `ScaledJob` from a shared SQS queue | scenario 2 and 3; P6-T2.2 |
-| ver3 §6.5 Pod requests GPU and runs only on the Karpenter GPU NodePool | scenario 3 and 7; D7 |
-| ver3 §6.5 Spot first with On-Demand fallback | D7, D10; P6-T4.3 |
-| ver3 §6.5 application checkpoints to S3 | scenario 3 and 5; P6-T2.1 |
+| ver3 §6.5 KEDA `ScaledJob` from a shared SQS queue | scenarios 2, 3; P6-T2.2; D3 |
+| ver3 §6.5 Pod runs only on the Karpenter NodePool (CPU per ADR-0009) | scenarios 3, 7; D7 |
+| ver3 §6.5 Spot first with On-Demand fallback | D7; P6-T4.2 On-Demand run |
+| ver3 §6.5 application checkpoints to S3 | scenarios 3, 5; P6-T2.1 |
 | ver3 §9.2 steps 1–5 | scenarios 2–4 |
-| ver3 §10.1 checkpoint/artifact in S3 and GPU node reclaimed | scenarios 3 and 4; §8 |
-| ver3 §11 quota, instance family and total GPU vCPU limits | scenario 1; D1, D7; §10.2 |
-| ver3 §12.1 Spot capacity rule | negative boundary 7; D10; §10.1 |
-| THREAT_MODEL §6.4 KEDA, Karpenter and batch ServiceAccount rows | scenario 8; P6-T3 |
-| EXPERIMENT_PLAN §6 H2 end event and scale-down end event | D12; P6-T4.2 |
-| DRF-19 (queue, checkpoint, GPU quota, lifecycle) | P6-T0, P6-T1, P6-T3 |
-| DRF-20 (outcome, checkpoint, node reclamation) | P6-T2, P6-T4, P6-T5 |
+| ver3 §10.1 checkpoint/artifact in S3 and node reclaimed | scenarios 3, 4; §8 |
+| ver3 §11 quota, instance family and vCPU limits | scenario 1; D1, D7 |
+| ver3 §12.1 Spot capacity rule | boundary 7; D7 |
+| THREAT_MODEL §6.4 KEDA, Karpenter, batch ServiceAccount rows | scenario 8; P6-T3 |
+| EXPERIMENT_PLAN §6 H2 end event and scale-down end event | P6-T2.1 marker; P6-T4.2 timings |
+| P5 audit §3.1 object-count quota moved to P6 | B11 |
+| ADR-0009 §2 label `CPU_SUBSTITUTE_FOR_GPU` | §0, §8 |
+| DRF-19, DRF-20 | whole SPEC; split per §9.4 |
 
 ## 9.3. Independent review
 
-Not done. This draft has had no second-agent review and no owner approval.
+The 25/11 recheck was done by Claude (Opus 5.5); it is not a second-agent review.
 
-## 9.4. Teardown order for a batch window
+Codex review 25/11 (owner ran it on the uncommitted candidate): **REQUEST
+CHANGES**, five HIGH and four MEDIUM findings. Claude applied all nine on 25/11:
 
-1. Remove requests from Git; run `cleanup`; wait for ScaledJobs and Jobs to go.
-2. Confirm zero NodeClaims and zero Karpenter-launched instances **on AWS**.
-3. Remove NodePools and the EC2NodeClass; then Karpenter, KEDA and the device
-   plugin.
-4. P5, P4 and P3 teardown order as applicable.
-5. `terraform destroy` (queues and roles go with it).
+| # | Finding | Applied in |
+|---|---|---|
+| 1 | Requests in a subfolder are never synced by `zdr-requests` | P6-T2.2 requests and `check.sh` |
+| 2 | B01 before the ScaledJob exists passes without a scaler; submit could run before purge | §4 scenario 2, B01, P6-T4.2 order, D8 |
+| 3 | Downward API cannot expose Node labels | P6-T2.1 marker, B04, boundary 7, §4 scenario 3 |
+| 4 | Teardown: root self-heal, unguarded counts, `stopped` instances missed | §9.5, L3 runbook F |
+| 5 | Duplicate submit and stale artifacts can make B04 pass | P6-T2.1 run key, `ALREADY_DONE`, B04 |
+| 6 | `maxReceiveCount` counts receives; one Failed Job kept | P6-T2.1 `RECEIVED-<n>`, B08, D3, D8, §12 |
+| 7 | B11 must name each quota; B12 needs an existing object and a real second tenant | B11, B12; platform-owned `batch-train` ServiceAccount |
+| 8 | L2 `kubectl wait` by label; spike reads only one namespace | L2 runbook steps 5 and 8 |
+| 9 | SPEC said kind runs every P5 guardrail | P6-T2.2 B, §12 |
+
+Codex re-review of these changes: not yet done.
+
+## 9.4. Linear tracking
+
+Created on 25/11 at the owner's request (parents before sub-tasks). DRF-19 and
+DRF-20 are cancelled as superseded, like DRF-18 in P5.
+
+| Issue | Code | Title | Est. | Due |
+|---|---|---|---|---|
+| DRF-73 | P6-T1 | Hợp đồng P6: quyết định D1–D14, pin KEDA/Karpenter, giá | 2 h | 25/11 |
+| DRF-74 | P6-T2 | Workload và đường request batch | parent | 26/11 |
+| DRF-75 | P6-T2.1 | Ứng dụng training và image | 4 h | 25/11 |
+| DRF-76 | P6-T2.2 | RGD BatchTrainingJob, KEDA và lab kind | 5 h | 26/11 |
+| DRF-77 | P6-T3 | Terraform: batch platform và Karpenter | 6 h | 25/11 |
+| DRF-78 | P6-T4 | Batch suite, window L3 và nghiệm thu P6 | parent | 26/11 |
+| DRF-79 | P6-T4.1 | Batch suite | 1.5 h | 26/11 |
+| DRF-80 | P6-T4.2 | Window L3 trên EKS | 4 h | 26/11 |
+| DRF-81 | P6-T4.3 | Nghiệm thu P6 | 1.5 h | 27/11 (delayed inventory) |
+
+## 9.5. Teardown order for a batch window
+
+1. Remove or disable requests in Git; run `cleanup`; wait until ScaledJobs and Jobs are gone.
+2. Pause automated sync of `zdr-root` first (its `selfHeal` would recreate a
+   deleted child app), then delete the NodePools app with the cascade
+   finalizer. The Karpenter controller stays up through this step. Pass only
+   when **both** reads succeed and both are zero: NodeClaims from the
+   Kubernetes API, and Karpenter-tagged instances on AWS in every state except
+   `terminated` (`pending`, `running`, `stopping`, `stopped`, `shutting-down`;
+   a `stopped` instance still bills its volume). A failed read is
+   `READ_FAILED`, never `0`.
+3. Delete the `EC2NodeClass`; then the Karpenter and KEDA applications.
+4. P5, P4 and P3 teardown order as applicable (Kyverno before Argo CD).
+5. `terraform destroy` (queues, roles, instance profile and access entry go with it).
 6. Immediate inventory; delayed inventory the next day.
 
-# 10. Quota, cost and timing analysis
+Karpenter-launched instances are **not** in Terraform state. If step 2 is
+skipped, `terraform destroy` removes the cluster but leaves the instances
+running and billing. The inventory counts Karpenter-tagged instances for that
+reason.
 
-All money figures are gross USD in `us-east-1`. Prices come from COST_PLAN §5.2
-(Price List API, 2026-09-28) unless marked; every one is rechecked in P6-T1 B.
-Durations are planning assumptions until P6-T4.2 replaces them with observed
-values. Nothing here is a result.
+# 10. Quota, cost and timing
 
-## 10.1. Quota: the critical path
+Gross USD in `us-east-1`. Prices from COST_PLAN §5.2 (Price List API, 28/09);
+rechecked in P6-T1. Durations are assumptions until the window.
 
-| Quota | Applied today | Needed | State |
+| Quota | Applied | Needed at peak | State |
 |---|---:|---:|---|
-| Running On-Demand G and VT instances | 0 vCPU | 4 vCPU | `BLOCKED_BY_QUOTA` |
-| All G and VT Spot Instance Requests | 0 vCPU | 4 vCPU | `BLOCKED_BY_QUOTA` |
-| Running On-Demand Standard instances | 5 vCPU | 4 vCPU (two `m6i.large`) | fits; one vCPU spare |
-| All Standard Spot Instance Requests | 5 vCPU | 2 vCPU (CPU lab node) | fits |
+| Running On-Demand Standard | 8 vCPU (read 25/11) | 4 (system) + 2 (batch-ondemand) = 6 | fits |
+| All Standard Spot | 5 vCPU (read 28/09) | 2 (batch-spot) | fits; reread |
+| G/VT | 0 | 0 | out of scope (ADR-0009) |
 
-Read-only check the owner can type:
-
-```bash
-aws service-quotas list-service-quotas --service-code ec2 --region us-east-1 \
-  --query "Quotas[?contains(QuotaName, 'G and VT') || contains(QuotaName, 'Standard')].[QuotaName,QuotaCode,Value]" \
-  --output table
-```
-
-The increase request is `aws service-quotas request-service-quota-increase`
-with the quota code and the desired value. It is an account mutation and is run
-only by the owner after approving D1.
-
-What is not known: how long AWS takes, and whether an account that runs on
-promotional credit with almost no billing history gets a GPU quota at all. The
-plan therefore has an explicit ladder. Each rung is the owner's decision; none
-may be taken silently, and none changes a label.
-
-| Outcome of the requests | Consequence | What can still be claimed |
-|---|---|---|
-| Both approved | Plan as written | everything |
-| On-Demand approved, Spot denied or pending | Functional runs and the H5 baseline run on On-Demand. Optimized arms run on On-Demand and are labelled so | H2, H3, scale-down time. H5 as a Spot claim is **not** supported; the saving from removing the idle window alone can be reported as its own, differently named observation |
-| Spot approved, On-Demand denied | Optimized arms run; no fallback; the H5 baseline arm cannot run | H2/H3 if Spot capacity holds; H5 `INCONCLUSIVE` |
-| Both denied or pending past the rebaselined date | Window 1 (CPU) still proves the KEDA and Karpenter mechanism. The GPU part of P6, H2, H5 and the GPU scale-down metric stay open | Mechanism on CPU only. Any substitute for the GPU requirement is a scope change that needs the owner, the supervisor and an ADR (ver3 §15.2); this SPEC does not propose one |
-
-Moving to another Region does not help by itself: quotas are per Region and the
-Terraform root accepts only `us-east-1`.
-
-## 10.2. Cost
-
-Unit prices used:
-
-| Item | Price | Source |
-|---|---:|---|
-| `g4dn.xlarge` On-Demand (4 vCPU, 16 GiB, one T4) | 0.526 USD/h | COST_PLAN §5.2 |
-| GPU node root volume, gp3 50 GB | 0.0055 USD/h | 50 × 0.08 / 730 |
-| Public IPv4 | 0.005 USD/h | COST_PLAN §5.2 |
-| **GPU node, On-Demand, all in** | **0.537 USD/h** | sum |
-| GPU node on Spot | unknown | must be read from Spot price history; **0.22 USD/h is a sizing assumption only** (about 40 % of On-Demand) |
-| Cluster with two `m6i.large`, no RDS | 0.309 USD/h | 0.10 + 2 × (0.096 + 0.005 + 0.0033) |
-| `g5.xlarge`, `g6.xlarge` | not looked up | recalled as roughly 2× and 1.5× the `g4dn.xlarge` price; `UNVERIFIED` |
-
-Time model per run (assumptions): provisioning to training start plus
-termination about 10 minutes; training 5 minutes; baseline idle window
-30 minutes (EXPERIMENT_PLAN §5.4, locked).
-
-| Run type | Node time | On-Demand | Spot (assumed) |
-|---|---:|---:|---:|
-| Optimized run (KEDA + Karpenter) | 0.25 h | 0.134 USD | 0.055 USD |
-| Baseline arm (On-Demand, always on through the idle window) | 0.75 h | 0.402 USD | — |
-
-P6 windows:
-
-| Window | Cluster | GPU (worst case, On-Demand) | Estimate |
-|---|---:|---:|---:|
-| 1 — CPU lab, 3 h | 0.93 | 0 (CPU Spot node ≈ 0.10) | 1.0 |
-| 2 — GPU bring-up, 4 h | 1.24 | ≤ 2 h → 1.07 | 2.3 |
-| 3 — full scenarios, 4 h | 1.24 | ≤ 2 h → 1.07 | 2.3 |
-| **Total** | 3.4 | 2.1 | **5.6** |
-
-Proposed cap (D15): 8 USD, GPU part at most 3 USD, which is 5.6 GPU-hours at the
-On-Demand rate (COST_PLAN §9 formula: remaining GPU envelope ÷ hourly price).
-
-GPU envelope across the remaining phases (ver3 §11: 15 USD), worst case with
-every optimized run on On-Demand:
-
-| Phase | GPU use | Worst case |
-|---|---|---:|
-| P6 | bring-up and scenarios | 3.0 |
-| P7 | one smoke under metrics, one manual-baseline dry run | 1.0 |
-| P8 | pilot: two H2 runs and one cost pair | 1.0 |
-| P9 | 20 optimized runs (2.68) + 5 baseline arms (2.01) + 25 % for replacement trials | 5.9 |
-| **Total** | | **10.9 of 15** |
-
-About 4 USD stays free, which is 7.6 On-Demand GPU-hours. With Spot at the
-assumed price the P9 line drops to about 3.9. COST_PLAN §5.3 planned 20 GPU-hours
-(10.63 USD); this model is consistent with it. If a larger instance type joins
-the allowlist (D9), every line is recomputed before approval.
-
-Guards on GPU spend, from strongest to weakest:
-
-1. Account quota of 4 vCPUs per capacity type (D1) — enforced by AWS.
-2. NodePool allowlist of types and zones; `limits` of one node and one GPU —
-   enforced by Karpenter, eventually consistent (§12 S4).
-3. Node expiry of 2 h — a node dies even if everything else hangs.
-4. `maxReplicaCount: 1`, one enabled request, tenant GPU quota of 1.
-5. Job deadline of 2,700 s; dead-letter queue after 3 receives.
-6. Window stop time, the stop conditions of P6-T4 and the inventory.
-7. Budget alerts — late by design; not a guard for a single window.
-
-## 10.3. What the model says about H2 and H5 before any measurement
-
-H2 (`TARGET` p95 ≤ 900 s from Argo observing the request to `TRAINING_STARTED`).
-Expected stages, all `ASSUMPTION` until P6-T4.2:
-
-| Stage | Assumed | Depends on |
-|---|---:|---|
-| kro graph, bucket Ready, message sent | 0.5–1.5 min | Crossplane, S3 API |
-| KEDA sees the message, creates the Job | ≤ polling interval | value fixed in Git |
-| Karpenter launches; instance running; node Ready | 2–5 min | capacity, AMI boot, driver load |
-| Device plugin Pod ready; GPU allocatable | 0.5–1.5 min | plugin image pull |
-| Training image pull | 1–4 min | image size; a framework image is several GB |
-| Process start and device check | < 0.5 min | — |
-
-The sum is about 5–12 minutes when capacity is available, so the target is
-plausible but not safe. The image size and the KEDA polling interval are the two
-parts under the project's control; both are fixed before the campaign freeze
-and not tuned afterwards. A Spot capacity error costs minutes before the
-fallback pool is tried and can push a trial past the target or the 1,800 s
-timeout; that is a valid result, not an exclusion.
-
-H5 (`TARGET` ≥ 40 % lower variable compute cost). In the time model above:
-
-| Comparison | Saving ratio |
+| Item | Price |
 |---|---:|
-| Optimized on Spot (assumed price) vs baseline | (0.402 − 0.055) / 0.402 ≈ 86 % |
-| Optimized on On-Demand vs baseline | (0.402 − 0.134) / 0.402 ≈ 67 % |
+| Cluster + two `m6i.large` + RDS `db.t4g.micro`, P5 stack | about 0.45 USD/h (P5 window estimate, `P5_L3_WINDOW.md` §7) |
+| `m6i.large` On-Demand + gp3 20 Gi + public IPv4 | 0.096 + 0.002 + 0.005 ≈ 0.103 USD/h |
+| `m6i.large` Spot | unread; 0.04 USD/h is a sizing assumption only |
+| SQS, EventBridge | requests in the thousands; below 0.01 USD |
 
-The second line shows that most of the saving comes from removing the idle
-window, not from the Spot discount. It also shows the result depends on the
-locked profile: with the same 10-minute overhead and 30-minute idle window, an
-On-Demand-only comparison stays above 40 % only while the training run is
-shorter than about 35 minutes. The report must state this dependence. The
-profile (run length, idle window, instance type) is locked in P7 and frozen in
-P8 before any cost is seen, and is not changed afterwards (ver3 §15.2).
+Window estimate (5 h): stack 2.25 + batch nodes about 2 node-hours 0.2 ≈
+**2.5 USD**. Cap D14: 4 USD.
 
-# 11. Open risks
+H2 budget (target p95 ≤ 900 s, measured in P9): KEDA poll ≤ 10 s; Karpenter
+launch to node Ready 1–3 min on CPU (no driver); image pull under 1 min for a
+small image; process start seconds. The CPU path is expected well under the
+target; that is a property of the substitute and is stated as such.
 
-- **GPU quota** (§10.1). The largest schedule risk in the project.
-- **Spot capacity.** A single type in two zones can be unavailable for long
-  stretches. D9 trades availability against price and trial uniformity.
-- **Orphaned instances.** If Karpenter is removed before its nodes, the
-  instances keep running and billing with nothing left to stop them. §9.4 and
-  the AWS-side inventory are the control.
-- **Stale message.** A message left in the queue launches a GPU node as soon as
-  the controllers come up. Short retention, purge at preflight and queues that
-  live only for a window are the controls.
-- **Message never deleted.** A bug in the worker makes KEDA start Job after Job.
-  The dead-letter queue bounds it to three launches.
-- **Image size against H2** (§10.3).
-- **Registry reachability.** Device plugin, KEDA and Karpenter images come from
-  registries not used in P3/P4; the S3 endpoint policy may block a redirect.
-- **kro and Jobs created by KEDA.** The outcome is outside the graph (D4). The
-  P4 spike found that kro leaves Job Pods behind; the submit Job has the same
-  issue and `cleanup` must cover it.
-- **Guardrails from P5.** Pod Security `restricted`, the image policy, the GPU
-  quota and default-deny egress all apply to the training Pod. Each is tested
-  in `Audit` first.
-- **Limits are eventually consistent.** Karpenter can briefly overshoot a
-  NodePool limit; the account quota is the real cap.
-- **Node clock.** The `TRAINING_STARTED` time comes from the node. The clock
-  check of EXPERIMENT_PLAN §11.2 (2 s) must include a freshly booted GPU node.
-- **Logs disappear with the node.** Pod logs are gone once the node is
-  terminated. Markers are written to S3 for that reason; the harness must not
-  depend on `kubectl logs` after completion.
-- **Shared queue.** A tenant's worker can receive or delete the other tenant's
-  message (D3). Soft isolation; recorded, not hidden.
-- **Schedule.** P6 starts after its gate; the rebaseline is the owner's.
+H5 (target ≥ 40 %): with 5 min of training, 3 min of overhead and the locked
+30-minute idle window, On-Demand optimized vs baseline is (35 − 8) / 35 ≈ 77 %;
+most of the saving comes from removing the idle window, not from Spot. The
+report states this dependence (ver3 §15.2); the profile is locked in P7/P8.
 
-# 12. Sources and dated facts (recheck at P6-T1)
+# 11. Sources and dated facts
 
 | # | Fact | Source | Checked | Status |
 |---|---|---|---|---|
-| S1 | G/VT On-Demand and Spot quotas are 0; Standard quotas are 5 | COST_PLAN §7.3 | 2026-09-28 | `ACCOUNT_VERIFIED` then; recheck |
-| S2 | Quota codes `L-DB2E81BA` (On-Demand G and VT) and `L-3819A6DF` (Spot G and VT) | author's recollection | not looked up | `UNVERIFIED`; read them from `list-service-quotas` |
-| S3 | KEDA latest release `v2.21.1`; matrix candidate `v2.21.0` tested on Kubernetes 1.34–1.36 | [KEDA releases](https://github.com/kedacore/keda/releases); VERSION_MATRIX §2 | 2026-11-16; 2026-09-25 | `SOURCE_VERIFIED`; pin at P6-T1 |
-| S4 | Karpenter latest release `v1.15.2`; matrix candidate `v1.14.1` LTS. Spot is tried before On-Demand; an unavailable offering is cached for three minutes; `limits` are eventually consistent; `weight` orders NodePools; consolidation policies `WhenEmpty`, `WhenEmptyOrUnderutilized`, `Balanced` | [Karpenter releases](https://github.com/aws/karpenter-provider-aws/releases), [NodePools](https://karpenter.sh/docs/concepts/nodepools/) | 2026-11-16 | `DOC_VERIFIED` for the latest docs; recheck against the pinned version |
-| S5 | `EC2NodeClass`: `instanceProfile` means Karpenter does not manage the profile; default metadata options are `httpTokens: required`, hop limit 1; default AL2023 root volume 20 Gi gp3 | [Karpenter NodeClasses](https://karpenter.sh/docs/concepts/nodeclasses/) | 2026-11-16 | `DOC_VERIFIED`; whether the `al2023` alias selects the NVIDIA variant for GPU types is `UNVERIFIED` |
-| S6 | AL2023 x86_64 NVIDIA AMI supports `g4dn`, `g5`, `g6`; includes driver and container toolkit; does **not** include the NVIDIA device plugin or DRA driver; kernel 6.12 for Kubernetes 1.33–1.35 | [EKS accelerated AMIs](https://docs.aws.amazon.com/eks/latest/userguide/ml-eks-optimized-ami.html), [NVIDIA GPUs on EKS](https://docs.aws.amazon.com/eks/latest/userguide/device-management-nvidia.html) | 2026-11-16 | `DOC_VERIFIED` |
-| S7 | KEDA SQS scaler defaults: `queueLength` 5, `scaleOnInFlight` true, `scaleOnDelayed` false; `identityOwner` deprecated; pod identity provider `aws` | [KEDA AWS SQS scaler 2.21](https://keda.sh/docs/2.21/scalers/aws-sqs/) | 2026-11-16 | `DOC_VERIFIED`; the exact IAM action is not named there — confirm |
-| S8 | `g4dn.xlarge` 0.526 USD/h; gp3 0.08 USD/GB-month; public IPv4 0.005 USD/h; `m6i.large` 0.096 USD/h; EKS 0.10 USD/h | COST_PLAN §5.2 | 2026-09-28 | `PRICE_API_VERIFIED`; recheck |
-| S9 | Spot price for any GPU type | — | never read | `UNVERIFIED`; `describe-spot-price-history` at P6-T1 and before each window |
-| S10 | NVIDIA device plugin version and image | — | not looked up | `UNVERIFIED`; pin at P6-T1 |
-| S11 | Size of a CUDA framework image; GPU node boot time | — | not measured | `ASSUMPTION`; measured in P6-T4.2 |
+| S1 | KEDA v2.21.1 latest (15/11); v2.21 supports Kubernetes 1.34–1.36; chart `kedacore/keda` 2.21.1 (16/11) | [KEDA releases](https://github.com/kedacore/keda/releases), [cluster](https://keda.sh/docs/latest/operate/cluster/), [charts](https://github.com/kedacore/charts/releases) | 2026-11-25 | `SOURCE_VERIFIED`; digests at P6-T1 |
+| S2 | KEDA 2.21.0 breaking change: service-account token audience enforcement (`boundServiceAccountToken` TriggerAuthentications) | KEDA release notes; [migration](https://keda.sh/docs/2.21/migration/) not read | 2026-11-25 | read migration page at P6-T1 |
+| S3 | SQS scaler: `queueURL`, `queueLength` (default 5), `activationQueueLength`, `awsRegion`, `awsEndpoint`, `scaleOnInFlight` (true), `scaleOnDelayed` (false); auth `podIdentity.provider: aws` or static keys via `secretTargetRef`; docs say only "read properties" of the queue | [KEDA SQS scaler](https://keda.sh/docs/latest/scalers/aws-sqs/) | 2026-11-25 | `DOC_VERIFIED`; exact IAM action from the scaler source at P6-T1 |
+| S4 | Karpenter v1.15.3 latest (20/11); Kubernetes 1.35 needs `>= 1.9`; chart `oci://public.ecr.aws/karpenter/karpenter` 1.15.3; empty selector terms now ignored | [releases](https://github.com/aws/karpenter-provider-aws/releases), [compatibility](https://karpenter.sh/docs/upgrading/compatibility/) | 2026-11-25 | `SOURCE_VERIFIED` |
+| S5 | `EC2NodeClass` v1: `associatePublicIPAddress`, `role` or `instanceProfile`, `amiSelectorTerms` alias `al2023@<version>` exclusive, `metadataOptions`; NodePool `limits` (cpu, memory, nodes), `expireAfter`, `consolidationPolicy` `WhenEmpty`, `consolidateAfter`. No published KWOK image (build from source) | [NodeClasses](https://karpenter.sh/docs/concepts/nodeclasses/), [NodePools](https://karpenter.sh/docs/concepts/nodepools/), [kwok](https://github.com/aws/karpenter-provider-aws/tree/main/kwok) | 2026-11-25 | `DOC_VERIFIED` |
+| S6 | ElasticMQ `softwaremill/elasticmq-native` 1.7.1 (= `latest`), SQS-compatible REST on 9324 | [Docker Hub](https://hub.docker.com/r/softwaremill/elasticmq-native/tags), [repo](https://github.com/softwaremill/elasticmq) | 2026-11-25 | `SOURCE_VERIFIED`; digest at P6-T1 |
+| S7 | Standard On-Demand quota 8 vCPU | P5-T4.2 evidence, preflight | 2026-11-25 | `ACCOUNT_VERIFIED` then; reread at T−30 |
+| S8 | `m6i.large` 0.096 USD/h; gp3 0.08 USD/GB-month; public IPv4 0.005 USD/h; EKS 0.10 USD/h | COST_PLAN §5.2 | 2026-09-28 | `PRICE_API_VERIFIED`; recheck |
+| S9 | Spot price of D1 types | — | never read | `UNVERIFIED`; P6-T1 and T−30 |
+
+# 12. Open risks
+
+- **Orphaned instances.** Karpenter nodes are outside Terraform state (§9.5).
+- **Stale message.** A message left in the queue launches a node as soon as the
+  controllers come up. Retention 1 h, purge at preflight, the queue lives only
+  for a window.
+- **Message never deleted.** A worker bug makes KEDA start Job after Job; the
+  DLQ bounds it to three receives. A Job that fails **before** it receives
+  (image pull, crash at start) does not raise the receive count, so KEDA keeps
+  creating Jobs; window stop condition H5 bounds that case.
+- **Duplicate messages.** A submit that crashes between send and marker sends
+  the same run key twice. `ALREADY_DONE` makes the second delivery harmless,
+  and B04 reads only the current attempt's prefix.
+- **Shared queue.** A tenant's worker can receive the other tenant's message
+  (D3); it releases it. Soft isolation, recorded.
+- **kro and KEDA Jobs.** The outcome is outside the graph (D4); kro leaves Job
+  Pods behind (P4 spike); `cleanup` covers them.
+- **P5 guardrails.** `restricted`, image digest, requests, tenant label, quota,
+  default-deny all apply to the training Pod. The kind lab covers `restricted`,
+  quota and LimitRange only; Kyverno and NetworkPolicy are first exercised in
+  the L3 window, so a policy mismatch can still appear there.
+- **Kyverno and Karpenter nodes.** Karpenter's own Pods run in `karpenter`, not
+  a tenant namespace, so the fail-closed webhook does not block them.
+- **Limits are eventually consistent.** Karpenter can briefly overshoot a
+  NodePool limit; the account quota is the hard cap.
+- **Logs disappear with the node.** Markers go to S3; the suite does not rely
+  on `kubectl logs` after completion.
+- **Schedule.** P6 in two days needs the kind lab and the window on 26/11; any
+  overflow goes to 27/11 and shifts P7–P11 (D13).

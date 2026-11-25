@@ -155,18 +155,18 @@
   },
   {
    "p": "P5",
-   "st": "now",
+   "st": "done",
    "t": "Governance: RBAC, quota, NetworkPolicy, Pod Security, Kyverno",
-   "d": "Code đã merge. Owner làm hai lab kind 24/11. Window L3 trên EKS 25/11: suite 82/82, Kyverno sập, micro-lab 6 lớp do owner gõ, teardown CLEAN. Còn: Codex review, inventory trễ và Bills (26/11), teach-back §7.",
+   "d": "Code đã merge. Owner làm hai lab kind 24/11. Window L3 trên EKS 25/11: suite 82/82, Kyverno sập, micro-lab 6 lớp do owner gõ, teardown CLEAN. Codex APPROVE, teach-back 8/8 (25/11). Còn thủ tục: inventory trễ và Bills gross (26/11).",
    "exit": "Negative security/isolation suite pass; không tuyên bố hard tenancy.",
    "k": "RBAC, Pod Security, Kyverno, ResourceQuota/LimitRange, NetworkPolicy, test âm, fail closed"
   },
   {
    "p": "P6",
-   "st": "hard",
+   "st": "now",
    "t": "KEDA + Karpenter + NodePool (CPU, ADR-0009)",
-   "d": "BatchTrainingJob end-to-end. Khó về kỹ thuật: autoscaling hay hỏng mà không báo lỗi.",
-   "exit": "Batch end-to-end, checkpoint và thu hồi Pod/node có evidence.",
+   "d": "Bắt đầu 25/11 (rebaseline: xong 26/11, tràn sang 27/11). SPEC-P6 bản candidate từ nháp Fable, chạy CPU theo ADR-0009; Linear DRF-73…81; runbook lab kind (KEDA + ElasticMQ + MinIO) và window L3 đã viết. Code chưa có. Khó: autoscaling hay hỏng mà không báo lỗi, và node Karpenter nằm ngoài Terraform state.",
+   "exit": "Batch end-to-end, checkpoint và thu hồi node CPU do Karpenter tạo, có evidence trên Kubernetes và AWS; nhãn CPU_SUBSTITUTE_FOR_GPU.",
    "k": "Scheduler, Pending, taints, NodePool, Spot"
   },
   {
@@ -514,7 +514,7 @@
    ],
    "vv": "Món nấu theo mẻ",
    "what": "Golden path thứ 2: job huấn luyện theo lô, checkpoint vào S3, chạy trên CPU (ADR-0009, AWS từ chối quota GPU).",
-   "lab": "Chưa làm (P6).",
+   "lab": "Kế hoạch: RGD gồm bucket, ScaledJob, Job submit; ServiceAccount batch-train do platform tạo sẵn. Ready = đã gửi message; kết quả = marker SUCCEEDED trong S3 của đúng attempt.",
    "cmd": "kubectl get batchtrainingjob -A",
    "emoji": "🏋️",
    "ls": "BatchJob"
@@ -529,12 +529,13 @@
     "P6"
    ],
    "vv": "Người đếm hàng đợi để gọi thêm đầu bếp",
-   "what": "Tạo Job theo độ dài hàng đợi (ScaledJob); 0 việc thì 0 Pod.",
-   "lab": "Chưa làm (P6).",
+   "what": "Đếm message trong hàng đợi SQS dùng chung (Terraform tạo) rồi tạo Job (ScaledJob, maxReplicaCount 1); 0 message thì 0 Pod. KEDA chỉ tạo Job, không tạo máy.",
+   "lab": "Kế hoạch: lab kind P6_L2_KIND_KEDA (ElasticMQ thay SQS, MinIO thay S3), rồi window L3 P6.",
    "cmd": "kubectl get scaledjob -A",
    "emoji": "📈",
    "icon": "cncf-keda.svg",
-   "shape": "hex"
+   "shape": "hex",
+   "notdo": "Không tạo node, không giữ trạng thái training."
   },
   {
    "id": "karp",
@@ -546,12 +547,13 @@
     "P6"
    ],
    "vv": "Thuê thêm bếp khi đông, trả bếp khi vắng",
-   "what": "Thấy Pod Pending → bật EC2 node (có Spot) theo NodePool; hết việc → thu hồi node.",
-   "lab": "Chưa làm (P6).",
+   "what": "Thấy Pod Pending có toleration batch → tạo NodeClaim → EC2 node CPU 2 vCPU (Spot trước, On-Demand sau) theo NodePool có limits 1 node và expireAfter 2h; node rỗng 60 s thì thu hồi.",
+   "lab": "Kế hoạch: chỉ trên EKS (kind không có provider Karpenter); micro-lab M1–M5 trong P6_L3_WINDOW.",
    "cmd": "kubectl get nodepools,nodeclaims",
    "emoji": "🖥️",
    "icon": "karpenter.svg",
-   "shape": "hex"
+   "shape": "hex",
+   "notdo": "Không checkpoint (việc của app), không quản node group system, không có quyền IAM write."
   },
   {
    "id": "obs",
@@ -1000,8 +1002,8 @@
     "P6"
    ],
    "vv": "Bếp thuê theo giờ",
-   "what": "Node do Karpenter bật/tắt cho batch.",
-   "lab": "Chưa làm (P6).",
+   "what": "Node CPU (m6i/m5/c6i.large) do Karpenter bật/tắt cho batch; mang taint zero-drift.io/batch. Không nằm trong Terraform state, nên phải đếm trên AWS trước khi destroy.",
+   "lab": "Kế hoạch (window L3 P6).",
    "cmd": "kubectl get nodes",
    "emoji": "🖥️",
    "icon": "aws-ec2.svg",
@@ -2444,7 +2446,7 @@
     {
      "t": "P6: batch + autoscaling",
      "proof": "plan",
-     "d": "BatchTrainingJob → KEDA tạo Job → Pod Pending → Karpenter bật EC2 (Spot) → checkpoint vào S3 → thu hồi node. CPU theo ADR-0009. <b>Kế hoạch.</b>",
+     "d": "BatchTrainingJob → SQS → KEDA tạo Job → Pod Pending → Karpenter bật EC2 CPU (Spot, fallback On-Demand) → checkpoint vào S3 → thu hồi node. CPU theo ADR-0009. Đang làm từ 25/11; chi tiết ở kịch bản ⑪. <b>Kế hoạch.</b>",
      "set": {
       "btj": "plan",
       "keda": "plan",
@@ -2954,6 +2956,199 @@
       ]
      ],
      "d": "Suite T07: ServiceAccount <code>zdr-iso-other</code> (ngoài mẫu <code>rag-*</code>) mang annotation role của tenant-a; STS trả <b>AccessDenied</b> trên EKS 25/11. Probe P4 cross ×2 (secret, schema, bucket của tenant kia) PASS."
+    }
+   ]
+  },
+  {
+   "name": "⑪ P6: một message → node → thu hồi (kế hoạch)",
+   "mode": "aws",
+   "proof": "plan",
+   "ev": [
+    [
+     "SPEC-P6",
+     "../../.agent/specs/SPEC-P6_BATCH_TRAINING_JOB.md"
+    ],
+    [
+     "Lab kind P6",
+     "../runbooks/P6_L2_KIND_KEDA.md"
+    ],
+    [
+     "Window L3 P6",
+     "../runbooks/P6_L3_WINDOW.md"
+    ],
+    [
+     "ADR-0009 (CPU thay GPU)",
+     "../../.agent/adr/ADR-0009_P6_CPU_BATCH_UNDER_GPU_QUOTA_DENIAL.md"
+    ]
+   ],
+   "init": {
+    "vpc": "ok",
+    "iam": "ok",
+    "s3": "ok",
+    "sa": "ok",
+    "req": "ok",
+    "pcfg": "ok",
+    "kyv": "ok",
+    "quota": "ok",
+    "netpol": "ok",
+    "role": "ok"
+   },
+   "learn": [
+    "KEDA tạo Job, Karpenter tạo máy: hai bộ scale khác nhau",
+    "Vì sao message chỉ bị xoá khi đã xong",
+    "Vì sao node Karpenter phải về 0 trên AWS trước terraform destroy"
+   ],
+   "steps": [
+    {
+     "t": "Request vào Git",
+     "on": [
+      "git",
+      "argo",
+      "kro",
+      "btj"
+     ],
+     "set": {
+      "btj": "plan"
+     },
+     "e": [
+      [
+       "git",
+       "argo",
+       "plan"
+      ],
+      [
+       "argo",
+       "kro",
+       "plan"
+      ],
+      [
+       "kro",
+       "btj",
+       "plan"
+      ]
+     ],
+     "d": "PR chuyển file <code>BatchTrainingJob</code> của <code>tenant-a</code> từ <code>requests/disabled/</code> lên <code>gitops/requests/</code> (Argo chỉ đọc tầng này). kro tạo bucket checkpoint (Crossplane), <code>ScaledJob</code> và Job submit ở <code>zdr-platform</code>. ServiceAccount <code>batch-train</code> có sẵn từ platform. <b>Kế hoạch.</b>"
+    },
+    {
+     "t": "Một message vào hàng đợi",
+     "on": [
+      "btj",
+      "s3"
+     ],
+     "e": [
+      [
+       "btj",
+       "s3",
+       "plan"
+      ]
+     ],
+     "d": "Job submit gửi đúng một message <code>{requestId, tenant, runAttempt, steps}</code> vào SQS dùng chung và ghi marker <code>submitted</code>. Instance chuyển <code>Ready</code> nghĩa là đã gửi, chưa phải đã train xong (D4)."
+    },
+    {
+     "t": "KEDA gọi thợ",
+     "on": [
+      "keda",
+      "btj"
+     ],
+     "set": {
+      "keda": "plan"
+     },
+     "e": [
+      [
+       "keda",
+       "btj",
+       "plan"
+      ]
+     ],
+     "d": "Mỗi 10 giây KEDA đọc độ dài hàng đợi. Thấy 1 thì tạo 1 Job. Message đang xử lý vẫn được tính (scaleOnInFlight), nhưng <code>maxReplicaCount: 1</code> chặn Job thứ hai."
+    },
+    {
+     "t": "Pod Pending: không còn chỗ",
+     "on": [
+      "sched"
+     ],
+     "d": "Pod có toleration <code>zero-drift.io/batch</code> và nodeSelector của pool batch. Node system không có label đó, nên scheduler để Pod <code>Pending</code>. Đây là tín hiệu cho Karpenter."
+    },
+    {
+     "t": "Karpenter thuê máy",
+     "on": [
+      "karp",
+      "ec2"
+     ],
+     "set": {
+      "karp": "plan",
+      "ec2": "plan"
+     },
+     "e": [
+      [
+       "karp",
+       "ec2",
+       "plan"
+      ]
+     ],
+     "d": "Karpenter tạo NodeClaim từ NodePool <code>batch-spot</code> (Spot trước). EC2 2 vCPU khởi động, join cluster, mang taint batch. Mỗi pool tối đa một node (limits cpu 2)."
+    },
+    {
+     "t": "Train và checkpoint",
+     "on": [
+      "kubelet",
+      "btj",
+      "s3"
+     ],
+     "e": [
+      [
+       "btj",
+       "s3",
+       "plan"
+      ]
+     ],
+     "d": "Worker ghi <code>TRAINING_STARTED</code> (device=cpu, run key, tên node). Pod không đọc được nhãn Node, nên suite tự đọc Pod → Node → nhãn Spot/On-Demand khi node còn sống. Heartbeat giữ message ẩn. Checkpoint mỗi 25 step vào prefix của attempt trong bucket tenant."
+    },
+    {
+     "t": "Pod chết giữa chừng",
+     "on": [
+      "btj",
+      "keda"
+     ],
+     "e": [
+      [
+       "keda",
+       "btj",
+       "plan"
+      ]
+     ],
+     "d": "Xoá Pod hoặc NodeClaim: worker nhận SIGTERM, ghi checkpoint, không xoá message. Hết visibility timeout thì message hiện lại, KEDA tạo Job mới, worker <code>resumed from step N</code>. Checkpoint là việc của app, không phải của Karpenter."
+    },
+    {
+     "t": "Xong và thu hồi máy",
+     "on": [
+      "karp",
+      "ec2",
+      "s3"
+     ],
+     "e": [
+      [
+       "karp",
+       "ec2",
+       "plan"
+      ]
+     ],
+     "d": "Worker ghi artifact và <code>SUCCEEDED</code>, rồi mới xoá message. Node rỗng 60 giây thì Karpenter xoá node, EC2 chuyển <code>terminated</code>. Đo scale-down time trên cả Kubernetes lẫn AWS."
+    },
+    {
+     "t": "Dọn đúng thứ tự",
+     "on": [
+      "tf",
+      "ec2"
+     ],
+     "e": [
+      [
+       "tf",
+       "vpc",
+       "plan"
+      ]
+     ],
+     "d": "Dừng sync của root, xoá NodePool, đợi 0 NodeClaim <b>và</b> 0 instance có tag Karpenter trên AWS (cả hai lệnh phải đọc được; đếm cả máy <code>stopped</code>), rồi mới gỡ Karpenter và chạy <code>terraform destroy</code>. Máy Karpenter không nằm trong state: destroy trước thì máy vẫn chạy và tính tiền."
     }
    ]
   }
@@ -3517,6 +3712,78 @@
    "Tenant chung cluster, node và control plane; cô lập bằng luật, không bằng máy riêng",
    "P5 không tuyên bố hard tenancy",
    "—"
+  ],
+  [
+   2,
+   "SQS queue",
+   "Bảng ghi đơn ở quầy",
+   "Hàng đợi message của AWS. Message được nhận thì tạm ẩn, bị xoá mới mất hẳn",
+   "zero-drift-batch (P6, kế hoạch)",
+   "aws sqs get-queue-attributes"
+  ],
+  [
+   2,
+   "Visibility timeout",
+   "Đơn úp mặt khi có thợ cầm",
+   "Thời gian message bị ẩn sau khi được nhận. Hết giờ mà chưa bị xoá thì message hiện lại",
+   "120 s + heartbeat 40 s (D8)",
+   "—"
+  ],
+  [
+   2,
+   "Dead-letter queue (DLQ)",
+   "Ngăn đựng đơn hỏng",
+   "Message bị nhận quá maxReceiveCount lần thì chuyển sang đây và không chạy lại nữa",
+   "maxReceiveCount 3 (D8)",
+   "—"
+  ],
+  [
+   2,
+   "ScaledJob",
+   "Quản lý ca gọi thợ theo số đơn",
+   "Object của KEDA, tạo Job Kubernetes theo độ dài hàng đợi",
+   "maxReplicaCount 1 (D5)",
+   "kubectl get scaledjob -A"
+  ],
+  [
+   2,
+   "Taint / toleration",
+   "Biển 'chỉ dành cho batch' và thẻ ra vào",
+   "Taint trên node đuổi những Pod không có toleration tương ứng",
+   "zero-drift.io/batch=true:NoSchedule (D7)",
+   "kubectl describe node"
+  ],
+  [
+   2,
+   "NodePool / NodeClaim",
+   "Hợp đồng thuê bàn và một bàn đã thuê",
+   "NodePool là luật Karpenter dùng để tạo máy. NodeClaim là một máy cụ thể Karpenter đã xin",
+   "batch-spot, batch-ondemand (D7)",
+   "kubectl get nodepools,nodeclaims"
+  ],
+  [
+   2,
+   "Spot vs On-Demand",
+   "Phòng giá rẻ có thể bị đòi lại và phòng giá đủ",
+   "Spot rẻ hơn nhưng AWS có thể thu hồi bất cứ lúc nào. On-Demand có giá cố định",
+   "Run On-Demand mang nhãn riêng, không tính là Spot",
+   "kubectl get nodes -L karpenter.sh/capacity-type"
+  ],
+  [
+   4,
+   "Checkpoint",
+   "Sổ tay tiến độ",
+   "App tự lưu trạng thái để chạy tiếp sau khi bị ngắt. Karpenter không làm việc này",
+   "mỗi 25 step vào S3 của tenant",
+   "—"
+  ],
+  [
+   4,
+   "Scale-to-zero",
+   "Hết khách thì tắt đèn, trả bàn",
+   "Không có việc thì 0 Pod (KEDA) và 0 node batch (Karpenter). Đây là nguồn tiết kiệm chính của H5",
+   "idle window 30 phút của baseline",
+   "—"
   ]
  ],
  "quiz": [
@@ -3599,6 +3866,18 @@
   [
    "Vì sao case mạng trên kind ghi SKIPPED_NEEDS_EKS chứ không PASS?",
    "NetworkPolicy của P5 do VPC CNI trên EKS thực thi; kind không chứng minh được, nên không được tính là PASS."
+  ],
+  [
+   "Vì sao worker batch xoá message ở cuối chứ không ở đầu?",
+   "Xoá ở đầu thì Pod chết giữa chừng là mất việc. Xoá ở cuối thì message tự hiện lại sau visibility timeout, và Job mới chạy tiếp từ checkpoint."
+  ],
+  [
+   "KEDA đã tạo Job mà vẫn chưa có máy. Ai làm bước tiếp theo?",
+   "Scheduler để Pod ở Pending vì không node nào hợp toleration batch. Karpenter thấy Pod Pending và tạo NodeClaim. KEDA không tạo máy."
+  ],
+  [
+   "Vì sao phải đếm 0 instance Karpenter trên AWS trước khi terraform destroy?",
+   "Máy do Karpenter tạo không nằm trong Terraform state. Destroy trước thì cluster mất nhưng máy vẫn chạy và vẫn tính tiền."
   ]
  ],
  "overview": {

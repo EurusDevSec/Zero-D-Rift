@@ -73,8 +73,11 @@ lab session of up to about a day, with lettered parts inside it, not more issues
 | [DRF-65](https://linear.app/zero-door/issue/DRF-65) | P5 | P5-T2 — Baseline namespace và admission; sub-tasks DRF-66 (T2.1), DRF-67 (T2.2) |
 | [DRF-68](https://linear.app/zero-door/issue/DRF-68) | P5 | P5-T3 — Network isolation: VPC CNI và NetworkPolicy; no sub-tasks |
 | [DRF-69](https://linear.app/zero-door/issue/DRF-69) | P5 | P5-T4 — Isolation suite, window L3 và nghiệm thu P5; sub-tasks DRF-70 (T4.1), DRF-71 (T4.2), DRF-72 (T4.3) |
-| [DRF-19](https://linear.app/zero-door/issue/DRF-19/batch-contract-queue-checkpoint-gpu-quota-va-lifecycle) | P6 | Batch contract: queue, checkpoint, GPU quota và lifecycle — ver3/current experiment contract; future SPEC pending |
-| [DRF-20](https://linear.app/zero-door/issue/DRF-20/batchtrainingjob-outcome-checkpoint-va-node-reclamation) | P6 | BatchTrainingJob: outcome, checkpoint và node reclamation — ver3/current experiment contract; future SPEC pending |
+| DRF-19, DRF-20 | P6 | Outline issues, cancelled as superseded on 25/11/2026; replaced by the four P6-T tasks below (SPEC-P6 §9.4, CPU per ADR-0009) |
+| [DRF-73](https://linear.app/zero-door/issue/DRF-73) | P6 | P6-T1 — Hợp đồng P6: quyết định D1–D14, pin KEDA/Karpenter, giá; no sub-tasks |
+| [DRF-74](https://linear.app/zero-door/issue/DRF-74) | P6 | P6-T2 — Workload và đường request batch; sub-tasks DRF-75 (T2.1), DRF-76 (T2.2) |
+| [DRF-77](https://linear.app/zero-door/issue/DRF-77) | P6 | P6-T3 — Terraform: batch platform và Karpenter; no sub-tasks |
+| [DRF-78](https://linear.app/zero-door/issue/DRF-78) | P6 | P6-T4 — Batch suite, window L3 và nghiệm thu P6; sub-tasks DRF-79 (T4.1), DRF-80 (T4.2), DRF-81 (T4.3) |
 | [DRF-21](https://linear.app/zero-door/issue/DRF-21/measurements-prometheusopencost-va-raw-cost-evidence) | P7 | Measurements: Prometheus/OpenCost và raw cost evidence — ver3/current experiment contract; future SPEC pending |
 | [DRF-22](https://linear.app/zero-door/issue/DRF-22/manual-baseline-runbook-va-matched-workload-profile-tai-lap) | P7 | Manual baseline: runbook và matched workload profile tái lập — ver3/current experiment contract; future SPEC pending |
 | [DRF-23](https://linear.app/zero-door/issue/DRF-23/sg-drift-reconciliation-co-timestamp-va-ownership-proof) | P8 | SG drift: reconciliation có timestamp và ownership proof — ver3/current experiment contract; future SPEC pending |
@@ -137,7 +140,7 @@ was produced by tracker setup.
 
 The 05/10 candidate AWS window is expired. Refresh identity/MFA/recovery, prices,
 spend/credit/EBS exposure, quotas, physical backend/Budget and reviewed plan before
-a newly approved window. GPU quota/capacity may delay P6; no request is authorized
+a newly approved window. P6 runs on CPU nodes (ADR-0009); Spot capacity may delay a run; no request is authorized
 by a target date. Backend 03/11 review/checkpoint is conditional on actual
 existence/inventory, never automatic deletion. Independent tested recovery login
 is required before L3; a second human remains optional SHOULD for single-owner PoC.

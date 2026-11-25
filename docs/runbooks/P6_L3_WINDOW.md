@@ -1,0 +1,216 @@
+# P6 L3 window trên EKS: đơn xin duyệt và luồng chạy (DRF-80, P6-T4.2)
+
+> **TL;DR** · Để làm gì: chạy đường batch thật trên EKS. Message vào SQS, KEDA tạo Job, Karpenter tạo node CPU, worker train
+> và checkpoint lên S3, rồi node bị thu hồi. Sau đó thử các ca lỗi, chạy cho tenant thứ hai trên On-Demand, và dọn sạch ·
+> Trạng thái: **bản kế hoạch 25/11**. Chỉ chạy khi P6-T2, P6-T3, P6-T4.1 đã merge và lab kind đã đạt ·
+> Chi phí: ước tính ≈ 2,6 USD, trần P6 là 4 USD (D14) ·
+> Liên quan: SPEC-P6 §4, §5 P6-T4.2, §9.5, §10, D7, D8, D14; runbook `P5_L3_WINDOW.md` (B, E, 5a), `P4_RAG_SANDBOX.md` (C, D, J) ·
+> Mục lục: 1 Đơn · 2 Bạn chọn · 3 Việc trước window · 4 Cổng T−30 · 5 Luồng window · 5b Micro-lab · 6 Điều kiện dừng · 7 Chi phí
+
+Mọi kết quả batch trong window này mang nhãn `CPU_SUBSTITUTE_FOR_GPU` (ADR-0009). Đây là smoke run (`official=false`),
+không phải trial của H2, H3 hay H5.
+
+Ví von: P4 và P5 xây xong căn hộ và lắp khoá. P6 mở thêm một **xưởng làm theo đơn**. Đơn đến (SQS) thì quản lý ca
+(KEDA) gọi thợ (Job). Thợ không có bàn thì bộ phận thuê bàn (Karpenter) thuê một bàn mới (node EC2). Xong việc thì trả bàn.
+Điều nguy hiểm nhất của window này: **bàn thuê không nằm trong sổ của Terraform**. Nếu dỡ xưởng (`terraform destroy`)
+trước khi trả bàn, bàn vẫn ở đó và vẫn tính tiền. Vì vậy thứ tự dọn ở bước F là bắt buộc.
+
+## 1. Đơn xin duyệt
+
+Không ghi account ID, IP, ARN, queue URL hay tên node vào đây, vào chat hay vào Linear.
+
+```
+WINDOW REQUEST — P6 L3
+RunId:             P6-L3-YYYYMMDD-01
+Bắt đầu:           YYYY-MM-DD HH:MM Asia/Saigon (= HH:MM UTC)        ← bạn chọn
+Kết thúc cứng:     bắt đầu + 5 giờ; tag ExpiresAt = giờ này, dạng UTC ...Z
+Freeze-new-create: kết thúc cứng − 1,5 giờ (sau giờ này không gửi message mới)
+Teardown owner:    HoangLV, có mặt suốt window; không rời máy khi cluster, RDS hoặc node Karpenter còn chạy
+Người chạy:        Claude (lệnh AWS, kubectl); owner gõ micro-lab và tự merge PR "tenant-b On-Demand"
+Git revision:      main = <điền ở cổng>; không sửa code trong window
+Node system:       2 × m6i.large (như P5)
+Node batch:        tối đa 1 node Spot + 1 node On-Demand, mỗi node 2 vCPU, chỉ m6i/m5/c6i .large (D1, D7)
+Plan:              <N> to add, 0 to change, 0 to destroy; shape sha256 <điền ở cổng>
+Ước tính:          ≈ 0,45 USD/giờ stack + ≈ 0,1 USD/giờ mỗi node batch đang chạy → ≈ 2,6 USD cho 5 giờ
+Trần P6 (D14):     4 USD gross cho mọi window P6 và mọi lần thử lại
+P6 đã tiêu:        0 (mọi lab P6 trước đó chạy trên kind)
+Owner duyệt:       "Duyệt window P6-L3-YYYYMMDD-01" (gõ trong chat)
+```
+
+Chỉ apply khi đủ cả năm điều kiện: plan khớp shape hash; danh tính đúng; còn dưới trần; window đang mở; bạn đã duyệt đúng RunId.
+
+## 2. Hai điều bạn chọn khi duyệt
+
+**a. Giờ bắt đầu.** Cần 5 giờ liền và bạn ngồi máy suốt.
+
+**b. Có chạy lại regression P5 không.** Mặc định là **không**: guardrail P5 vẫn bật (Kyverno ở `Deny`, NetworkPolicy, quota),
+nhưng không chạy lại cả suite P5 82 ca, chỉ chạy B11 (quota) của batch suite. Chạy lại suite P5 tốn thêm khoảng 15 phút,
+tức khoảng 0,1 USD. Nên chọn có nếu bạn muốn bằng chứng rằng thêm batch không làm hỏng cô lập.
+
+## 3. Việc trước window (Claude, không AWS, không tốn tiền)
+
+| # | Việc | Xong khi |
+|---|---|---|
+| P1 | Soạn sẵn PR "window: tenant-b On-Demand": chuyển `tenant-b-batch.yaml` từ `gitops/requests/disabled/` lên `gitops/requests/`, chuyển `tenant-a-batch.yaml` xuống `disabled/`, đặt `limits.cpu: "0"` cho `batch-spot`. **Không merge trước window** | PR mở ở dạng draft; bạn merge ở bước E1 |
+| P1b | Soạn sẵn PR "window: bật tenant-a": chuyển `tenant-a-batch.yaml` từ `disabled/` lên `gitops/requests/`. Argo chỉ đọc file nằm **ngay** trong `gitops/requests/`, không đọc thư mục con | PR draft; bạn merge ở bước C1 |
+| P2 | Lab kind `P6_L2_KIND_KEDA.md` đạt, có dự đoán của bạn | Có evidence `P6-T2.2_L2_KIND_KEDA_<date>.md` |
+| P3 | Batch suite (`gitops/tests/batch-suite.sh`) đã merge và đã chạy trên kind: các ca cần EKS ghi `SKIPPED_NEEDS_EKS` | Có `acceptance.json` của lần chạy kind |
+| P4 | Codex review suite và hai module Terraform | Kết quả ghi nguyên văn vào evidence |
+| P5 | Bạn điền **bảng dự đoán** ở mục 5b trước window | Có dự đoán của bạn |
+
+## 4. Cổng T−30 (chỉ đọc, có MFA)
+
+Làm như `P4_RAG_SANDBOX.md` mục C (gồm `P2_L3_WINDOW.md` C), rồi kiểm thêm các mục riêng của P6:
+
+| Kiểm | Phải thấy |
+|---|---|
+| Danh tính | `assumed-role/zero-drift-bootstrap/<SESSION>`; MFA còn ≥ 40 phút lúc apply |
+| `inventory.sh` | `RESULT: CLEAN`; dòng mới của P6 (instance có tag Karpenter, launch template, Spot request, queue) đều `0` |
+| Quota Standard On-Demand | ≥ 6 vCPU (4 system + 2 batch On-Demand). Đọc được 8 ngày 25/11 |
+| Quota Standard Spot | ≥ 2 vCPU. Chưa đọc từ 28/09 (lúc đó là 5) |
+| Spot service-linked role | `aws iam get-role --role-name AWSServiceRoleForEC2Spot` có hoặc không. Không có thì dừng và hỏi bạn: tạo role này là thay đổi account (A11) |
+| Giá | đọc lại On-Demand `m6i.large`, `m5.large`, `c6i.large` và giá Spot 7 ngày qua; lệch > 20% so với §10 thì tính lại ước tính |
+| `run.tfvars` | `run_id`, `expires_at` theo đơn; `enable_rag_platform = true`; `enable_batch_platform = true`; `system_node_desired_size = 2`; **không** đè `vpc_cidr` |
+| `bash gitops/check.sh` | PASS, gồm luật P6: tối đa một `BatchTrainingJob` bật; NodePool có `limits` và `expireAfter` |
+| `terraform plan` + `plan_assert.sh` (`ADMIN_WINDOW=1 P4_WINDOW=1 P6_WINDOW=1`) | PASS; ghi số resource và shape sha256 vào đơn |
+| `rag_iam_check.sh tfplan` và `batch_iam_check.sh tfplan` | PASS |
+
+## 5. Luồng window
+
+```
+B Dựng (1 g)        apply → smoke P2 → Argo CD → platform (P4, P5) → KEDA → Karpenter → NodePool
+                    → hai request batch đều tắt → purge queue và DLQ
+C Một run (1 g)     merge PR P1b (bật tenant-a) → B02, B03 → node Spot lên → B04 → B05 node bị thu hồi
+                    → B01 (queue rỗng, scaler đã chứng minh chạy: 0 Job mới, 0 node)
+D Sự cố (1 g)       B06 xoá Pod → B07 xoá NodeClaim → B08 DLQ → B09–B14 ca âm
+E Tenant-b (0,5 g)  queue rỗng → bạn merge PR P1 → run của tenant-b trên On-Demand → micro-lab
+F Dọn (0,5 g)       tắt request + cleanup → dừng root → xoá NodePool → 0 NodeClaim + 0 instance trên AWS
+                    (cả hai lệnh đọc được) → EC2NodeClass → Karpenter, KEDA → P5 E → P4 J → destroy → inventory
+```
+
+**Làm mới MFA:** như `P5_L3_WINDOW.md` mục 5. Chỉ làm mới khi Claude báo **không còn lệnh nào đang chạy**.
+Trước một bước dài (một run khoảng 8 phút, `terraform destroy` khoảng 15 phút), làm mới trước nếu phiên còn dưới 30 phút.
+
+**B. Dựng.**
+
+1. Làm `P4_RAG_SANDBOX.md` từ mục D tới khi các app platform `Synced Healthy`. Hai request RAG giữ **tắt**: P6 không cần sandbox,
+   và quota tenant còn chỗ cho cả hai nếu bạn chọn regression P5 ở mục 2b.
+2. `zdr-keda`, `zdr-karpenter`, `zdr-karpenter-nodepools` `Synced Healthy`. Pod Karpenter nằm trên node system
+   (`kubectl -n karpenter get pods -o wide` cho thấy tên node thuộc node group, không phải node do Karpenter tạo; chỉ ghi "system", không ghi tên node).
+3. `kubectl get nodepools` có `batch-spot` (weight 100) và `batch-ondemand` (weight 10); `kubectl get ec2nodeclass batch` `Ready=True`.
+   Gắn annotation IRSA cho ServiceAccount `batch-train` của hai tenant từ output Terraform bằng kubectl, như `rag-db-admin` ở P4.
+   Annotation chứa account ID nên không nằm trong Git; không in giá trị ra chat.
+4. Hai request batch vẫn nằm trong `gitops/requests/disabled/`: `kubectl get batchtrainingjob -A` ra `No resources found`,
+   chưa có ScaledJob nào, nên chưa có Job submit nào gửi message.
+5. Purge queue và DLQ (lệnh `aws sqs purge-queue` nằm trong `batch-suite.sh preflight`). Một message cũ sót lại sẽ dựng máy
+   ngay khi có ScaledJob. Purge xong mới sang C1.
+
+B01 (queue rỗng thì 0 Job, 0 node) **không** chạy ở đây. Lúc này chưa có ScaledJob, nên "0 Job" vẫn đúng kể cả khi scaler
+hỏng hoặc thiếu hẳn. B01 chạy ở C6, sau khi scaler đã tạo được một Job thật.
+
+**C. Một run hoàn chỉnh (tenant-a, Spot).**
+
+1. Bạn merge PR P1b (bật tenant-a). Ghi giờ merge: đây là mốc bắt đầu của bảng thời gian smoke.
+2. **B02, B03**: 1 Job cho run key này; sau 3 lần poll vẫn 1 Job.
+3. Theo dõi: Pod `Pending` → NodeClaim `Launched` → `Registered` → `Initialized` → Pod `Running`.
+   Ghi các mốc thời gian vào bảng smoke: sync, message gửi, Job tạo, NodeClaim tạo, instance running, node Ready, image pulled, `TRAINING_STARTED`.
+4. **B04**, khi Pod còn đang chạy: suite đọc Pod → `spec.nodeName` → hai nhãn của Node (`karpenter.sh/capacity-type`,
+   `node.kubernetes.io/instance-type`) và lưu kèm run key. Worker không tự ghi capacity type: Downward API không cho Pod đọc nhãn Node.
+   Sau khi xong: dưới prefix của attempt này có `TRAINING_STARTED` (`device=cpu`), checkpoint, `SUCCEEDED` và đúng một artifact,
+   tất cả ghi sau marker `submitted` của chính attempt này. Phải thấy capacity type `spot`.
+5. **B05**: sau khi Job xong, đo **scale-down time** từ lúc Job hoàn tất tới lúc Node biến mất khỏi Kubernetes,
+   rồi tới lúc instance `terminated` trên AWS (đếm theo tag, không ghi instance ID). `consolidateAfter: 60s` nên kỳ vọng vài phút.
+6. **B01**: ScaledJob `Ready` và vừa tạo được Job ở bước 2, tức scaler đọc được queue. Queue `visible=0 inflight=0` qua ít nhất
+   3 lần poll. Phải thấy 0 Job mới, 0 NodeClaim, 0 instance có tag Karpenter. Thiếu ScaledJob là `FAIL`, không phải "0".
+
+**D. Sự cố và ca âm.**
+
+1. **B06**: gửi run mới với 300 step. Sau checkpoint đầu, xoá Pod. Phải thấy message lật lại sau ≤ 120 giây, Job mới, `resumed from step N` với N > 0.
+2. **B07**: lặp lại nhưng xoá **NodeClaim** (`kubectl delete nodeclaim <tên>`; chỉ ghi "đã xoá NodeClaim"). Karpenter drain node, Pod nhận SIGTERM và ghi checkpoint,
+   rồi Karpenter tạo NodeClaim mới cho Pod tiếp theo. Ghi nhãn "simulated disruption" (D11). Đây không phải Spot interruption thật.
+3. **B08**: gửi một request `fail-always`. Phải thấy marker `RECEIVED-1`, `RECEIVED-2`, `RECEIVED-3` của attempt này,
+   message của attempt nằm trong DLQ, không có `SUCCEEDED`, và node bị thu hồi sau đó. Không đếm số Job `Failed`:
+   `failedJobsHistoryLimit: 1` chỉ giữ một Job. Nếu Job hỏng **trước** khi nhận message (không có `RECEIVED-1`),
+   DLQ không chặn được: đó là điều kiện dừng H5.
+4. **B09–B14** theo `batch-suite.sh`:
+   - B09: message thứ hai khi đang chạy, không có node thứ hai.
+   - B10: Pod không có toleration không lên node batch.
+   - B11: hai lần từ chối riêng cho `pods` và `count/jobs.batch` ở mức D9, mỗi thông báo phải nêu đúng tên quota đó,
+     cộng một Pod vượt `requests.cpu`. Lỗi chung chung là `FAIL`.
+   - B12: dùng artifact có thật trong bucket của tenant-a (từ run ở C). Pod probe với ServiceAccount `tenant-a/batch-train`
+     đọc được (đối chứng). Pod probe với `tenant-b/batch-train` phải nhận đúng `AccessDenied` khi get và put cùng key.
+     `NoSuchBucket`, timeout hay mã khác là `FAIL`. ServiceAccount `batch-train` do platform tạo sẵn cho cả hai tenant,
+     nên tenant-b có danh tính thật dù request của nó đang tắt.
+   - B13: KEDA chỉ đọc được thuộc tính queue; Karpenter không có quyền IAM write.
+   - B14: Pod batch không lấy được credential của node qua IMDS.
+
+**E. Tenant-b trên On-Demand.**
+
+1. Trước khi merge: queue `visible=0 inflight=0` và không còn Job batch nào đang chạy. Nếu worker của tenant-a còn sống,
+   nó có thể nhận message của tenant-b rồi trả lại; lần nhận đó vẫn bị đếm vào `maxReceiveCount` (D3).
+   Rồi bạn merge PR P1. `batch-spot` có `limits.cpu: "0"`, nên Karpenter chỉ còn `batch-ondemand`.
+2. Run của tenant-b chạy xong. Suite đọc nhãn Node của Pod thật và thấy capacity type `on-demand`. Run này mang nhãn
+   `on-demand`, không bao giờ được tính là Spot (biên âm 7).
+3. Micro-lab ở mục 5b.
+
+**F. Dọn** (từ giờ freeze, hoặc sớm hơn nếu đã xong). Theo đúng SPEC §9.5:
+
+1. Tắt mọi `BatchTrainingJob` qua PR, chạy `cleanup`, đợi ScaledJob và Job về 0.
+2. Dừng sync của `zdr-root` **trước**. Root có `selfHeal`: xoá app con khi root còn chạy thì root tạo lại app đó
+   (cái bẫy đã thấy ở P5 mục 5a). Rồi xoá app NodePool có cascade, như P4 J bước 1. Controller Karpenter vẫn chạy suốt bước này,
+   vì chính nó xoá NodeClaim và instance:
+   ```bash
+   kubectl -n argocd patch app zdr-root --type json -p '[{"op":"remove","path":"/spec/syncPolicy/automated"}]'
+   kubectl -n argocd patch app zdr-karpenter-nodepools --type merge -p '{"metadata":{"finalizers":["resources-finalizer.argocd.argoproj.io"]}}'
+   kubectl -n argocd delete app zdr-karpenter-nodepools --timeout=300s
+   ```
+   Đếm bằng lệnh có guard. Lệnh đọc lỗi thì in `READ_FAILED`, không bao giờ in `0`. Bộ lọc gồm mọi trạng thái trừ `terminated`:
+   instance `stopped` vẫn tính tiền volume.
+   ```bash
+   nc=$(kubectl get nodeclaims -o name) && echo "nodeclaims: $(printf '%s' "$nc" | grep -c .)" || echo "nodeclaims: READ_FAILED"
+   ni=$(aws ec2 describe-instances --filters Name=tag-key,Values=karpenter.sh/nodepool Name=instance-state-name,Values=pending,running,stopping,stopped,shutting-down --query 'length(Reservations[].Instances[])' --output text) && echo "karpenter_instances: $ni" || echo "karpenter_instances: READ_FAILED"
+   ```
+   Chỉ sang bước 3 khi **cả hai dòng** đều đọc được và đều ra `0`. Có `READ_FAILED` (ví dụ hết MFA) thì làm mới MFA rồi đếm lại.
+3. Xoá `EC2NodeClass`, rồi app `zdr-karpenter` và `zdr-keda` (root đã dừng ở bước 2, nên app không bị tạo lại).
+4. Làm `P5_L3_WINDOW.md` E2 (gỡ Kyverno, đếm webhook bằng lệnh có guard), rồi `P4_RAG_SANDBOX.md` J bước 3–4: gỡ các app còn lại, gỡ Argo CD, `terraform destroy`.
+5. `inventory.sh` phải ra `RESULT: CLEAN`, gồm các dòng P6 bằng 0. Inventory trễ vào ngày hôm sau (P6-T4.3).
+
+### 5b. Micro-lab: bạn tự gõ, theo một NodeClaim từ lúc sinh tới lúc mất
+
+Gõ ở bước E2, khi run của tenant-b đang chạy. Điền cột dự đoán **trước** window. Chỉ đọc tên NodeClaim trên màn hình,
+không dán tên node hay instance ID vào chat.
+
+| # | Lệnh | Hỏi | Dự đoán của bạn | Phải thấy |
+|---|---|---|---|---|
+| M1 | `kubectl get nodeclaims -w` (Ctrl+C khi thấy `True` ở cột READY) | NodeClaim đi qua những trạng thái nào? | | `Launched` → `Registered` → `Initialized`/READY `True` |
+| M2 | `kubectl get nodes -L karpenter.sh/capacity-type,node.kubernetes.io/instance-type,zero-drift.io/pool` | Node mới là Spot hay On-Demand, loại máy nào? | | `on-demand`, một trong `m6i/m5/c6i.large`, pool `batch` |
+| M3 | `kubectl describe nodeclaim <tên> \| grep -A3 Taints` | Vì sao Pod thường không lên được node này? | | taint `zero-drift.io/batch=true:NoSchedule` |
+| M4 | `kubectl -n tenant-b get pods -o wide -l app.kubernetes.io/name=batch-train` | Pod training nằm trên node nào? | | đúng node ở M2 |
+| M5 | `kubectl get nodeclaims -w` sau khi Job xong (đợi tối đa 5 phút) | Ai xoá node, và sau bao lâu? | | Karpenter xoá vì node rỗng (`WhenEmpty`), sau `consolidateAfter: 60s` và thời gian drain |
+
+## 6. Điều kiện dừng
+
+Áp dụng S1–S7 của P2, P1–P5 của P3, R1–R9 của P4 và G1–G6 của P5. P6 thêm các điều kiện sau:
+
+| # | Tình huống | Làm gì |
+|---|---|---|
+| H1 | Node batch sống quá 15 phút mà không có Pod batch nào | Xoá NodeClaim đó. Ghi thành lỗi (consolidation hỏng). Không gửi message mới cho tới khi rõ nguyên nhân |
+| H2 | Hai node batch cùng một pool, hoặc quá hai node batch tổng cộng | Dừng gửi message. Đặt cả hai pool `limits.cpu: "0"` qua Argo. Ghi lại, dọn |
+| H3 | Pod `Pending` 20 phút mà không có node (`FAILED_CAPACITY`) | Ghi nguyên văn sự kiện của NodeClaim. **Không** nới allowlist trong window. Có thể thử pool On-Demand một lần nếu bạn đồng ý |
+| H4 | NodeClaim không biến mất 15 phút sau khi bị xoá | Ghi lại. Xem instance trên AWS. Chỉ terminate tay khi bạn đồng ý, và ghi thành lỗi |
+| H5 | Job mới cứ được tạo liên tục cho cùng một request: message không bao giờ bị xoá, hoặc Job hỏng **trước** khi nhận message (kéo image lỗi, crash lúc khởi động; không có `RECEIVED-1`). Ngưỡng: Job thứ 4 cho cùng run key | Purge queue, tắt request. Nếu đã có `RECEIVED-3` thì DLQ đáng lẽ đã chặn: ghi thành lỗi. Nếu chưa có `RECEIVED-1` thì DLQ không thể chặn: ghi lớp hỏng (image, Pod Security, Kyverno) |
+| H6 | Instance có tag Karpenter (mọi trạng thái trừ `terminated`) còn trên AWS ở bước F2 sau 15 phút, hoặc lệnh đếm cứ ra `READ_FAILED` | **Không chạy `terraform destroy`.** Ghi lại. Terminate tay theo tag khi bạn đồng ý, rồi đếm lại cho tới khi đọc được `0` |
+| H7 | Gross ước tính của window chạm trần 4 USD | Dọn ngay |
+
+## 7. Chi phí
+
+| Khoản | USD/giờ | Nguồn |
+|---|---|---|
+| Stack P5 (EKS, 2 node system, RDS, IPv4, EBS) | ≈ 0,45 | `P5_L3_WINDOW.md` §7, ước tính |
+| Node batch `m6i.large` On-Demand + gp3 20 Gi + IPv4 | ≈ 0,10 | COST_PLAN §5.2 (28/09), đọc lại ở cổng |
+| Node batch trên Spot | chưa đọc; giả định ≈ 0,05 | đọc giá Spot ở cổng |
+| SQS, EventBridge, S3 | < 0,01 cho cả window | vài nghìn request |
+| **Tổng** | 5 giờ × 0,45 + khoảng 2 giờ-node batch ≈ **2,5–2,6 USD** | dưới trần 4 USD |
+
+Đối chiếu: Bills gross tháng 11 trước window P5 là 0,73 USD. Window P5 ước tính khoảng 1,36 USD. Bills gross của P6 chỉ đọc
+được sau window (P6-T4.3).
