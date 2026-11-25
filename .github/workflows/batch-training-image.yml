@@ -1,0 +1,71 @@
+# BatchTrainingJob image (SPEC-P6 P6-T2.1, D10): test, then publish to GHCR on main.
+# Pull requests run the same tests and build, but never push and get no write token.
+# Consumers pin the digest from the job summary (@sha256), never the tag.
+name: batch-training-image
+
+on:
+  pull_request:
+    paths:
+      - "workloads/batch-training/**"
+      - ".github/workflows/batch-training-image.yml"
+  push:
+    branches: [main]
+    paths:
+      - "workloads/batch-training/**"
+      - ".github/workflows/batch-training-image.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: batch-training-image-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  IMAGE: ghcr.io/eurusdevsec/zero-d-rift/batch-training
+
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Unit tests (in-memory SQS and S3 fakes)
+        run: bash workloads/batch-training/test.sh
+      - name: Hardened smoke on S3Mock and ElasticMQ (L2 conditional write, resume)
+        run: bash workloads/batch-training/smoke.sh
+
+  publish:
+    needs: test
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - id: build
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: workloads/batch-training
+          platforms: linux/amd64
+          push: true
+          tags: ${{ env.IMAGE }}:sha-${{ github.sha }}
+      - name: Record digest
+        env:
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          echo "Image: \`${IMAGE}@${DIGEST}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "Source commit: \`${GITHUB_SHA}\`" >> "$GITHUB_STEP_SUMMARY"
