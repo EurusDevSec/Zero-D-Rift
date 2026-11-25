@@ -1,0 +1,28 @@
+# Micro-lab (SPEC-P5 P5-T4.2 D): Kyverno layer. A Pod that passes Pod Security,
+# LimitRange and quota, but names the project image by tag instead of digest.
+# Only zdr-image-digest should refuse it, and only once the policies are in Deny.
+# Owner types: kubectl apply --dry-run=server -f tests/isolation/microlab/kyverno-tag.yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: microlab-tag
+  namespace: tenant-a
+  labels:
+    rag.zero-drift.io/tenant: tenant-a
+spec:
+  restartPolicy: Never
+  automountServiceAccountToken: false
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 10001
+    seccompProfile: {type: RuntimeDefault}
+  containers:
+    - name: c
+      image: ghcr.io/eurusdevsec/zero-d-rift/rag-sandbox:latest
+      command: ["sleep", "60"]
+      securityContext:
+        allowPrivilegeEscalation: false
+        capabilities: {drop: [ALL]}
+      resources:
+        requests: {cpu: 50m, memory: 96Mi}
+        limits: {memory: 192Mi}
