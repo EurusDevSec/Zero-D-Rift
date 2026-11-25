@@ -98,6 +98,16 @@ E Dọn (0,5 g)       request + cleanup → policy → Kyverno → webhook = 0 �
 
 - Đo A6 (Claude đọc, ghi vào evidence): số Pod đang chạy so với allocatable `pods`, và tổng memory request so với allocatable memory của từng node.
 - `zdr-kyverno` và `zdr-kyverno-policies` `Synced Healthy`. Ba policy ở `Audit`. Webhook `Fail` và chỉ bắt namespace tenant (như lab kind bước 0).
+- NetworkPolicy của VPC CNI đã bật. Container `aws-network-policy-agent` có sẵn từ VPC CNI v1.14 dù tính năng bật hay tắt, nên phải xem **cờ**, không chỉ tên container:
+  `kubectl -n kube-system get ds aws-node -o jsonpath='{.spec.template.spec.containers[?(@.name=="aws-network-policy-agent")].args}'`.
+  Phải thấy `--enable-network-policy=true`. Tên cờ này chưa được kiểm trên cluster của dự án; nếu output khác, ghi nguyên văn vào evidence và dựa vào điều kiện G5 (PolicyEndpoint).
+
+> **Lưu ý VPC CNI (SPEC-P5 P5-T3 A, D5).** Bật `enableNetworkPolicy` làm add-on `vpc-cni` cập nhật, và
+> DaemonSet `aws-node` restart trên mọi node. Trong lúc restart, Pod mới có thể chưa có mạng. Vì vậy
+> chỉ bật tính năng này **lúc tạo cluster**: Terraform của dự án đã đặt sẵn trong module cluster, nên
+> `apply` đầu window đã có nó. **Không** bật hay tắt trên một cluster đang chạy trial hoặc đang có sandbox.
+> Nếu cần đổi (ví dụ sang mode `strict`), hãy đổi trong Git rồi áp vào một window mới, trên cluster mới.
+> Ví von: thay ổ khoá thì làm lúc nhà còn trống, không làm khi khách đang ở.
 
 **C. Control rồi guardrail.** Root có `selfHeal`, nên phải tạm dừng root **trước**, rồi mới tạm dừng app con.
 
