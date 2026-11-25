@@ -1,0 +1,11 @@
+# Guard fixture (DRF-72, F3 of window P5-L3-20261125-01): a valid tenant-a request that
+# gitops/tests/check_guards.sh mutates. It is a copy, so deleting or editing the live
+# requests in gitops/requests/ (a sandbox recreate) no longer breaks the guard tests.
+# check.sh does not scan gitops/tests/, so this file is never synced by Argo CD.
+apiVersion: kro.run/v1alpha1
+kind: RAGSandbox
+metadata:
+  name: docs-qa
+  namespace: tenant-a
+spec:
+  bootstrapAttempt: 0
