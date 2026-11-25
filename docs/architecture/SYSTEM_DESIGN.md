@@ -5,7 +5,7 @@
 - PoC này giúp AI/ML developer tự phục vụ hạ tầng theo hai mẫu hạ tầng AI đã chuẩn hóa, đồng thời hỗ trợ quản trị phân quyền, quan sát chi phí, thu hồi tài nguyên nhàn rỗi, phát hiện sai lệch cấu hình và thực hiện quy trình phục hồi dữ liệu có kiểm soát.
 - Hai golden path
   - `RAGSandbox`: môi trường ứng dụng RAG dùng EKS Pod, S3 và RDS PostgreSQL/pgvector dùng chung.
-  - `BatchTrainingJob`: workload training theo batch, có khả năng yêu cầu GPU node động và lưu checkpoint vào S3.
+  - `BatchTrainingJob`: workload training theo batch, chạy trên node CPU do Karpenter tạo động (ADR-0009 thay GPU vì quota G/VT bị từ chối) và lưu checkpoint vào S3.
 - Giới hạn rõ ràng:
   - Một AWS account sandbox.
   - Một AWS Region.
@@ -32,9 +32,9 @@
 | Kubernetes workload | Chạy RAG application hoặc batch-training Job; thực hiện health check, DB access và checkpoint. | Nhận Deployment/Job, config, ServiceAccount và secret reference; trả về Pod/Job status, readiness và artifact/checkpoint. | Không tự cấp EC2 node, không giữ AWS admin credential và không tự tạo RDS instance. | Là workload mà golden path cấp phát và là đối tượng được kiểm chứng. |
 | IRSA | Ánh xạ Kubernetes ServiceAccount identity sang IAM role để Pod nhận temporary AWS credentials. | Nhận projected ServiceAccount token, OIDC trust và IAM role mapping; AWS STS trả temporary credentials. | Không cấp quyền PostgreSQL, không quản lý Kubernetes RBAC/NetworkPolicy và không lưu secret. | Tránh AWS access key dài hạn trong Pod và giới hạn quyền AWS theo workload. |
 | RDS PostgreSQL/pgvector | Cung cấp shared database đã chuẩn bị trước cho `RAGSandbox`; lưu dữ liệu quan hệ/vector trong phạm vi PoC. | Nhận kết nối từ application/bootstrap Job; cung cấp database hoặc schema và DB role riêng cho từng sandbox. | Không tạo instance mới cho từng `RAGSandbox`; không dùng DB chính cho destructive recovery trial. | Loại thời gian tạo RDS khỏi provisioning path và giữ một data service dùng chung có kiểm soát. |
-| S3 | Lưu object, artifact/checkpoint và dữ liệu workload được cho phép. | Nhận AWS API call đã xác thực; cung cấp bucket/prefix và object theo policy. | Không thay RDS, không schedule Job và không thu hồi GPU node. | Giữ artifact/checkpoint bền vững khi Pod hoặc Spot node biến mất. |
+| S3 | Lưu object, artifact/checkpoint và dữ liệu workload được cho phép. | Nhận AWS API call đã xác thực; cung cấp bucket/prefix và object theo policy. | Không thay RDS, không schedule Job và không thu hồi batch node. | Giữ artifact/checkpoint bền vững khi Pod hoặc Spot node biến mất. |
 | KEDA | Điều chỉnh số lần chạy Job theo event, ví dụ message trong SQS, thông qua `ScaledJob`. | Nhận scaler configuration và queue/event state; tạo Job theo nhu cầu. | Không provision EC2 node cho Pod đang pending. | Cung cấp event-driven execution và scale-to-zero cho `BatchTrainingJob`. |
-| Karpenter | Provision, chọn capacity type và thu hồi EC2 node phù hợp với Pod constraints, gồm GPU. | Nhận tín hiệu Pod chưa schedule cùng NodePool/NodeClass constraints; tạo node và thực hiện disruption/reclamation. | Không scale Job theo SQS, không bảo đảm Spot capacity và không lưu checkpoint. | Chứng minh GPU node lifecycle và thử nghiệm Spot/On-Demand fallback. |
+| Karpenter | Provision, chọn capacity type và thu hồi EC2 node phù hợp với Pod constraints (node batch CPU, ADR-0009). | Nhận tín hiệu Pod chưa schedule cùng NodePool/NodeClass constraints; tạo node và thực hiện disruption/reclamation. | Không scale Job theo SQS, không bảo đảm Spot capacity và không lưu checkpoint. | Chứng minh vòng đời node batch CPU (ADR-0009) và thử nghiệm Spot/On-Demand fallback. |
 | Kyverno / RBAC / ResourceQuota / NetworkPolicy | Áp guardrail về admission, quyền Kubernetes, giới hạn tài nguyên và traffic giữa tenant. | Nhận policy/RBAC/quota/network rules; cho phép hoặc từ chối request và traffic tương ứng. | Không tạo hard multi-tenancy tương đương account/cluster riêng và không tự cấp AWS IAM permission. | Giới hạn hai tenant PoC và làm cơ sở cho negative security tests. |
 | Prometheus / OpenCost | Thu metrics, utilization và allocation-cost view theo workload/namespace. | Nhận metrics và cost configuration; cung cấp time series và cost allocation. | Không phải hóa đơn AWS cuối cùng, không tự giảm chi phí và không terminate resource. | Hỗ trợ phân tích workload; dữ liệu billing AWS được dùng để đối soát chi phí thực tế. |
 
@@ -67,7 +67,7 @@
 5. Cài kro sau khi Crossplane vertical slice ổn định. kro dùng Crossplane managed resource đã xác minh như một node trong ResourceGraphDefinition, thay vì đưa một dependency AWS chưa kiểm chứng vào golden path
 6. Xây dựng và xác minh `RAGSandbox` end-to-end: namespace resources, ServiceAccount và IRSA, shared RDS access, S3 access, workload và readiness check.
 7. Áp dụng governance control cho hai tenant mô phỏng: RBAC, ResourceQuota, NetworkPolicy, Pod Security và Kyverno. Chạy negative tests trước khi coi namespace tenancy là đủ cho phạm vi PoC.
-8. Bổ sung BatchTrainingJob theo thứ tự KEDA trước, Karpenter CPU sau, rồi đến Karpenter GPU, workload phải checkpoint vào S3 trước khi dùng Spot/GPU lifecycle
+8. Bổ sung BatchTrainingJob theo thứ tự KEDA trước, Karpenter CPU sau (không có bước GPU, ADR-0009), workload phải checkpoint vào S3 trước khi dùng Spot lifecycle
 9. Bổ sung Prometheus/Opencost và AWS cost reconciliation trước các thí nghiệm FinOps, drift và recovery. Thu raw evidence trước khi chạy offcial trials.
 10. Chỉ bắt đầu official experiment collection khi version matrix, run manifest, baseline, timeout và exclusion rule đã được phê duyệt và đóng băng.
 
@@ -124,7 +124,7 @@ to the pull-request interface requires a separate integration and remains
 1. AI developer tạo PR chứa `BatchTrainingJob` custom resource theo schema golden path.
 2. CI chạy schema validation, policy/static validation, sau khi merge Argo CD sync revision hợp lệ vào EKS
 3. kro tạo resource graph cho batch workload, gồm `ScaledJob` và các resource cần thiết để KEDA quan sát event từ AWS SQS queue dùng chung trong phạm vi PoC.
-4. KEDA theo dõi message/event và tạo Job theo cấu hình `ScaledJob`. Khi Job Pod yêu cầu GPU
+4. KEDA theo dõi message/event và tạo Job theo cấu hình `ScaledJob`. Khi Job Pod cần node batch
    nhưng chưa schedule được, Karpenter provision node phù hợp theo NodePool và
    capacity constraints; ưu tiên Spot và dùng On-Demand fallback đã định nghĩa
    khi cần cho thí nghiệm.
@@ -238,7 +238,7 @@ sau Karpenter reclaim node.
 
 | Quyết định                                 | Trạng thái | Cách xác minh                                                                                                                                            | Không được giả định                                                                        |
 | ------------------------------------------ | ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
-| AWS Region                                 | SELECTED — `us-east-1` | STS, một credit 100 USD, candidate prices và applied EKS/EC2/VPC/RDS quotas đã đọc ngày 2026-09-28; Spot/GPU capacity còn mở. | Không coi Region/price/credit evidence là bằng chứng Spot capacity hoặc runtime behavior. |
+| AWS Region                                 | SELECTED — `us-east-1` | STS, một credit 100 USD, candidate prices và applied EKS/EC2/VPC/RDS quotas đã đọc ngày 2026-09-28; Spot capacity còn mở; GPU ngoài phạm vi (ADR-0009). | Không coi Region/price/credit evidence là bằng chứng Spot capacity hoặc runtime behavior. |
 | Network egress design                      | ACCEPTED — ADR-0006 | Public worker subnets + restricted public IPv4, private RDS, no default NAT Gateway và S3 gateway endpoint; owner/account/Region review đã xong, Terraform plan và L3 checks còn mở. | Không coi cost-optimized PoC network là production design hoặc public subnet tự động an toàn. |
 | Local-first environment                    | PROPOSED — ADR-0005 | Dùng `kind v0.33.0` với Kubernetes 1.35.8 image đã pin digest; owner teach-back đã xong nhưng L2 micro-lab chưa có. | Không coi kind tương đương EKS về IRSA, VPC CNI, Karpenter, RDS hoặc AWS IAM.               |
 | Crossplane AWS provider packages           | PROPOSED SCOPE      | Candidate v2.7.0; chọn S3 và EC2 cho approved resource paths, giữ SQS conditional và không chọn EKS/IAM/RDS mặc định. Exact OCI refs/digests và pairing cần L2. | Không cài toàn bộ AWS provider family hoặc tuyên bố pairing runtime đã pass.               |
@@ -260,7 +260,7 @@ phải tiếp tục giữ nhãn `UNVERIFIED` thay vì suy ra từ design/account
 | Bootstrap plane và platform control plane boundary | ACCEPTED — ADR-0003 | Terraform/OpenTofu bootstrap AWS/EKS; Argo CD, kro và Crossplane chạy sau khi EKS sẵn sàng. | Canonical scope ver3, system design và dependency review.                                   |
 | Local-first environment: kind                       | PROPOSED — ADR-0005 | Dùng kind cho Kubernetes 1.35 compatibility work trước EKS.                                 | Version matrix và owner teach-back đã có; còn L2 micro-lab trước khi `ACCEPTED`.             |
 | Selected Crossplane AWS provider packages          | DECISION PENDING    | Chọn S3/EC2 candidates; SQS conditional; không chọn EKS/IAM/RDS mặc định.                   | L2 pairing/CRD footprint evidence và final ownership review trước provider installation.     |
-| AWS Region                                         | SELECTED — `us-east-1` | Account/Region, one credit, candidate prices và selected quotas đã probe read-only; GPU quota increase/capacity còn mở. | Revisit nếu credit, price, quota approval hoặc capacity không phù hợp.                       |
+| AWS Region                                         | SELECTED — `us-east-1` | Account/Region, one credit, candidate prices và selected quotas đã probe read-only; GPU quota bị từ chối, ngoài phạm vi (ADR-0009). | Revisit nếu credit, price, quota approval hoặc capacity không phù hợp.                       |
 | Network egress design                              | ACCEPTED — ADR-0006 | No default NAT; public worker subnets, private RDS và S3 gateway endpoint cho PoC.            | Owner/price review đã xong; Terraform plan và L3 network/security evidence còn mở.           |
 | Secret integration method                          | ACCEPTED — ADR-0008 | Direct SDK qua IRSA; shared RDS do Terraform sở hữu; role workload tạo sẵn theo tenant.      | Owner chấp nhận văn bản ADR; L3 evidence ở P4-T4.1 trước khi `RUNTIME_VERIFIED`.             |
 | Crossplane management/deletion policy              | DECISION PENDING    | Xác định lifecycle của selected AWS resources khi manifest bị đổi/xóa.                      | Pinned version semantics, teardown plan và recovery safety review.                          |

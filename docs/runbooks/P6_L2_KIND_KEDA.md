@@ -21,7 +21,7 @@ Trên kind không có AWS. Lab thay hai thứ (D12):
 | Trên EKS | Trên kind | Vì sao vẫn đúng bài |
 |---|---|---|
 | SQS | ElasticMQ 1.7.1 (`softwaremill/elasticmq-native`), cổng 9324 | Cùng API SQS. KEDA trỏ tới bằng `awsEndpoint`, worker trỏ tới bằng `endpoint_url` |
-| S3 | MinIO | Cùng API S3, cùng code boto3 |
+| S3 | Adobe S3Mock 5.2.3, cổng 9090 (MinIO đã ngừng phát hành) | Cùng API S3, cùng code boto3. S3Mock chỉ nhận URL kiểu path (`http://host:9090/bucket/key`) nên worker bật path-style khi có `endpoint_url` |
 | IRSA | Key tĩnh của lab trong Secret `lab-aws` | Lab không chứng minh gì về IAM |
 | Node do Karpenter tạo | Worker thứ hai của kind, gắn sẵn taint và label của pool batch | Thấy được chỗ đặt Pod, nhưng không thấy máy mới sinh ra |
 
@@ -62,7 +62,7 @@ sha256sum "$LAB/chart/keda-2.21.1.tgz"          # so với docs/evidence/p6/P6-T
 helm install keda "$LAB/chart/keda-2.21.1.tgz" -n keda --create-namespace --wait --timeout 5m
 $K -n keda get deploy
 
-# Hàng đợi (ElasticMQ) và kho (MinIO) của lab, cùng image worker build tại chỗ
+# Hàng đợi (ElasticMQ) và kho (S3Mock) của lab, cùng image worker build tại chỗ
 $K apply -f labs/p6-kind/backends.yaml
 $K -n zdr-lab wait --for=condition=Available deploy --all --timeout=180s
 docker build -t zdr-batch:lab workloads/batch-training
@@ -71,7 +71,7 @@ B=labs/p6-kind/batch.sh        # gói các lệnh hay dùng: send, stats, marks,
 ```
 
 **Phải thấy:** ba Deployment của KEDA `1/1` (operator, metrics-apiserver, admission-webhooks). Hai Deployment
-`elasticmq`, `minio` trong `zdr-lab` `Available`. `$B stats` in ra `visible=0 inflight=0 dlq=0`.
+`elasticmq`, `s3mock` trong `zdr-lab` `Available`. `$B stats` in ra `visible=0 inflight=0 dlq=0`.
 
 ## 1. Hàng đợi rỗng thì có Job không?
 
@@ -94,7 +94,7 @@ Dự đoán trước: 1 message thì có mấy Job, và Pod nằm trên node nà
 $B send lab-1 300        # requestId=lab-1, 300 step (khoảng 5 phút)
 sleep 20; $B jobs
 $K -n tenant-a get pods -o wide -l app.kubernetes.io/name=batch-train
-$B marks lab-1           # các marker trong MinIO
+$B marks lab-1           # các marker trong S3Mock
 ```
 
 **Phải thấy:** `jobs=1`. Pod nằm trên worker có `zero-drift.io/pool=batch`. `marks` có `TRAINING_STARTED` với
