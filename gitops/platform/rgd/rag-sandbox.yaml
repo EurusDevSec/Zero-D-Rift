@@ -237,5 +237,11 @@ spec:
           selector:
             app.kubernetes.io/name: ragsandbox
             rag.zero-drift.io/sandbox: ${schema.metadata.name}
+            # P5 (found in window P5-L3-20261125-01): the VPC CNI checks egress
+            # before the Service IP is translated, and its controller allows a
+            # ClusterIP only when the Service selector holds the NetworkPolicy
+            # peer labels. Without the tenant label, the own app is unreachable
+            # through its Service under allow-app-same-tenant.
+            rag.zero-drift.io/tenant: ${schema.metadata.namespace}
           ports:
             - {name: http, port: 8080, targetPort: http}
