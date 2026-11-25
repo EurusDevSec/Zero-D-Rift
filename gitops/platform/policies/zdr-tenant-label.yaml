@@ -1,6 +1,6 @@
 # P5 (DRF-67, SPEC-P5 D6, D8, D9). Validate only, Pods in namespaces that
-# carry rag.zero-drift.io/tenant. Starts in Audit; the switch to Deny is a
-# pull request after the policy reports are clean. failurePolicy Fail (D8):
+# carry rag.zero-drift.io/tenant. Deny: switched from Audit in the P5 L3 window
+# (P5-T4.2 C) after the Audit policy reports were clean. failurePolicy Fail (D8):
 # if Kyverno is down, tenant Pods are refused; platform namespaces are outside
 # the selector, so teardown still works. No PolicyException (D9).
 # Autogen is off: kro-created Deployments are judged by their Pods.
@@ -13,7 +13,7 @@ metadata:
   name: zdr-tenant-label
 spec:
   failurePolicy: Fail
-  validationActions: [Audit]
+  validationActions: [Deny]
   autogen:
     podControllers:
       controllers: []
