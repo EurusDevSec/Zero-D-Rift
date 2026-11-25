@@ -353,8 +353,10 @@ nothing about VPC CNI enforcement or IRSA.
       `enableNetworkPolicy = "true"`; enforcing mode per D5.
 - [x] `terraform test` asserts the value; `plan_assert.sh` fails when it is
       missing in a P5+ window; guard test with a synthetic plan.
-- [ ] Runbook note: enabling the feature restarts `aws-node`; do it at cluster
+- [x] Runbook note: enabling the feature restarts `aws-node`; do it at cluster
       creation, not on a cluster that carries trials.
+      (25/11: `docs/runbooks/P5_L3_WINDOW.md` §5 B, with a check of the
+      `--enable-network-policy` flag on the `aws-network-policy-agent` container.)
 
 **B. Policies (2 h)**
 
