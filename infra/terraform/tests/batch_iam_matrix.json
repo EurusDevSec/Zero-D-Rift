@@ -1,0 +1,557 @@
+{
+ "_comment": "IAM allow/deny matrix for the P6 roles (DRF-77). Offline: tests/batch_iam_offline.sh evaluates it on tests/p6_approved_policies.json (glob and condition rules). Window: scripts/batch_iam_check.sh runs it through aws iam simulate-* with the context entries. ACCT is the account ID. A missing context key fails a condition (IfExists and ForAllValues excepted).",
+ "cases": [
+  {
+   "role": "keda",
+   "expect": "allowed",
+   "action": "sqs:GetQueueAttributes",
+   "resource": "arn:aws:sqs:us-east-1:ACCT:zero-drift-batch"
+  },
+  {
+   "role": "keda",
+   "expect": "implicitDeny",
+   "action": "sqs:GetQueueAttributes",
+   "resource": "arn:aws:sqs:us-east-1:ACCT:zero-drift-batch-dlq",
+   "why": "only the shared queue"
+  },
+  {
+   "role": "keda",
+   "expect": "implicitDeny",
+   "action": "sqs:ReceiveMessage",
+   "resource": "arn:aws:sqs:us-east-1:ACCT:zero-drift-batch"
+  },
+  {
+   "role": "keda",
+   "expect": "implicitDeny",
+   "action": "sqs:SendMessage",
+   "resource": "arn:aws:sqs:us-east-1:ACCT:zero-drift-batch"
+  },
+  {
+   "role": "keda",
+   "expect": "implicitDeny",
+   "action": "s3:ListBucket",
+   "resource": "arn:aws:s3:::zero-drift-batch-tenant-a-demo"
+  },
+  {
+   "role": "keda",
+   "expect": "implicitDeny",
+   "action": "iam:PassRole",
+   "resource": "arn:aws:iam::ACCT:role/zero-drift-karpenter-node"
+  },
+  {
+   "role": "submit",
+   "expect": "allowed",
+   "action": "sqs:SendMessage",
+   "resource": "arn:aws:sqs:us-east-1:ACCT:zero-drift-batch"
+  },
+  {
+   "role": "submit",
+   "expect": "implicitDeny",
+   "action": "sqs:SendMessage",
+   "resource": "arn:aws:sqs:us-east-1:ACCT:zero-drift-batch-dlq"
+  },
+  {
+   "role": "submit",
+   "expect": "implicitDeny",
+   "action": "sqs:ReceiveMessage",
+   "resource": "arn:aws:sqs:us-east-1:ACCT:zero-drift-batch"
+  },
+  {
+   "role": "submit",
+   "expect": "allowed",
+   "action": "s3:PutObject",
+   "resource": "arn:aws:s3:::zero-drift-batch-tenant-a-demo/runs/demo/1/submit-started"
+  },
+  {
+   "role": "submit",
+   "expect": "allowed",
+   "action": "s3:PutObject",
+   "resource": "arn:aws:s3:::zero-drift-batch-tenant-a-demo/runs/demo/1/submitted"
+  },
+  {
+   "role": "submit",
+   "expect": "implicitDeny",
+   "action": "s3:PutObject",
+   "resource": "arn:aws:s3:::zero-drift-batch-tenant-a-demo/runs/demo/1/SUCCEEDED",
+   "why": "only the two submit markers"
+  },
+  {
+   "role": "submit",
+   "expect": "implicitDeny",
+   "action": "s3:PutObject",
+   "resource": "arn:aws:s3:::zero-drift-batch-tenant-a-demo/runs/demo/1/ckpt/step-000025.json"
+  },
+  {
+   "role": "submit",
+   "expect": "implicitDeny",
+   "action": "s3:PutObject",
+   "resource": "arn:aws:s3:::zero-drift-rag-tenant-a-s1/runs/demo/1/submitted",
+   "why": "batch buckets only"
+  },
+  {
+   "role": "submit",
+   "expect": "allowed",
+   "action": "s3:ListBucket",
+   "resource": "arn:aws:s3:::zero-drift-batch-tenant-a-demo",
+   "context": {
+    "s3:prefix": "runs/demo/1/submitted"
+   }
+  },
+  {
+   "role": "submit",
+   "expect": "implicitDeny",
+   "action": "s3:ListBucket",
+   "resource": "arn:aws:s3:::zero-drift-batch-tenant-a-demo",
+   "context": {
+    "s3:prefix": "runs/demo/1/"
+   },
+   "why": "cannot list tenant object names"
+  },
+  {
+   "role": "submit",
+   "expect": "implicitDeny",
+   "action": "s3:ListBucket",
+   "resource": "arn:aws:s3:::zero-drift-batch-tenant-a-demo",
+   "context": {
+    "s3:prefix": ""
+   }
+  },
+  {
+   "role": "submit",
+   "expect": "implicitDeny",
+   "action": "s3:ListBucket",
+   "resource": "arn:aws:s3:::zero-drift-batch-tenant-a-demo",
+   "why": "no prefix at all"
+  },
+  {
+   "role": "submit",
+   "expect": "implicitDeny",
+   "action": "s3:GetObject",
+   "resource": "arn:aws:s3:::zero-drift-batch-tenant-a-demo/runs/demo/1/submitted",
+   "why": "no s3:GetObject"
+  },
+  {
+   "role": "submit",
+   "expect": "implicitDeny",
+   "action": "s3:GetObject",
+   "resource": "arn:aws:s3:::zero-drift-batch-tenant-a-demo/runs/demo/1/artifact/model.json"
+  },
+  {
+   "role": "submit",
+   "expect": "implicitDeny",
+   "action": "s3:DeleteObject",
+   "resource": "arn:aws:s3:::zero-drift-batch-tenant-a-demo/runs/demo/1/submitted"
+  },
+  {
+   "role": "tenant-a",
+   "expect": "allowed",
+   "action": "sqs:ReceiveMessage",
+   "resource": "arn:aws:sqs:us-east-1:ACCT:zero-drift-batch"
+  },
+  {
+   "role": "tenant-a",
+   "expect": "allowed",
+   "action": "sqs:DeleteMessage",
+   "resource": "arn:aws:sqs:us-east-1:ACCT:zero-drift-batch"
+  },
+  {
+   "role": "tenant-a",
+   "expect": "allowed",
+   "action": "sqs:ChangeMessageVisibility",
+   "resource": "arn:aws:sqs:us-east-1:ACCT:zero-drift-batch"
+  },
+  {
+   "role": "tenant-a",
+   "expect": "implicitDeny",
+   "action": "sqs:ReceiveMessage",
+   "resource": "arn:aws:sqs:us-east-1:ACCT:zero-drift-batch-dlq"
+  },
+  {
+   "role": "tenant-a",
+   "expect": "implicitDeny",
+   "action": "sqs:SendMessage",
+   "resource": "arn:aws:sqs:us-east-1:ACCT:zero-drift-batch"
+  },
+  {
+   "role": "tenant-a",
+   "expect": "implicitDeny",
+   "action": "sqs:GetQueueAttributes",
+   "resource": "arn:aws:sqs:us-east-1:ACCT:zero-drift-batch"
+  },
+  {
+   "role": "tenant-a",
+   "expect": "implicitDeny",
+   "action": "sqs:PurgeQueue",
+   "resource": "arn:aws:sqs:us-east-1:ACCT:zero-drift-batch"
+  },
+  {
+   "role": "tenant-a",
+   "expect": "allowed",
+   "action": "s3:ListBucket",
+   "resource": "arn:aws:s3:::zero-drift-batch-tenant-a-demo"
+  },
+  {
+   "role": "tenant-a",
+   "expect": "allowed",
+   "action": "s3:GetObject",
+   "resource": "arn:aws:s3:::zero-drift-batch-tenant-a-demo/runs/demo/1/ckpt/step-000025.json"
+  },
+  {
+   "role": "tenant-a",
+   "expect": "implicitDeny",
+   "action": "s3:GetObject",
+   "resource": "arn:aws:s3:::zero-drift-batch-tenant-b-demo/runs/demo/1/ckpt/step-000025.json",
+   "why": "other tenant (B12)"
+  },
+  {
+   "role": "tenant-a",
+   "expect": "allowed",
+   "action": "s3:PutObject",
+   "resource": "arn:aws:s3:::zero-drift-batch-tenant-a-demo/runs/demo/1/ckpt/step-000025.json"
+  },
+  {
+   "role": "tenant-a",
+   "expect": "implicitDeny",
+   "action": "s3:PutObject",
+   "resource": "arn:aws:s3:::zero-drift-batch-tenant-b-demo/runs/demo/1/ckpt/step-000025.json",
+   "why": "other tenant (B12)"
+  },
+  {
+   "role": "tenant-a",
+   "expect": "allowed",
+   "action": "s3:DeleteObject",
+   "resource": "arn:aws:s3:::zero-drift-batch-tenant-a-demo/runs/demo/1/ckpt/step-000025.json"
+  },
+  {
+   "role": "tenant-a",
+   "expect": "implicitDeny",
+   "action": "s3:DeleteObject",
+   "resource": "arn:aws:s3:::zero-drift-batch-tenant-b-demo/runs/demo/1/ckpt/step-000025.json",
+   "why": "other tenant (B12)"
+  },
+  {
+   "role": "tenant-a",
+   "expect": "implicitDeny",
+   "action": "s3:ListBucket",
+   "resource": "arn:aws:s3:::zero-drift-batch-tenant-b-demo"
+  },
+  {
+   "role": "tenant-a",
+   "expect": "implicitDeny",
+   "action": "s3:CreateBucket",
+   "resource": "arn:aws:s3:::zero-drift-batch-tenant-a-demo"
+  },
+  {
+   "role": "tenant-a",
+   "expect": "implicitDeny",
+   "action": "s3:DeleteBucket",
+   "resource": "arn:aws:s3:::zero-drift-batch-tenant-a-demo"
+  },
+  {
+   "role": "tenant-a",
+   "expect": "implicitDeny",
+   "action": "s3:GetObject",
+   "resource": "arn:aws:s3:::zero-drift-rag-tenant-a-s1/docs/1.txt",
+   "why": "P4 buckets are not batch buckets"
+  },
+  {
+   "role": "tenant-a",
+   "expect": "implicitDeny",
+   "action": "iam:PassRole",
+   "resource": "arn:aws:iam::ACCT:role/zero-drift-karpenter-node"
+  },
+  {
+   "role": "tenant-b",
+   "expect": "allowed",
+   "action": "sqs:ReceiveMessage",
+   "resource": "arn:aws:sqs:us-east-1:ACCT:zero-drift-batch"
+  },
+  {
+   "role": "tenant-b",
+   "expect": "allowed",
+   "action": "sqs:DeleteMessage",
+   "resource": "arn:aws:sqs:us-east-1:ACCT:zero-drift-batch"
+  },
+  {
+   "role": "tenant-b",
+   "expect": "allowed",
+   "action": "sqs:ChangeMessageVisibility",
+   "resource": "arn:aws:sqs:us-east-1:ACCT:zero-drift-batch"
+  },
+  {
+   "role": "tenant-b",
+   "expect": "implicitDeny",
+   "action": "sqs:ReceiveMessage",
+   "resource": "arn:aws:sqs:us-east-1:ACCT:zero-drift-batch-dlq"
+  },
+  {
+   "role": "tenant-b",
+   "expect": "implicitDeny",
+   "action": "sqs:SendMessage",
+   "resource": "arn:aws:sqs:us-east-1:ACCT:zero-drift-batch"
+  },
+  {
+   "role": "tenant-b",
+   "expect": "implicitDeny",
+   "action": "sqs:GetQueueAttributes",
+   "resource": "arn:aws:sqs:us-east-1:ACCT:zero-drift-batch"
+  },
+  {
+   "role": "tenant-b",
+   "expect": "implicitDeny",
+   "action": "sqs:PurgeQueue",
+   "resource": "arn:aws:sqs:us-east-1:ACCT:zero-drift-batch"
+  },
+  {
+   "role": "tenant-b",
+   "expect": "allowed",
+   "action": "s3:ListBucket",
+   "resource": "arn:aws:s3:::zero-drift-batch-tenant-b-demo"
+  },
+  {
+   "role": "tenant-b",
+   "expect": "allowed",
+   "action": "s3:GetObject",
+   "resource": "arn:aws:s3:::zero-drift-batch-tenant-b-demo/runs/demo/1/ckpt/step-000025.json"
+  },
+  {
+   "role": "tenant-b",
+   "expect": "implicitDeny",
+   "action": "s3:GetObject",
+   "resource": "arn:aws:s3:::zero-drift-batch-tenant-a-demo/runs/demo/1/ckpt/step-000025.json",
+   "why": "other tenant (B12)"
+  },
+  {
+   "role": "tenant-b",
+   "expect": "allowed",
+   "action": "s3:PutObject",
+   "resource": "arn:aws:s3:::zero-drift-batch-tenant-b-demo/runs/demo/1/ckpt/step-000025.json"
+  },
+  {
+   "role": "tenant-b",
+   "expect": "implicitDeny",
+   "action": "s3:PutObject",
+   "resource": "arn:aws:s3:::zero-drift-batch-tenant-a-demo/runs/demo/1/ckpt/step-000025.json",
+   "why": "other tenant (B12)"
+  },
+  {
+   "role": "tenant-b",
+   "expect": "allowed",
+   "action": "s3:DeleteObject",
+   "resource": "arn:aws:s3:::zero-drift-batch-tenant-b-demo/runs/demo/1/ckpt/step-000025.json"
+  },
+  {
+   "role": "tenant-b",
+   "expect": "implicitDeny",
+   "action": "s3:DeleteObject",
+   "resource": "arn:aws:s3:::zero-drift-batch-tenant-a-demo/runs/demo/1/ckpt/step-000025.json",
+   "why": "other tenant (B12)"
+  },
+  {
+   "role": "tenant-b",
+   "expect": "implicitDeny",
+   "action": "s3:ListBucket",
+   "resource": "arn:aws:s3:::zero-drift-batch-tenant-a-demo"
+  },
+  {
+   "role": "tenant-b",
+   "expect": "implicitDeny",
+   "action": "s3:CreateBucket",
+   "resource": "arn:aws:s3:::zero-drift-batch-tenant-b-demo"
+  },
+  {
+   "role": "tenant-b",
+   "expect": "implicitDeny",
+   "action": "s3:DeleteBucket",
+   "resource": "arn:aws:s3:::zero-drift-batch-tenant-b-demo"
+  },
+  {
+   "role": "tenant-b",
+   "expect": "implicitDeny",
+   "action": "s3:GetObject",
+   "resource": "arn:aws:s3:::zero-drift-rag-tenant-b-s1/docs/1.txt",
+   "why": "P4 buckets are not batch buckets"
+  },
+  {
+   "role": "tenant-b",
+   "expect": "implicitDeny",
+   "action": "iam:PassRole",
+   "resource": "arn:aws:iam::ACCT:role/zero-drift-karpenter-node"
+  },
+  {
+   "role": "karpenter",
+   "expect": "allowed",
+   "action": "iam:PassRole",
+   "resource": "arn:aws:iam::ACCT:role/zero-drift-karpenter-node",
+   "context": {
+    "iam:PassedToService": "ec2.amazonaws.com"
+   }
+  },
+  {
+   "role": "karpenter",
+   "expect": "implicitDeny",
+   "action": "iam:PassRole",
+   "resource": "arn:aws:iam::ACCT:role/zero-drift-karpenter-node",
+   "context": {
+    "iam:PassedToService": "lambda.amazonaws.com"
+   }
+  },
+  {
+   "role": "karpenter",
+   "expect": "implicitDeny",
+   "action": "iam:PassRole",
+   "resource": "arn:aws:iam::ACCT:role/zero-drift-batch-tenant-a",
+   "context": {
+    "iam:PassedToService": "ec2.amazonaws.com"
+   },
+   "why": "only the node role"
+  },
+  {
+   "role": "karpenter",
+   "expect": "implicitDeny",
+   "action": "iam:PassRole",
+   "resource": "arn:aws:iam::ACCT:role/zero-drift-bootstrap",
+   "context": {
+    "iam:PassedToService": "ec2.amazonaws.com"
+   }
+  },
+  {
+   "role": "karpenter",
+   "expect": "allowed",
+   "action": "iam:GetInstanceProfile",
+   "resource": "arn:aws:iam::ACCT:instance-profile/zero-drift-karpenter-node"
+  },
+  {
+   "role": "karpenter",
+   "expect": "implicitDeny",
+   "action": "iam:GetInstanceProfile",
+   "resource": "arn:aws:iam::ACCT:instance-profile/other"
+  },
+  {
+   "role": "karpenter",
+   "expect": "allowed",
+   "action": "iam:ListInstanceProfiles",
+   "resource": "arn:aws:iam::ACCT:instance-profile/"
+  },
+  {
+   "role": "karpenter",
+   "expect": "implicitDeny",
+   "action": "iam:CreateInstanceProfile",
+   "resource": "arn:aws:iam::ACCT:instance-profile/zero-drift-karpenter-node",
+   "why": "D6: no IAM write"
+  },
+  {
+   "role": "karpenter",
+   "expect": "implicitDeny",
+   "action": "iam:TagInstanceProfile",
+   "resource": "arn:aws:iam::ACCT:instance-profile/zero-drift-karpenter-node",
+   "why": "D6: no IAM write"
+  },
+  {
+   "role": "karpenter",
+   "expect": "implicitDeny",
+   "action": "iam:AddRoleToInstanceProfile",
+   "resource": "arn:aws:iam::ACCT:instance-profile/zero-drift-karpenter-node",
+   "why": "D6: no IAM write"
+  },
+  {
+   "role": "karpenter",
+   "expect": "implicitDeny",
+   "action": "iam:RemoveRoleFromInstanceProfile",
+   "resource": "arn:aws:iam::ACCT:instance-profile/zero-drift-karpenter-node",
+   "why": "D6: no IAM write"
+  },
+  {
+   "role": "karpenter",
+   "expect": "implicitDeny",
+   "action": "iam:DeleteInstanceProfile",
+   "resource": "arn:aws:iam::ACCT:instance-profile/zero-drift-karpenter-node",
+   "why": "D6: no IAM write"
+  },
+  {
+   "role": "karpenter",
+   "expect": "implicitDeny",
+   "action": "iam:CreateRole",
+   "resource": "arn:aws:iam::ACCT:role/zero-drift-escalate"
+  },
+  {
+   "role": "karpenter",
+   "expect": "implicitDeny",
+   "action": "iam:PutRolePolicy",
+   "resource": "arn:aws:iam::ACCT:role/zero-drift-karpenter-node"
+  },
+  {
+   "role": "karpenter",
+   "expect": "implicitDeny",
+   "action": "iam:AttachRolePolicy",
+   "resource": "arn:aws:iam::ACCT:role/zero-drift-karpenter-node"
+  },
+  {
+   "role": "karpenter",
+   "expect": "allowed",
+   "action": "eks:DescribeCluster",
+   "resource": "arn:aws:eks:us-east-1:ACCT:cluster/zero-drift"
+  },
+  {
+   "role": "karpenter",
+   "expect": "implicitDeny",
+   "action": "eks:DescribeCluster",
+   "resource": "arn:aws:eks:us-east-1:ACCT:cluster/other"
+  },
+  {
+   "role": "karpenter",
+   "expect": "allowed",
+   "action": "sqs:ReceiveMessage",
+   "resource": "arn:aws:sqs:us-east-1:ACCT:zero-drift-karpenter"
+  },
+  {
+   "role": "karpenter",
+   "expect": "implicitDeny",
+   "action": "sqs:ReceiveMessage",
+   "resource": "arn:aws:sqs:us-east-1:ACCT:zero-drift-batch",
+   "why": "not the batch queue"
+  },
+  {
+   "role": "karpenter",
+   "expect": "allowed",
+   "action": "ec2:TerminateInstances",
+   "resource": "arn:aws:ec2:us-east-1:ACCT:instance/i-0123456789abcdef0",
+   "context": {
+    "aws:ResourceTag/kubernetes.io/cluster/zero-drift": "owned",
+    "aws:ResourceTag/karpenter.sh/nodepool": "batch-spot"
+   }
+  },
+  {
+   "role": "karpenter",
+   "expect": "implicitDeny",
+   "action": "ec2:TerminateInstances",
+   "resource": "arn:aws:ec2:us-east-1:ACCT:instance/i-0123456789abcdef0",
+   "context": {
+    "aws:ResourceTag/karpenter.sh/nodepool": "batch-spot"
+   },
+   "why": "instance not tagged for this cluster"
+  },
+  {
+   "role": "karpenter",
+   "expect": "implicitDeny",
+   "action": "ec2:TerminateInstances",
+   "resource": "arn:aws:ec2:us-east-1:ACCT:instance/i-0123456789abcdef0",
+   "context": {
+    "aws:ResourceTag/kubernetes.io/cluster/zero-drift": "owned"
+   },
+   "why": "system node: no nodepool tag"
+  },
+  {
+   "role": "karpenter",
+   "expect": "allowed",
+   "action": "ssm:GetParameter",
+   "resource": "arn:aws:ssm:us-east-1::parameter/aws/service/eks/optimized-ami/1.35/amazon-linux-2023/x86_64/standard/recommended/image_id"
+  },
+  {
+   "role": "karpenter",
+   "expect": "implicitDeny",
+   "action": "ssm:GetParameter",
+   "resource": "arn:aws:ssm:us-east-1:ACCT:parameter/zero-drift/secret"
+  }
+ ]
+}

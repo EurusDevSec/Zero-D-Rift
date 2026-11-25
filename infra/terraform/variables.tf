@@ -170,6 +170,17 @@ variable "enable_rag_platform" {
   default     = false
 }
 
+variable "enable_batch_platform" {
+  description = "Create the P6 batch queue, batch roles and Karpenter prerequisites (DRF-77). true only for an approved P6 window."
+  type        = bool
+  default     = false
+
+  validation {
+    condition     = !var.enable_batch_platform || var.enable_rag_platform
+    error_message = "enable_batch_platform needs enable_rag_platform: the Crossplane S3 role that creates checkpoint buckets lives in rag-identity (SPEC-P6 A7)."
+  }
+}
+
 # Run metadata for the tag contract (docs/finops/COST_PLAN.md §10). No defaults:
 # every plan must name its run and expiry (see run.tfvars.example).
 variable "run_id" {

@@ -37,6 +37,10 @@ fi
 #     bucket set must fail (Codex review 14/11, DRF-38).
 bash tests/plan_assert_guards.sh > /dev/null 2>&1 && pass "plan_assert guard tests (synthetic plans)" || fail "plan_assert guard tests (run: bash tests/plan_assert_guards.sh)"
 
+# 3d. P6 allow/deny matrix evaluated offline on the approved batch and
+#     Karpenter policies (DRF-77); the AWS simulation is scripts/batch_iam_check.sh.
+bash tests/batch_iam_offline.sh > /dev/null 2>&1 && pass "P6 IAM matrix (offline)" || fail "P6 IAM matrix (run: bash tests/batch_iam_offline.sh)"
+
 # 4. Provider lockfile exists and pins exactly the approved builds.
 expected="aws=6.67.0 cloudinit=2.4.1 null=3.3.2 time=0.14.2 tls=4.4.1"
 if [[ -f .terraform.lock.hcl ]]; then

@@ -1,0 +1,386 @@
+{
+ "_comment": "Approved P6 inline policies (SPEC-P6 P6-T3, D6, DRF-77). ACCT stands for the account ID. Source of truth for tests/batch_platform.tftest.hcl (module statements must equal this file), scripts/plan_assert.sh check 19 (the plan must equal it) and tests/batch_iam_offline.sh (the matrix must hold on it). Karpenter rows follow the v1.15.3 cloudformation.yaml minus the instance-profile write statements (P6-T1 evidence section 6).",
+ "policies": {
+  "batch-keda": [
+   {
+    "Sid": "ReadQueueDepth",
+    "Effect": "Allow",
+    "Action": [
+     "sqs:GetQueueAttributes"
+    ],
+    "Resource": [
+     "arn:aws:sqs:us-east-1:ACCT:zero-drift-batch"
+    ]
+   }
+  ],
+  "batch-submit": [
+   {
+    "Sid": "SendToQueue",
+    "Effect": "Allow",
+    "Action": [
+     "sqs:SendMessage"
+    ],
+    "Resource": [
+     "arn:aws:sqs:us-east-1:ACCT:zero-drift-batch"
+    ]
+   },
+   {
+    "Sid": "WriteSubmitMarkers",
+    "Effect": "Allow",
+    "Action": [
+     "s3:PutObject"
+    ],
+    "Resource": [
+     "arn:aws:s3:::zero-drift-batch-*/runs/*/submit-started",
+     "arn:aws:s3:::zero-drift-batch-*/runs/*/submitted"
+    ]
+   },
+   {
+    "Sid": "ListSubmittedMarkerOnly",
+    "Effect": "Allow",
+    "Action": [
+     "s3:ListBucket"
+    ],
+    "Resource": [
+     "arn:aws:s3:::zero-drift-batch-*"
+    ],
+    "Condition": {
+     "StringLike": {
+      "s3:prefix": [
+       "runs/*/submitted"
+      ]
+     }
+    }
+   }
+  ],
+  "batch-tenant-a": [
+   {
+    "Sid": "UseSharedQueue",
+    "Effect": "Allow",
+    "Action": [
+     "sqs:ChangeMessageVisibility",
+     "sqs:DeleteMessage",
+     "sqs:ReceiveMessage"
+    ],
+    "Resource": [
+     "arn:aws:sqs:us-east-1:ACCT:zero-drift-batch"
+    ]
+   },
+   {
+    "Sid": "ListOwnBuckets",
+    "Effect": "Allow",
+    "Action": [
+     "s3:ListBucket"
+    ],
+    "Resource": [
+     "arn:aws:s3:::zero-drift-batch-tenant-a-*"
+    ]
+   },
+   {
+    "Sid": "OwnObjects",
+    "Effect": "Allow",
+    "Action": [
+     "s3:DeleteObject",
+     "s3:GetObject",
+     "s3:PutObject"
+    ],
+    "Resource": [
+     "arn:aws:s3:::zero-drift-batch-tenant-a-*/*"
+    ]
+   }
+  ],
+  "batch-tenant-b": [
+   {
+    "Sid": "UseSharedQueue",
+    "Effect": "Allow",
+    "Action": [
+     "sqs:ChangeMessageVisibility",
+     "sqs:DeleteMessage",
+     "sqs:ReceiveMessage"
+    ],
+    "Resource": [
+     "arn:aws:sqs:us-east-1:ACCT:zero-drift-batch"
+    ]
+   },
+   {
+    "Sid": "ListOwnBuckets",
+    "Effect": "Allow",
+    "Action": [
+     "s3:ListBucket"
+    ],
+    "Resource": [
+     "arn:aws:s3:::zero-drift-batch-tenant-b-*"
+    ]
+   },
+   {
+    "Sid": "OwnObjects",
+    "Effect": "Allow",
+    "Action": [
+     "s3:DeleteObject",
+     "s3:GetObject",
+     "s3:PutObject"
+    ],
+    "Resource": [
+     "arn:aws:s3:::zero-drift-batch-tenant-b-*/*"
+    ]
+   }
+  ],
+  "karpenter-controller": [
+   {
+    "Sid": "AllowScopedEC2InstanceAccessActions",
+    "Effect": "Allow",
+    "Action": [
+     "ec2:CreateFleet",
+     "ec2:RunInstances"
+    ],
+    "Resource": [
+     "arn:aws:ec2:us-east-1:*:capacity-reservation/*",
+     "arn:aws:ec2:us-east-1:*:placement-group/*",
+     "arn:aws:ec2:us-east-1:*:security-group/*",
+     "arn:aws:ec2:us-east-1:*:subnet/*",
+     "arn:aws:ec2:us-east-1::image/*",
+     "arn:aws:ec2:us-east-1::snapshot/*"
+    ]
+   },
+   {
+    "Sid": "AllowScopedEC2LaunchTemplateAccessActions",
+    "Effect": "Allow",
+    "Action": [
+     "ec2:CreateFleet",
+     "ec2:RunInstances"
+    ],
+    "Resource": [
+     "arn:aws:ec2:us-east-1:*:launch-template/*"
+    ],
+    "Condition": {
+     "StringEquals": {
+      "aws:ResourceTag/kubernetes.io/cluster/zero-drift": "owned"
+     },
+     "StringLike": {
+      "aws:ResourceTag/karpenter.sh/nodepool": "*"
+     }
+    }
+   },
+   {
+    "Sid": "AllowScopedEC2InstanceActionsWithTags",
+    "Effect": "Allow",
+    "Action": [
+     "ec2:CreateFleet",
+     "ec2:CreateLaunchTemplate",
+     "ec2:RunInstances"
+    ],
+    "Resource": [
+     "arn:aws:ec2:us-east-1:*:fleet/*",
+     "arn:aws:ec2:us-east-1:*:instance/*",
+     "arn:aws:ec2:us-east-1:*:launch-template/*",
+     "arn:aws:ec2:us-east-1:*:network-interface/*",
+     "arn:aws:ec2:us-east-1:*:spot-instances-request/*",
+     "arn:aws:ec2:us-east-1:*:volume/*"
+    ],
+    "Condition": {
+     "StringEquals": {
+      "aws:RequestTag/kubernetes.io/cluster/zero-drift": "owned",
+      "aws:RequestTag/eks:eks-cluster-name": "zero-drift"
+     },
+     "StringLike": {
+      "aws:RequestTag/karpenter.sh/nodepool": "*"
+     }
+    }
+   },
+   {
+    "Sid": "AllowScopedResourceCreationTagging",
+    "Effect": "Allow",
+    "Action": [
+     "ec2:CreateTags"
+    ],
+    "Resource": [
+     "arn:aws:ec2:us-east-1:*:fleet/*",
+     "arn:aws:ec2:us-east-1:*:instance/*",
+     "arn:aws:ec2:us-east-1:*:launch-template/*",
+     "arn:aws:ec2:us-east-1:*:network-interface/*",
+     "arn:aws:ec2:us-east-1:*:spot-instances-request/*",
+     "arn:aws:ec2:us-east-1:*:volume/*"
+    ],
+    "Condition": {
+     "StringEquals": {
+      "aws:RequestTag/kubernetes.io/cluster/zero-drift": "owned",
+      "aws:RequestTag/eks:eks-cluster-name": "zero-drift",
+      "ec2:CreateAction": [
+       "CreateFleet",
+       "CreateLaunchTemplate",
+       "RunInstances"
+      ]
+     },
+     "StringLike": {
+      "aws:RequestTag/karpenter.sh/nodepool": "*"
+     }
+    }
+   },
+   {
+    "Sid": "AllowScopedResourceTagging",
+    "Effect": "Allow",
+    "Action": [
+     "ec2:CreateTags"
+    ],
+    "Resource": [
+     "arn:aws:ec2:us-east-1:*:instance/*"
+    ],
+    "Condition": {
+     "StringEquals": {
+      "aws:ResourceTag/kubernetes.io/cluster/zero-drift": "owned"
+     },
+     "StringLike": {
+      "aws:ResourceTag/karpenter.sh/nodepool": "*"
+     },
+     "StringEqualsIfExists": {
+      "aws:RequestTag/eks:eks-cluster-name": "zero-drift"
+     },
+     "ForAllValues:StringEquals": {
+      "aws:TagKeys": [
+       "Name",
+       "eks:eks-cluster-name",
+       "karpenter.sh/nodeclaim"
+      ]
+     }
+    }
+   },
+   {
+    "Sid": "AllowScopedDeletion",
+    "Effect": "Allow",
+    "Action": [
+     "ec2:DeleteLaunchTemplate",
+     "ec2:TerminateInstances"
+    ],
+    "Resource": [
+     "arn:aws:ec2:us-east-1:*:instance/*",
+     "arn:aws:ec2:us-east-1:*:launch-template/*"
+    ],
+    "Condition": {
+     "StringEquals": {
+      "aws:ResourceTag/kubernetes.io/cluster/zero-drift": "owned"
+     },
+     "StringLike": {
+      "aws:ResourceTag/karpenter.sh/nodepool": "*"
+     }
+    }
+   },
+   {
+    "Sid": "AllowPassingInstanceRole",
+    "Effect": "Allow",
+    "Action": [
+     "iam:PassRole"
+    ],
+    "Resource": [
+     "arn:aws:iam::ACCT:role/zero-drift-karpenter-node"
+    ],
+    "Condition": {
+     "StringEquals": {
+      "iam:PassedToService": "ec2.amazonaws.com"
+     }
+    }
+   },
+   {
+    "Sid": "AllowAPIServerEndpointDiscovery",
+    "Effect": "Allow",
+    "Action": [
+     "eks:DescribeCluster"
+    ],
+    "Resource": [
+     "arn:aws:eks:us-east-1:ACCT:cluster/zero-drift"
+    ]
+   },
+   {
+    "Sid": "AllowInterruptionQueueActions",
+    "Effect": "Allow",
+    "Action": [
+     "sqs:DeleteMessage",
+     "sqs:GetQueueUrl",
+     "sqs:ReceiveMessage"
+    ],
+    "Resource": [
+     "arn:aws:sqs:us-east-1:ACCT:zero-drift-karpenter"
+    ]
+   },
+   {
+    "Sid": "AllowZonalShiftStatusReadOnly",
+    "Effect": "Allow",
+    "Action": [
+     "arc-zonal-shift:GetManagedResource"
+    ],
+    "Resource": [
+     "*"
+    ],
+    "Condition": {
+     "StringEquals": {
+      "arc-zonal-shift:ResourceIdentifier": "arn:aws:eks:us-east-1:ACCT:cluster/zero-drift"
+     }
+    }
+   },
+   {
+    "Sid": "AllowRegionalReadActions",
+    "Effect": "Allow",
+    "Action": [
+     "ec2:DescribeCapacityReservations",
+     "ec2:DescribeImages",
+     "ec2:DescribeInstanceStatus",
+     "ec2:DescribeInstanceTypeOfferings",
+     "ec2:DescribeInstanceTypes",
+     "ec2:DescribeInstances",
+     "ec2:DescribeLaunchTemplates",
+     "ec2:DescribePlacementGroups",
+     "ec2:DescribeSecurityGroups",
+     "ec2:DescribeSpotPriceHistory",
+     "ec2:DescribeSubnets"
+    ],
+    "Resource": [
+     "*"
+    ],
+    "Condition": {
+     "StringEquals": {
+      "aws:RequestedRegion": "us-east-1"
+     }
+    }
+   },
+   {
+    "Sid": "AllowSSMReadActions",
+    "Effect": "Allow",
+    "Action": [
+     "ssm:GetParameter"
+    ],
+    "Resource": [
+     "arn:aws:ssm:us-east-1::parameter/aws/service/*"
+    ]
+   },
+   {
+    "Sid": "AllowPricingReadActions",
+    "Effect": "Allow",
+    "Action": [
+     "pricing:GetProducts"
+    ],
+    "Resource": [
+     "*"
+    ]
+   },
+   {
+    "Sid": "AllowScopedInstanceProfileListAction",
+    "Effect": "Allow",
+    "Action": [
+     "iam:ListInstanceProfiles"
+    ],
+    "Resource": [
+     "arn:aws:iam::ACCT:instance-profile/*"
+    ]
+   },
+   {
+    "Sid": "AllowInstanceProfileReadActions",
+    "Effect": "Allow",
+    "Action": [
+     "iam:GetInstanceProfile"
+    ],
+    "Resource": [
+     "arn:aws:iam::ACCT:instance-profile/zero-drift-karpenter-node"
+    ]
+   }
+  ]
+ }
+}

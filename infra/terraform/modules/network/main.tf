@@ -17,10 +17,10 @@ module "vpc" {
   # inbound is closed by security groups, not by the subnet.
   public_subnets          = var.public_subnet_cidrs
   map_public_ip_on_launch = true
-  public_subnet_tags = {
+  public_subnet_tags = merge({
     Tier                     = "public"
     "kubernetes.io/role/elb" = "1"
-  }
+  }, var.extra_public_subnet_tags)
 
   # DB subnets: own route table, no IGW and no NAT route, plus a DB subnet group
   # ready for a later private RDS (ADR-0006 §4). No RDS is created here.

@@ -73,3 +73,14 @@ variable "crossplane_service_account" {
   type        = string
   default     = "provider-aws-s3"
 }
+
+variable "extra_bucket_prefixes" {
+  description = "More bucket prefixes for the Crossplane S3 role: zero-drift-batch- in a P6 window (SPEC-P6 A7). Empty by default."
+  type        = list(string)
+  default     = []
+
+  validation {
+    condition     = alltrue([for p in var.extra_bucket_prefixes : contains(["zero-drift-batch-"], p)])
+    error_message = "Only zero-drift-batch- may be added (SPEC-P6 A7)."
+  }
+}
