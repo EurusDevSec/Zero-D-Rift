@@ -165,7 +165,7 @@
    "p": "P6",
    "st": "now",
    "t": "KEDA + Karpenter + NodePool (CPU, ADR-0009)",
-   "d": "Bắt đầu 25/11 (rebaseline: xong 26/11, tràn sang 27/11). SPEC-P6 bản candidate từ nháp Fable, chạy CPU theo ADR-0009; Linear DRF-73…81; runbook lab kind (KEDA + ElasticMQ + MinIO) và window L3 đã viết. Code chưa có. Khó: autoscaling hay hỏng mà không báo lỗi, và node Karpenter nằm ngoài Terraform state.",
+   "d": "Bắt đầu 25/11 (rebaseline: xong 26/11, tràn sang 27/11). SPEC-P6 bản candidate từ nháp Fable, chạy CPU theo ADR-0009; Linear DRF-73…81; runbook lab kind (KEDA + ElasticMQ + S3Mock) và window L3 đã viết. Code chưa có. Khó: autoscaling hay hỏng mà không báo lỗi, và node Karpenter nằm ngoài Terraform state.",
    "exit": "Batch end-to-end, checkpoint và thu hồi node CPU do Karpenter tạo, có evidence trên Kubernetes và AWS; nhãn CPU_SUBSTITUTE_FOR_GPU.",
    "k": "Scheduler, Pending, taints, NodePool, Spot"
   },
@@ -530,7 +530,7 @@
    ],
    "vv": "Người đếm hàng đợi để gọi thêm đầu bếp",
    "what": "Đếm message trong hàng đợi SQS dùng chung (Terraform tạo) rồi tạo Job (ScaledJob, maxReplicaCount 1); 0 message thì 0 Pod. KEDA chỉ tạo Job, không tạo máy.",
-   "lab": "Kế hoạch: lab kind P6_L2_KIND_KEDA (ElasticMQ thay SQS, MinIO thay S3), rồi window L3 P6.",
+   "lab": "Kế hoạch: lab kind P6_L2_KIND_KEDA (ElasticMQ thay SQS, S3Mock thay S3), rồi window L3 P6.",
    "cmd": "kubectl get scaledjob -A",
    "emoji": "📈",
    "icon": "cncf-keda.svg",

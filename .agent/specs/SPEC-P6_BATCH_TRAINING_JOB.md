@@ -226,17 +226,25 @@ Scenario: Delete and teardown are complete
 
 - [x] Recheck §2 (done 25/11 in this file), second-agent review (Codex, four
       rounds, APPROVE at `fdedcac`), owner decides D1–D14 (approved 25/11, §9.1).
-- [ ] Pins (§11): KEDA chart and app 2.21.1, Karpenter chart and app 1.15.3,
+- [x] Pins (§11): KEDA chart and app 2.21.1, Karpenter chart and app 1.15.3,
       ElasticMQ 1.7.1 for kind only. Image digests read and recorded in
       `docs/evidence/p6/P6-T1_PINS_<date>.md` and VERSION_MATRIX "P6 pins".
-- [ ] KEDA SQS scaler IAM action confirmed from the scaler source (S3); KEDA
+- [x] KEDA SQS scaler IAM action confirmed from the scaler source (S3); KEDA
       2.21 audience change (S2) checked against the TriggerAuthentication shape.
-- [ ] Karpenter controller policy for 1.15.3 taken from the release's
+- [x] Karpenter controller policy for 1.15.3 taken from the release's
       CloudFormation reference, reduced per D6.
-- [ ] Prices: `m6i.large`, `m5.large`, `c6i.large` On-Demand from the Price List
+- [x] Prices: `m6i.large`, `m5.large`, `c6i.large` On-Demand from the Price List
       API; Spot price history 7 days per type and zone (read-only). §10 updated.
-- [ ] ADR-0009 consequences applied where a P6 file says GPU: EXPERIMENT_PLAN §7
+      25/11: On-Demand 0.096 / 0.096 / 0.085 USD/h; Spot 7-day median 0.0345 /
+      0.0397 / 0.0295 USD/h across 5 zones (S8, S9).
+- [x] ADR-0009 consequences applied where a P6 file says GPU: EXPERIMENT_PLAN §7
       wording, COST_PLAN §5.3 batch line, ver3 P6 row note. Thresholds unchanged.
+      25/11: EXPERIMENT_PLAN (contract 0.2.0), COST_PLAN and SYSTEM_DESIGN done. ver3:
+      owner chose "Add a change note"; ver3 §15.3 C1 maps every GPU passage to its
+      CPU reading, original §1–§14 text unchanged.
+- [x] D12 S3 substitute: MinIO has no public image any more (S10). Owner 25/11
+      delegated the pick ("CÁI NÀO tối ưu hơn thì chọn pheien bản đó"); Claude
+      picked Adobe S3Mock 5.2.3 (D12, S10).
 
 Gate: no Terraform, manifest or image change merges before D1–D14 are approved.
 
@@ -292,7 +300,7 @@ Gate: no Terraform, manifest or image change merges before D1–D14 are approved
       only `caller_role_match=true|false` against an expected role name passed
       in; it never prints the ARN or account. B12 and B14 use it, so their probe Pods pass the same Kyverno
       digest policy as training.
-- [ ] Conditional write check (§9.3 L2): against MinIO and the real S3 API, a
+- [ ] Conditional write check (§9.3 L2): against S3Mock and the real S3 API, a
       second `If-None-Match: *` write of `submit-started` returns `412` and the
       first value stays.
 - [ ] Unit tests with in-memory fakes for SQS and S3: resume, foreign message,
@@ -360,11 +368,11 @@ resume. It runs without Kyverno and without NetworkPolicy, and uses a locally
 built image by tag; the image-digest policy and the real network path are
 checked only at L3.
 
-- [ ] KEDA 2.21.1 on kind with ElasticMQ as the queue and MinIO as S3 (lab-only
+- [ ] KEDA 2.21.1 on kind with ElasticMQ as the queue and S3Mock as S3 (lab-only
       images, lab namespace, not in Git requests).
 - [ ] Zero messages → zero Jobs. One message → one Job. Message in flight → no
       second Job. Message never deleted → redelivery after the visibility timeout.
-- [ ] Training end to end against MinIO; kill the Pod mid-run; resume from the
+- [ ] Training end to end against S3Mock; kill the Pod mid-run; resume from the
       checkpoint; one artifact.
 - [ ] kro graph with a `ScaledJob` node becomes Active (A5).
 - [ ] Runbook step 5 reads the replacement Job with a guarded read and stops
@@ -493,7 +501,7 @@ gross reaching the window cap.
 |---|---|---|
 | L0 | Unit tests, YAML/static checks, `terraform fmt/validate/test`, plan assertions, CI | commands, exit status |
 | L1 | Rendered RGD and ScaledJob checked against the pinned CRDs | render output |
-| L2 | kind: KEDA queue behaviour (ElasticMQ), resume (MinIO), kro graph with ScaledJob | run ID, predictions, observed |
+| L2 | kind: KEDA queue behaviour (ElasticMQ), resume (S3Mock), kro graph with ScaledJob | run ID, predictions, observed |
 | L3 | EKS: SQS, IRSA, Karpenter Spot and On-Demand, reclamation, negatives, teardown | approval, AWS and Kubernetes output, inventory |
 
 # 7. Teach-back questions
@@ -546,7 +554,7 @@ The accepted limits carried into the thesis: soft isolation on the shared queue
 | D9 | Tenant quota and Pod size | Training container requests `500m` CPU, `384Mi` memory, memory limit `512Mi` (inside LimitRange max). Tenant quota raised by exactly one training Pod and its Jobs: `pods` 8→10, `requests.cpu` 400m→900m, `requests.memory` 768Mi→1152Mi, `limits.memory` 1536Mi→2048Mi, `count/jobs.batch` 4→6. GPU stays 0 | A14; smallest change that fits one run beside two sandboxes; the batch node is dedicated by taint, so the request only sizes the Pod | Separate batch namespace per tenant |
 | D10 | Workload | NumPy logistic regression on synthetic data, `steps` from the request (default 300, about 5 min with a fixed per-step pause), checkpoint every 25 steps; image on GHCR by digest | Short, repeatable, small image (H2 pull time); no dataset, no licence | PyTorch CPU (GB image, closer to real training) |
 | D11 | Disruption test | Operator deletes the Pod (B06) and the NodeClaim (B07) mid-run; labelled "simulated disruption" | A real Spot interruption cannot be ordered without AWS FIS (boundary 5) | AWS FIS (new service, extra cost) |
-| D12 | Kind lab substitutes | ElasticMQ 1.7.1 for SQS, MinIO for S3, static lab keys in a lab Secret; never in `gitops/requests` | Same boto3 code path with `endpoint_url`; no AWS cost | LocalStack (larger, more services than needed) |
+| D12 | Kind lab substitutes | ElasticMQ 1.7.1 for SQS, Adobe S3Mock 5.2.3 for S3 (25/11: MinIO archived, S10; S3Mock accepts any keys and path-style URLs only, so the worker sets path-style addressing whenever `endpoint_url` is set), static lab keys in a lab Secret; never in `gitops/requests` | Same boto3 code path with `endpoint_url`; no AWS cost; S3Mock is built for tests, one container, buckets created at start | LocalStack (larger, more services than needed); Versity S3 Gateway (a real gateway: needs a storage backend and root keys) |
 | D13 | Schedule | **Owner 25/11: rebaseline, P6 runs 25–26/11.** Overflow moves to 27/11, never cut. P7–P11 per ROADMAP "Rebaseline 25/11" | Owner directive 25/11; ver3 §12.1 forbids cutting trials, acceptance, learning gate or teardown | Keep 02/12 and cut P8 per the ADR-0009 cut order |
 | D14 | P6 gross cap and windows | 4 USD for the window and retries; one window planned, a second only on new approval | §10 estimate about 2.5 USD for 5 h | — |
 
@@ -616,7 +624,7 @@ into the implementation tasks:
 | # | Item | Carried to |
 |---|---|---|
 | L1 | L2 step 5: `tail -1` can hide a failed Job read before `wait` | P6-T2.2 B: check the read succeeded and a Job name exists before `wait` |
-| L2 | MinIO image in the lab not yet shown to honour `If-None-Match: *` | P6-T2.1 / T2.2: write the same key twice, expect `412` and the first value kept |
+| L2 | S3Mock image in the lab not yet shown to honour `If-None-Match: *` | P6-T2.1 / T2.2: write the same key twice, expect `412` and the first value kept |
 
 Review was read-only (Git Bash stubs for E2 and the ConfigMap check); no AWS,
 EKS or kind run.
@@ -662,7 +670,7 @@ reason.
 # 10. Quota, cost and timing
 
 Gross USD in `us-east-1`. Prices from COST_PLAN §5.2 (Price List API, 28/09);
-rechecked in P6-T1. Durations are assumptions until the window.
+rechecked in P6-T1 on 25/11 (S8, S9). Durations are assumptions until the window.
 
 | Quota | Applied | Needed at peak | State |
 |---|---:|---:|---|
@@ -673,8 +681,9 @@ rechecked in P6-T1. Durations are assumptions until the window.
 | Item | Price |
 |---|---:|
 | Cluster + two `m6i.large` + RDS `db.t4g.micro`, P5 stack | about 0.45 USD/h (P5 window estimate, `P5_L3_WINDOW.md` §7) |
-| `m6i.large` On-Demand + gp3 20 Gi + public IPv4 | 0.096 + 0.002 + 0.005 ≈ 0.103 USD/h |
-| `m6i.large` Spot | unread; 0.04 USD/h is a sizing assumption only |
+| `m6i.large` On-Demand + gp3 20 Gi + public IPv4 | 0.096 + 0.002 + 0.005 ≈ 0.103 USD/h (On-Demand rechecked 25/11) |
+| `m5.large` / `c6i.large` On-Demand | 0.096 / 0.085 USD/h (25/11) |
+| Spot, 7 days to 25/11, 5 zones (min–max, median) | `m6i.large` 0.0292–0.0395 (0.0345); `m5.large` 0.0338–0.0522 (0.0397); `c6i.large` 0.0261–0.0356 (0.0295) USD/h. History, not a promise: reread at T−30 |
 | SQS, EventBridge | requests in the thousands; below 0.01 USD |
 
 Window estimate (5 h): stack 2.25 + batch nodes about 2 node-hours 0.2 ≈
@@ -694,15 +703,17 @@ report states this dependence (ver3 §15.2); the profile is locked in P7/P8.
 
 | # | Fact | Source | Checked | Status |
 |---|---|---|---|---|
-| S1 | KEDA v2.21.1 latest (15/11); v2.21 supports Kubernetes 1.34–1.36; chart `kedacore/keda` 2.21.1 (16/11) | [KEDA releases](https://github.com/kedacore/keda/releases), [cluster](https://keda.sh/docs/latest/operate/cluster/), [charts](https://github.com/kedacore/charts/releases) | 2026-11-25 | `SOURCE_VERIFIED`; digests at P6-T1 |
-| S2 | KEDA 2.21.0 breaking change: service-account token audience enforcement (`boundServiceAccountToken` TriggerAuthentications) | KEDA release notes; [migration](https://keda.sh/docs/2.21/migration/) not read | 2026-11-25 | read migration page at P6-T1 |
-| S3 | SQS scaler: `queueURL`, `queueLength` (default 5), `activationQueueLength`, `awsRegion`, `awsEndpoint`, `scaleOnInFlight` (true), `scaleOnDelayed` (false); auth `podIdentity.provider: aws` or static keys via `secretTargetRef`; docs say only "read properties" of the queue | [KEDA SQS scaler](https://keda.sh/docs/latest/scalers/aws-sqs/) | 2026-11-25 | `DOC_VERIFIED`; exact IAM action from the scaler source at P6-T1 |
+| S1 | KEDA v2.21.1 latest (15/11); v2.21 supports Kubernetes 1.34–1.36; chart `kedacore/keda` 2.21.1 (16/11) | [KEDA releases](https://github.com/kedacore/keda/releases), [cluster](https://keda.sh/docs/latest/operate/cluster/), [charts](https://github.com/kedacore/charts/releases) | 2026-11-25 | `SOURCE_VERIFIED`; chart and image digests in `docs/evidence/p6/P6-T1_PINS_20261125.md` §1 |
+| S2 | KEDA 2.21.0 breaking change: service-account token audience enforcement (`boundServiceAccountToken` TriggerAuthentications) | KEDA release notes; `kedacore/keda-docs` `content/docs/2.21/migration.md` | 2026-11-25 | `SOURCE_VERIFIED`; IRSA (`podIdentity.provider: aws`) not affected, `docs/evidence/p6/P6-T1_PINS_20261125.md` §5 |
+| S3 | SQS scaler: `queueURL`, `queueLength` (default 5), `activationQueueLength`, `awsRegion`, `awsEndpoint`, `scaleOnInFlight` (true), `scaleOnDelayed` (false); auth `podIdentity.provider: aws` or static keys via `secretTargetRef`; docs say only "read properties" of the queue | [KEDA SQS scaler](https://keda.sh/docs/latest/scalers/aws-sqs/) | 2026-11-25 | `SOURCE_VERIFIED`: only `GetQueueAttributes`, scaler source at `v2.21.1`, `docs/evidence/p6/P6-T1_PINS_20261125.md` §4 |
 | S4 | Karpenter v1.15.3 latest (20/11); Kubernetes 1.35 needs `>= 1.9`; chart `oci://public.ecr.aws/karpenter/karpenter` 1.15.3; empty selector terms now ignored | [releases](https://github.com/aws/karpenter-provider-aws/releases), [compatibility](https://karpenter.sh/docs/upgrading/compatibility/) | 2026-11-25 | `SOURCE_VERIFIED` |
 | S5 | `EC2NodeClass` v1: `associatePublicIPAddress`, `role` or `instanceProfile`, `amiSelectorTerms` alias `al2023@<version>` exclusive, `metadataOptions`; NodePool `limits` (cpu, memory, nodes), `expireAfter`, `consolidationPolicy` `WhenEmpty`, `consolidateAfter`. No published KWOK image (build from source) | [NodeClasses](https://karpenter.sh/docs/concepts/nodeclasses/), [NodePools](https://karpenter.sh/docs/concepts/nodepools/), [kwok](https://github.com/aws/karpenter-provider-aws/tree/main/kwok) | 2026-11-25 | `DOC_VERIFIED` |
-| S6 | ElasticMQ `softwaremill/elasticmq-native` 1.7.1 (= `latest`), SQS-compatible REST on 9324 | [Docker Hub](https://hub.docker.com/r/softwaremill/elasticmq-native/tags), [repo](https://github.com/softwaremill/elasticmq) | 2026-11-25 | `SOURCE_VERIFIED`; digest at P6-T1 |
+| S6 | ElasticMQ `softwaremill/elasticmq-native` 1.7.1 (= `latest`), SQS-compatible REST on 9324 | [Docker Hub](https://hub.docker.com/r/softwaremill/elasticmq-native/tags), [repo](https://github.com/softwaremill/elasticmq) | 2026-11-25 | `SOURCE_VERIFIED`; digest in `docs/evidence/p6/P6-T1_PINS_20261125.md` §3 |
 | S7 | Standard On-Demand quota 8 vCPU | P5-T4.2 evidence, preflight | 2026-11-25 | `ACCOUNT_VERIFIED` then; reread at T−30 |
-| S8 | `m6i.large` 0.096 USD/h; gp3 0.08 USD/GB-month; public IPv4 0.005 USD/h; EKS 0.10 USD/h | COST_PLAN §5.2 | 2026-09-28 | `PRICE_API_VERIFIED`; recheck |
-| S9 | Spot price of D1 types | — | never read | `UNVERIFIED`; P6-T1 and T−30 |
+| S8 | `m6i.large` 0.096, `m5.large` 0.096, `c6i.large` 0.085 USD/h (Linux, shared, On-Demand); gp3 0.08 USD/GB-month; public IPv4 0.005 USD/h; EKS 0.10 USD/h | Price List API; COST_PLAN §5.2 | EC2 2026-11-25; others 2026-09-28 | `PRICE_API_VERIFIED`; `docs/evidence/p6/P6-T1_PINS_20261125.md` §9 |
+| S9 | Spot price history of D1 types, 7 days, 5 zones: medians `m6i.large` 0.0345, `m5.large` 0.0397, `c6i.large` 0.0295 USD/h | `ec2 describe-spot-price-history` (read-only) | 2026-11-25 | `ACCOUNT_VERIFIED` (history only); reread at T−30; `docs/evidence/p6/P6-T1_PINS_20261125.md` §9 |
+| S10 | MinIO archived (repo read-only since 2026-04, last release 2025-10-15); `minio/minio` image no longer public; candidates Adobe S3Mock 5.2.3 and Versity S3 Gateway v1.11.0 support `If-None-Match` | GitHub API, registry manifests | 2026-11-25 | `SOURCE_VERIFIED`; D12 picks Adobe S3Mock 5.2.3 (owner delegated 25/11), `docs/evidence/p6/P6-T1_PINS_20261125.md` §3 |
+| S11 | Karpenter 1.15.3 controller policy: 6 managed policies, 18 statements; D6 drops 5 IAM write actions on instance profiles | release CloudFormation at tag `v1.15.3` | 2026-11-25 | `SOURCE_VERIFIED`; `docs/evidence/p6/P6-T1_PINS_20261125.md` §6 |
 
 # 12. Open risks
 

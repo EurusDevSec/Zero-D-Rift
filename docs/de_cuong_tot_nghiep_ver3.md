@@ -12,6 +12,8 @@ TP.HCM, ngày 23 tháng 08 năm 2026
 > **Phạm vi hiệu lực:** Đặc tả triển khai, thực nghiệm, nghiệm thu và viết báo cáo cho Zero D-Rift.  
 > **Quan hệ với đề cương đã duyệt:** Giữ nguyên tên đề tài, mục tiêu và phạm vi cốt lõi của phiên bản 2; phiên bản 3 chỉ làm rõ kiến trúc, hạ tiêu chí về mức có thể kiểm chứng và loại bỏ các khẳng định chưa có dữ liệu.  
 > **Quy tắc ưu tiên:** Khi tài liệu kỹ thuật khác trong repository mâu thuẫn với tài liệu này, phiên bản 3 được dùng để triển khai. Hồ sơ hành chính đã được nhà trường phê duyệt vẫn là căn cứ pháp lý cao nhất.
+>
+> **Thay đổi sau ban hành:** văn bản gốc giữ nguyên; các thay đổi đã duyệt ghi ở §15.3 và được ưu tiên hơn đoạn gốc tương ứng.
 
 ---
 
@@ -448,6 +450,43 @@ Chỉ `SUPPORTED` được viết như kết quả cuối cùng. Ví dụ:
 - Không sửa metric sau khi xem kết quả để biến trial thất bại thành thành công.
 - `docs/de_cuong_tot_nghiep_ver2.md`, `docs/drift.md`, `docs/drift2.md` và slide cũ được giữ làm lịch sử; không dùng làm đặc tả triển khai nếu mâu thuẫn với phiên bản 3.
 - Khi hoàn tất dataset, tạo một Git tag cho phiên bản code, manifest và tài liệu đã dùng trong thực nghiệm.
+
+### 15.3. Nhật ký thay đổi sau ban hành
+
+Văn bản từ §1 đến §14 giữ nguyên như lúc ban hành để thấy rõ kế hoạch ban đầu. Mỗi thay đổi đã duyệt được ghi
+dưới đây cùng ADR của nó. Khi một đoạn gốc mâu thuẫn với bảng này, bảng này và ADR được dùng để triển khai.
+
+#### C1 — Batch training chạy trên CPU thay cho GPU (ADR-0009, 17/11/2026)
+
+- **Lý do:** account dự án có quota G/VT bằng 0 ở `us-east-1`; AWS Support từ chối hai lần yêu cầu tăng quota
+  (On-Demand và Spot, 01/11 và 03/11/2026). Chi tiết ở `docs/finops/COST_PLAN.md` §7.3.1.
+- **Quyết định:** owner chọn phương án A ngày 17/11/2026. Chi tiết ở
+  `.agent/adr/ADR-0009_P6_CPU_BATCH_UNDER_GPU_QUOTA_DENIAL.md`.
+- **Giữ nguyên:** cơ chế KEDA → Job chờ → Karpenter tạo node → checkpoint S3 → thu hồi node; Spot ưu tiên với
+  On-Demand fallback; idle window; ngưỡng H2, H3, H5; số trial; quy trình đo và teardown.
+- **Thay đổi:** node batch là node CPU 2 vCPU do Karpenter tạo (`m6i.large`, `m5.large`, `c6i.large`); Pod
+  request CPU/memory, không request `nvidia.com/gpu`. Mọi số đo và kết quả liên quan mang nhãn
+  `CPU_SUBSTITUTE_FOR_GPU`.
+- **Thời điểm:** quyết định trước khi bắt đầu thu dữ liệu chính thức, nên không phải là sửa metric sau khi xem
+  kết quả (§15.2).
+- **Giới hạn phải nêu trong báo cáo:** đề tài không chứng minh thời gian khởi động node GPU (driver, image lớn,
+  capacity GPU Spot). H2 đo trên CPU là thuộc tính của phương án thay thế và được nói rõ như vậy.
+
+Cách đọc các đoạn gốc còn ghi GPU:
+
+| Vị trí gốc | Đọc theo C1 |
+|---|---|
+| §4.2 `BatchTrainingJob` "yêu cầu GPU node động" | yêu cầu node CPU động do Karpenter tạo |
+| §4.3 H2 "GPU workload bắt đầu chạy" | training process bắt đầu trên node CPU do Karpenter tạo; ngưỡng p95 ≤ 15 phút giữ nguyên |
+| §5.2 "GPU được dùng để chứng minh cơ chế" | node CPU được dùng để chứng minh cùng cơ chế provisioning và reclamation |
+| §6 sơ đồ kiến trúc "EC2 GPU Spot hoặc On-Demand fallback"; §6.5 "Pod request GPU", "GPU NodePool" | EC2 CPU Spot hoặc On-Demand fallback; Pod request CPU/memory; NodePool batch CPU |
+| §8.1 baseline "provision GPU On-Demand"; §8.2 "GPU training container", "GPU node terminate" | node CPU On-Demand cùng loại instance; training container trên node CPU; node CPU terminate |
+| §8.4 "GPU/EC2 variable compute cost" | EC2 variable compute cost của node batch CPU |
+| §9 bước 2–3 "cần GPU", "tạo GPU node" | cần node batch; Karpenter tạo node CPU |
+| §10 "GPU node được thu hồi" | node batch CPU được thu hồi |
+| §11 "GPU trial 15 USD"; "tổng GPU vCPU"; "EC2 GPU" | envelope batch CPU 15 USD; tổng vCPU của NodePool batch; EC2 cho node batch |
+| §12 dòng P6 "GPU NodePool", "Pod/GPU node" | NodePool batch CPU; Pod/node batch |
+| §12 và §14 "GPU Spot không có capacity" | Spot của loại CPU đã chọn không có capacity; cách xử lý giữ nguyên |
 
 ## 16. Tài liệu tham chiếu chính thức
 

@@ -202,3 +202,19 @@ row (`v1.19.1`); §7 and §8 pins carry over unchanged.
 | VPC CNI | add-on `v1.22.4-eksbuild.10` kept (default for 1.35 is now `.14`); NetworkPolicy needs 1.21+; schema has `enableNetworkPolicy` and `env.NETWORK_POLICY_ENFORCING_MODE` (`standard`/`strict`) | — | `ACCOUNT_VERIFIED` 2026-11-22 |
 
 Runtime status moves to `RUNTIME_VERIFIED` only after the P5 kind labs (L2) and the EKS window (L3).
+
+## 10. P6 pins (2026-11-25)
+
+Checked on 2026-11-25 for SPEC-P6 P6-T1 (DRF-73). Results and decisions:
+`docs/evidence/p6/P6-T1_PINS_20261125.md`. §7–§9 pins carry over unchanged.
+
+| Component | Pin | Digest | Status |
+| --- | --- | --- | --- |
+| KEDA | `2.21.1`, chart `2.21.1` (`kedacore.github.io/charts`); Kubernetes 1.34–1.36 | chart sha256 `76b45621…91d8fb883e` (equals the repository index) | `SOURCE_VERIFIED` |
+| KEDA images | `keda`, `keda-metrics-apiserver`, `keda-admission-webhooks` (`ghcr.io/kedacore`), all `2.21.1`; pinned through `image.*.tag` = `2.21.1@sha256:…` | index digests in the evidence file | `SOURCE_VERIFIED` |
+| Karpenter | `1.15.3`, chart `oci://public.ecr.aws/karpenter/karpenter` `1.15.3` | chart `sha256:7fadb557…23328fe56ed`; controller `sha256:37ae6d13…7297b4814` (pinned by the chart) | `SOURCE_VERIFIED` |
+| ElasticMQ (kind only) | `softwaremill/elasticmq-native:1.7.1` | `sha256:e4580ab9…ee71c24e05c` | `SOURCE_VERIFIED` |
+| Worker base | `python:3.12-slim` | `sha256:191083cd…f5296f51b4b` | `SOURCE_VERIFIED` 2026-11-25 (tag moves) |
+| S3 substitute (kind only) | Adobe S3Mock `5.2.3` (MinIO no longer published) | `sha256:ab01a694…8fca92` | D12, picked 25/11 (owner delegated); path-style only |
+
+Runtime status moves to `RUNTIME_VERIFIED` only after the P6 kind lab (L2) and the EKS window (L3).

@@ -2,12 +2,14 @@
 
 ```yaml
 document_status: APPROVED_CONTRACT
-contract_version: 0.1.0
+contract_version: 0.2.0
 phase: P1
 created_at: 2026-09-29
 approved_at: 2026-09-29
 approved_by: owner
 official_collection_started: false
+amended_at: 2026-11-25
+amendment: "0.2.0: batch path on CPU nodes per ADR-0009 (accepted 17/11); thresholds, samples and formulas unchanged"
 ```
 
 ## 1. Purpose and evidence boundary
@@ -25,6 +27,10 @@ Các nhãn bắt buộc:
 | `INCLUDED` | Trial hợp lệ theo contract và được đưa vào primary analysis. |
 | `EXCLUDED` | Trial được giữ lại nhưng không đưa vào primary analysis vì một reason code định trước. |
 | `FAILED` | Trial hợp lệ đã bắt đầu nhưng không đạt acceptance checks; không đồng nghĩa với `EXCLUDED`. |
+
+Batch trials (H2, H3 batch, H5, node scale-down) chạy trên node CPU do Karpenter tạo vì
+quota G/VT bị AWS từ chối (ADR-0009). Mọi dataset, bảng và slide của các trial này mang nhãn
+`CPU_SUBSTITUTE_FOR_GPU`. Không ngoại suy kết quả CPU sang GPU.
 
 Negative boundaries:
 
@@ -84,7 +90,7 @@ Supporting measurements không phải giả thuyết độc lập:
 | --- | ---: |
 | Manual interactions và commands | 5 manual baseline runs/blueprint + IDP logs tương ứng |
 | Drift detection time | Cùng 20 H4 trials |
-| GPU scale-down time | Cùng 20 batch trials khi GPU path chạy được |
+| Node scale-down time (node CPU do Karpenter tạo, ADR-0009) | Cùng 20 batch trials |
 | Isolation/policy pass rate | Mỗi major policy/config commit |
 | Teardown inventory | Mọi paid AWS window/campaign |
 
@@ -120,9 +126,9 @@ email hoặc secret.
 
 - `cold_request`: không còn per-request Kubernetes/AWS resource từ trial trước;
   shared EKS controllers và shared RDS có thể tồn tại theo allowlist.
-- `batch_optimized`: queue/event mới, không có GPU node từ trial trước.
-- `batch_baseline`: cùng input/profile với optimized arm; On-Demand GPU được
-  provision thủ công và giữ qua idle window đã khóa.
+- `batch_optimized`: queue/event mới, không có batch node do Karpenter tạo từ trial trước.
+- `batch_baseline`: cùng input/profile với optimized arm; một node CPU On-Demand
+  cùng instance type được provision thủ công và giữ qua idle window đã khóa.
 - `drift_clean`: Security Group khớp desired state trước mutation.
 - `recovery_clean`: recovery DB/clone, snapshot và sentinel checksum đã xác minh;
   shared demo RDS không phải target.
@@ -166,8 +172,8 @@ query pass; nếu không pass trong `manual_rag_timeout_seconds`, run là failed
 Mỗi baseline arm dùng input, image, dataset/checkpoint target và acceptance checks
 giống optimized arm:
 
-1. xác nhận preflight, queue/event state, S3 target và no pre-existing GPU node;
-2. provision một approved On-Demand GPU node/capacity bằng runbook thủ công;
+1. xác nhận preflight, queue/event state, S3 target và no pre-existing batch node;
+2. provision một approved On-Demand CPU node cùng instance type với optimized arm bằng runbook thủ công;
 3. xác minh node join, label/taint và workload identity;
 4. submit training Job và ghi marker khi process thực sự bắt đầu;
 5. xác minh job complete và checkpoint/artifact tồn tại trong S3;
@@ -201,11 +207,11 @@ tạo measurement uncertainty tối đa một poll interval; API/event timestamp
 | Experiment | `t0` | End event | Timeout / stop rule | Success rule |
 | --- | --- | --- | ---: | --- |
 | H1 RAG provisioning | Argo CD first observes target Git revision containing valid request | Later of app readiness pass and independent DB query pass | 900 s | Both checks pass; required child resources ready; no unresolved degraded condition |
-| H2 batch readiness | Argo CD first observes target revision/request | Training container emits versioned `TRAINING_STARTED` marker after process begins | 1,800 s | Correct Job/Pod, GPU node and identity; marker arrives before timeout |
+| H2 batch readiness | Argo CD first observes target revision/request | Training container emits versioned `TRAINING_STARTED` marker after process begins | 1,800 s | Correct Job/Pod, batch node created by Karpenter (CPU, ADR-0009) and identity; marker arrives before timeout |
 | H3 provisioning success | Same `t0` as H1/H2 | All blueprint acceptance checks pass | RAG 900 s; batch full-path 4,500 s | Pass within timeout; otherwise valid failure |
 | H4 drift detection | AWS mutation API returns success for injected PoC SG rule | First controller condition/event/log detects divergence | 600 s | Detection evidence references intended managed resource |
 | H4 drift remediation | Same successful mutation acknowledgement | AWS describe confirms injected rule absent and valid desired rules retained | 600 s | Remediated without deleting valid rule or entering reconcile loop |
-| GPU scale-down | Job completes or queue reaches locked zero event | Workload Pod absent and EC2 GPU instance/Node terminated; use later event | 1,800 s | Both Kubernetes and AWS absence checks pass |
+| Node scale-down | Job completes or queue reaches locked zero event | Workload Pod absent and EC2 batch instance/Node terminated; use later event | 1,800 s | Both Kubernetes and AWS absence checks pass |
 | H5 cost arm | Locked workload request/event begins | Workload completes plus 1,800 s idle window and cost window closes | Workload 2,700 s; teardown 1,800 s | Same profile completes; evidence covers runtime, capacity type, idle and teardown |
 | H6 recovery | Controlled incident on recovery DB/clone is acknowledged | App health, reconnect and sentinel checksum all pass | 5,400 s safety stop | Correct recovery target restored; checksum matches; shared RDS unchanged |
 | Policy/isolation suite | Versioned suite starts | All expected allow/deny assertions finish | 900 s | Allowed path succeeds and every registered forbidden path is denied |
@@ -229,9 +235,9 @@ và không được loại khỏi success-rate denominator.
 
 Mỗi H5 pair khóa cùng:
 
-- application/image digest, dataset/input size, GPU request và success marker;
+- application/image digest, dataset/input size, CPU/memory request và success marker;
 - Region; AZ được ghi observed và khác biệt phải được báo cáo;
-- GPU family allowlist, storage, checkpoint behavior và workload timeout;
+- instance type allowlist, storage, checkpoint behavior và workload timeout;
 - 1,800-second idle window;
 - logging/metric configuration;
 - trial ordering được xen kẽ `baseline -> optimized` và `optimized -> baseline`
@@ -248,7 +254,7 @@ Decision H5 PASS khi ratio `>= 0.40`, có ít nhất 5 valid pairs và không pa
 được ghép sau khi đã xem cost. Báo thêm pairwise ratio, median, range, capacity
 errors và On-Demand fallback. `billing_pending` không được biến thành zero.
 
-Variable compute chỉ gồm GPU/EC2 runtime và attached compute storage đã định nghĩa.
+Variable compute chỉ gồm batch EC2 runtime và attached compute storage đã định nghĩa.
 EKS control plane, system nodes, RDS, snapshots, public IPv4, logging và data
 transfer được báo riêng; OpenCost là allocation evidence, AWS Billing/Cost data
 là reconciliation source khi đã cập nhật.
@@ -362,7 +368,7 @@ Reproducible analysis script later generates, without hard-coded results:
 Sau `t0`, các trường hợp sau vẫn là official valid failure và ở trong denominator:
 
 - timeout;
-- EC2/Spot insufficient capacity hoặc GPU quota failure;
+- EC2/Spot insufficient capacity hoặc EC2 quota failure;
 - IAM/IRSA, policy, network, controller, webhook hoặc application error;
 - reconcile loop, wrong Ready condition, failed checkpoint hoặc failed teardown;
 - operator chạy đúng runbook nhưng system trả lỗi.

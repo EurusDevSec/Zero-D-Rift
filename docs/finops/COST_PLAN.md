@@ -65,7 +65,7 @@ Evidence đã redaction: `docs/finops/evidence/2026-09-28_ACCOUNT_COST_PREFLIGHT
 | EKS control plane | 25 USD | Standard-support cluster; mục tiêu tối đa 200 cluster-hours, 5 USD còn lại làm buffer. |
 | System/CPU nodes | 25 USD | Pin allowed instance families/sizes và node count; không để Karpenter quản lý system pool. |
 | RDS, storage, snapshot | 15 USD | Một shared RDS trong active window; recovery DB/clone chỉ tồn tại trong trial window. |
-| GPU trial | 15 USD | Tối đa một GPU node đồng thời; tính runtime cap từ giá Region trước từng campaign. |
+| Batch trial (CPU, ADR-0009; trước là GPU) | 15 USD | Node batch CPU do Karpenter tạo, tối đa một node mỗi capacity type; runtime cap tính từ giá Region trước từng campaign. Dùng envelope cũ của GPU cho CPU là quyết định riêng của owner (ADR-0009 §3); P6 chỉ tiêu trong trần D14 = 4 USD. |
 | Network, IPv4, log, data transfer | 10 USD | Không tạo NAT Gateway mặc định; giới hạn log retention và public IPv4 hours. |
 | Dự phòng | 10 USD | Chỉ dùng cho sai số billing, failed trial hợp lệ hoặc teardown; không dùng để mở rộng scope. |
 | **Tổng** | **100 USD** | Hard project envelope, không phải bảo đảm của AWS Budgets. |
@@ -106,8 +106,8 @@ RDS cost
  + backup/snapshot storage
  + data transfer/request cost when applicable
 
-GPU variable cost
-= GPU instance runtime x observed On-Demand or Spot price
+Batch variable cost (CPU, ADR-0009)
+= batch EC2 instance runtime x observed On-Demand or Spot price
  + attached storage
  + checkpoint S3 requests/storage
 
@@ -125,7 +125,9 @@ Network cost
 | EKS standard-support control plane | 0.10 USD/cluster-hour; extended support 0.60 USD/cluster-hour | `DOC_VERIFIED` |
 | EKS 25 USD envelope | Lý thuyết tối đa 250 giờ ở 0.10 USD/giờ; plan dùng tối đa 200 giờ để giữ buffer | `DERIVED_FROM_DOC` |
 | Public IPv4 | 0.005 USD/address-hour cho in-use và idle public IPv4 | `DOC_VERIFIED` |
-| Linux `m6i.large` | 0.096 USD/instance-hour tại `us-east-1` | `PRICE_API_VERIFIED` |
+| Linux `m6i.large` | 0.096 USD/instance-hour tại `us-east-1` | `PRICE_API_VERIFIED`  kiểm lại 2026-11-25 (P6-T1), không đổi |
+| Linux `m5.large` / `c6i.large` | 0.096 / 0.085 USD/instance-hour tại `us-east-1` | `PRICE_API_VERIFIED` 2026-11-25 (P6-T1) |
+| Spot `m6i.large` / `m5.large` / `c6i.large`, lịch sử 7 ngày tới 25/11, 5 zone | trung vị 0.0345 / 0.0397 / 0.0295 USD/h (min–max ở `docs/evidence/p6/P6-T1_PINS_20261125.md` §9) | `ACCOUNT_VERIFIED` (chỉ là lịch sử); đọc lại ở T−30 |
 | Linux `t3.medium` | 0.0416 USD/instance-hour tại `us-east-1` | `PRICE_API_VERIFIED` |
 | Linux `g4dn.xlarge` | 0.526 USD/instance-hour tại `us-east-1` | `PRICE_API_VERIFIED`; launch `BLOCKED_BY_QUOTA` |
 | RDS PostgreSQL Single-AZ `db.t4g.micro` | 0.016 USD/instance-hour | `PRICE_API_VERIFIED`; kiểm lại 2026-11-17, không đổi |
@@ -151,10 +153,11 @@ Terraform plan và run manifest, không phải cam kết AWS sẽ có capacity:
 | EKS | 1 cluster x 200 h x 0.10 USD | 20.00 USD | <= 25 USD |
 | System/CPU nodes | `m6i.large` 200 h (19.20) + `t3.medium` 80 h (3.33) + gp3 30 GB/200 h (0.66) + gp3 20 GB/80 h (0.18) | 23.36 USD | <= 25 USD |
 | RDS/storage/recovery | Shared `db.t4g.micro` 200 h (3.20) + gp3 20 GB/200 h (0.63) + recovery DB 20 h (0.32) + recovery gp3 20 GB/20 h (0.06) + 20 GB snapshot tối đa một tháng ngoài free allocation (1.90) | 6.11 USD | <= 15 USD |
-| GPU | `g4dn.xlarge` 20 h (10.52) + gp3 50 GB/20 h (0.11) | 10.63 USD | <= 15 USD; quota hiện bằng 0 |
+| GPU (đã thay bởi dòng dưới, ADR-0009) | `g4dn.xlarge` 20 h (10.52) + gp3 50 GB/20 h (0.11) | 10.63 USD | không dùng: quota G/VT bằng 0 |
+| Batch CPU (ADR-0009) | `m6i.large` On-Demand 0.096 + gp3 20 GB + IPv4 0.005 ≈ 0.103 USD/h; P6 khoảng 2 node-hour (0.21); node-hour của P9 chốt ở freeze P8 | ≈ 0.21 USD cho P6 | <= 15 USD; Spot đọc 25/11: trung vị `m6i.large` 0.0345 USD/h (§5.2) |
 | Network fixed baseline | Public IPv4 cho system/CPU/GPU: `(200 + 80 + 20) h x 0.005`; NAT = 0; interface endpoint = 0; S3 gateway endpoint = 0 | 1.50 USD | <= 10 USD; 8.50 USD còn lại cap log/request/data transfer |
 
-Known planning subtotal là **61.60 USD**. Category headroom và reserve vẫn bị chặn
+Known planning subtotal là **61.60 USD** (vẫn tính dòng GPU cũ 10.63 USD; tính lại với dòng batch CPU ở freeze P8). Category headroom và reserve vẫn bị chặn
 bởi tổng gross envelope 100 USD; không được cộng toàn bộ headroom thành scope mới.
 Nếu Terraform plan đổi instance type/count, storage, active hours, NAT hoặc endpoint,
 phải chạy lại priced estimate trước `apply`.
@@ -388,22 +391,22 @@ Trong mỗi active AWS window:
 4. Kết thúc run: export evidence, teardown và chạy inventory lại.
 5. Ngày kế tiếp: đối soát delayed billing; cập nhật category ledger, không sửa raw trial.
 
-## 9. GPU và autoscaling cost guardrails
+## 9. Batch node và autoscaling cost guardrails (CPU, ADR-0009)
 
-- Account quota cho cả G/VT On-Demand và G/VT Spot phải được đọc trước P6; default
-  có thể bằng 0.
-- Chỉ một GPU node đồng thời trong PoC.
-- GPU NodePool allowlist selected family/size/AZ; không dùng wildcard mọi GPU family.
-- Karpenter NodePool đặt `limits.nodes: 1`, `limits.nvidia.com/gpu: 1` và CPU/memory
-  limit tương ứng selected instance.
+- Quota G/VT bằng 0 và nằm ngoài phạm vi (ADR-0009). Standard On-Demand và Standard Spot
+  phải được đọc lại trước mỗi window batch (On-Demand 8 vCPU ngày 25/11).
+- Tối đa một node batch mỗi capacity type (SPEC-P6 D7).
+- NodePool batch chỉ cho `m6i.large`, `m5.large`, `c6i.large` ở `us-east-1a`/`b`; không wildcard.
+- Karpenter NodePool đặt `limits.cpu: "2"`, `expireAfter: 2h`, `consolidationPolicy: WhenEmpty`
+  sau 60 s.
 - Karpenter limit checking là eventually consistent; account EC2 quota và admission
   guardrail vẫn là lớp chặn bổ sung.
 - Spot fallback sang On-Demand phải bounded, không tự mở rộng số node.
 - Trước campaign, runtime cap:
 
 ```text
-maximum GPU runtime
-= remaining GPU envelope / selected effective hourly price
+maximum batch node runtime
+= remaining batch envelope / selected effective hourly price
 ```
 
 - Job phải checkpoint vào S3 trước Spot trial. Failed/interrupted trial vẫn giữ
