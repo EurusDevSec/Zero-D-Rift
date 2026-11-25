@@ -246,7 +246,8 @@ net_case() { # ID THREAT EXPECTED TENANT HOST PORT
     record "$1" "$2" networkpolicy "$3" "$obs" "$4 -> $5:$6: ${r#RESULT }"
 }
 # NetworkPolicies of TENANT in Git, by name.
-git_np() { python -I -c 'import sys,yaml; print("\n".join(d["metadata"]["name"] for d in yaml.safe_load_all(open(sys.argv[1])) if d and d["metadata"]["namespace"] == sys.argv[2]))' gitops/platform/tenants/networkpolicy.yaml "$1" | LC_ALL=C sort -u; }
+# Windows Python prints CRLF; the PolicyEndpoint list from kubectl has none (found in window P5-L3-20261125-01).
+git_np() { python -I -c 'import sys,yaml; print("\n".join(d["metadata"]["name"] for d in yaml.safe_load_all(open(sys.argv[1])) if d and d["metadata"]["namespace"] == sys.argv[2]))' gitops/platform/tenants/networkpolicy.yaml "$1" | tr -d '\r' | LC_ALL=C sort -u; }
 NETS=("T10-own-app T10 tenant-a rag-$SANDBOX.tenant-a.svc 8080"
       "T10-a-to-b T10 tenant-a rag-$SANDBOX.tenant-b.svc 8080"
       "T10-b-to-a T10 tenant-b rag-$SANDBOX.tenant-a.svc 8080"
