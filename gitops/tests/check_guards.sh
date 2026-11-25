@@ -26,11 +26,21 @@ yaml.safe_dump_all(docs, open(path, "w"), sort_keys=False)
 EOF
 }
 
+# The request cases mutate a fixture, not a live request: a PR that deletes the
+# live requests (sandbox recreate, window P5-L3-20261125-01 F3) must not break
+# these tests. The fixture is placed in the copy under the live file's name.
+FIX="$src/tests/fixtures/request-tenant-a.yaml"
+REQ=requests/tenant-a-docs-qa.yaml
+fresh() {
+    rm -rf "$tmp/g" && cp -r "$src" "$tmp/g"
+    cp "$FIX" "$tmp/g/$REQ"
+}
+
 # case NAME EXPECTED_FAIL_TEXT FILE PYTHON
 case_() {
     local name="$1" want="$2" file="$3" code="$4" out
     n=$((n + 1))
-    rm -rf "$tmp/g" && cp -r "$src" "$tmp/g"
+    fresh
     if [[ "$file" == +* ]]; then
         printf '%s\n' "$code" > "$tmp/g/${file#+}"   # new file
     else
@@ -46,7 +56,15 @@ case_() {
 }
 
 RGD=platform/rgd/rag-sandbox.yaml
-REQ=requests/tenant-a-docs-qa.yaml
+
+# The unchanged copy with the fixture must pass, or a case could fail for a
+# reason other than the rule it breaks.
+fresh
+if ! out="$(bash "$tmp/g/check.sh" 2>&1)"; then
+    echo "FAIL  baseline: check.sh fails on the unchanged copy with the fixture"; grep '^FAIL' <<< "$out" | sed 's/^/        /'
+    echo; echo "RESULT: FAIL"; exit 1
+fi
+echo "PASS  baseline: unchanged copy with the fixture passes check.sh"
 
 case_ "request outside the tenants" "has no tenant role" "$REQ" 'docs[0]["metadata"]["namespace"] = "zdr-requests"'
 case_ "request in zdr-platform" "has no tenant role" "$REQ" 'docs[0]["metadata"]["namespace"] = "zdr-platform"'
@@ -55,7 +73,7 @@ case_ "name of 33 characters" "breaks the sandbox name contract" "$REQ" 'docs[0]
 case_ "negative bootstrapAttempt" "not a non-negative integer" "$REQ" 'docs[0]["spec"]["bootstrapAttempt"] = -1'
 case_ "string bootstrapAttempt" "not a non-negative integer" "$REQ" 'docs[0]["spec"]["bootstrapAttempt"] = "1"'
 case_ "extra spec field" "unknown spec fields" "$REQ" 'docs[0]["spec"]["replicas"] = 3'
-case_ "duplicate request" "unique" "+requests/dup.yaml" "$(cat "$src/$REQ")"
+case_ "duplicate request" "unique" "+requests/dup.yaml" "$(cat "$FIX")"
 case_ "negative turned valid" "NOTHING WRONG" requests/disabled/rag-sandbox-no-tenant-role.yaml 'docs[0]["metadata"]["namespace"] = "tenant-b"; docs[0]["metadata"]["name"] = "other"'
 case_ "password in a request" "no secret value" "$REQ" 'docs[0]["spec"]["password"] = "x"'
 case_ "password env in the RGD" "no secret value" "$RGD" 'node("app")["template"]["spec"]["template"]["spec"]["containers"][0]["env"].append({"name": "PGPASSWORD", "value": "x"})'
@@ -78,7 +96,7 @@ case_ "kro may read Secrets" "no wildcard, no secrets/pods" platform/kro-rbac/cl
 case_ "kro may write ConfigMaps" "configmaps read only" platform/kro-rbac/clusterrole-p4.yaml 'docs[0]["rules"][0]["verbs"].append("patch")'
 case_ "extra provider package" "provider packages = allowlist" platform/providers/providers.yaml 'docs.append({"apiVersion": "pkg.crossplane.io/v1", "kind": "Provider", "metadata": {"name": "provider-aws-iam"}, "spec": {"package": "xpkg.crossplane.io/crossplane-contrib/provider-aws-iam@sha256:" + "0" * 64}})'
 # Codex C5: Argo also syncs .yml and .json; requests/ must hold only RAGSandbox.
-case_ "bad name in a .yml request" "breaks the sandbox name contract" "+requests/bad.yml" "$(sed 's/name: docs-qa/name: docs--qa/' "$src/$REQ")"
+case_ "bad name in a .yml request" "breaks the sandbox name contract" "+requests/bad.yml" "$(sed 's/name: docs-qa/name: docs--qa/' "$FIX")"
 case_ "no-tenant request as .json" "has no tenant role" "+requests/bad.json" '{"apiVersion": "kro.run/v1alpha1", "kind": "RAGSandbox", "metadata": {"name": "json-qa", "namespace": "zdr-requests"}, "spec": {"bootstrapAttempt": 0}}'
 case_ "ConfigMap in requests" "requests/ holds only RAGSandbox" "+requests/extra.yaml" 'apiVersion: v1
 kind: ConfigMap
