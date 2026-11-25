@@ -1,0 +1,20 @@
+# LAB ONLY (DRF-76, SPEC-P6 P6-T2.2 B). One control plane and two workers. The
+# second worker stands in for a Karpenter batch node: it carries the batch pool
+# label and taint of the real NodePools (gitops/platform/batch/nodepools.yaml),
+# so placement is the same; kind cannot show a node being created (S5).
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+nodes:
+  - role: control-plane
+  - role: worker
+  - role: worker
+    labels:
+      zero-drift.io/pool: batch
+    kubeadmConfigPatches:
+      - |
+        kind: JoinConfiguration
+        nodeRegistration:
+          taints:
+            - key: zero-drift.io/batch
+              value: "true"
+              effect: NoSchedule

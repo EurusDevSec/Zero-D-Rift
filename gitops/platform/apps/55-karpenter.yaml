@@ -1,0 +1,66 @@
+# Wave 55 (P6, DRF-76, SPEC-P6 MUST, D6, D7, negative boundaries 3-4):
+# Karpenter 1.15.3 from the OCI chart (chart digest sha256:7fadb557..., P6-T1
+# pins). The controller image is pinned by digest at controller.image.digest.
+# - One replica on the system nodes. The chart's default affinity
+#   (karpenter.sh/nodepool DoesNotExist) is kept, so the controller never runs
+#   on a node it provisions; Karpenter never manages the system node group.
+# - IRSA role zero-drift-karpenter-controller (Terraform module karpenter): no
+#   IAM write; the instance profile is pre-created and named in the
+#   EC2NodeClass (wave 57). The role ARN annotation on ServiceAccount
+#   karpenter/karpenter holds the account ID, so infra/p6-window/window.sh
+#   annotate adds it with kubectl and restarts the controller; this Application
+#   ignores that field. Until then the controller has no AWS credentials (IMDS
+#   hop limit 1) and launches nothing.
+# - interruptionQueue: the Terraform queue zero-drift-karpenter (a name, not a URL).
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: zdr-karpenter
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "55"
+spec:
+  project: default
+  source:
+    repoURL: public.ecr.aws/karpenter
+    chart: karpenter
+    targetRevision: 1.15.3
+    helm:
+      releaseName: karpenter
+      valuesObject:
+        replicas: 1
+        settings:
+          clusterName: zero-drift
+          interruptionQueue: zero-drift-karpenter
+        controller:
+          image:
+            repository: public.ecr.aws/karpenter/controller
+            tag: 1.15.3
+            digest: sha256:37ae6d1349563d71c2fae7de721dece50b5cf9701e48aa4646f95be7297b4814
+          resources:
+            requests: {cpu: 200m, memory: 512Mi}
+            limits: {memory: 1Gi}
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: karpenter
+  ignoreDifferences:
+    - group: ""
+      kind: ServiceAccount
+      namespace: karpenter
+      name: karpenter
+      jsonPointers:
+        - /metadata/annotations/eks.amazonaws.com~1role-arn
+  syncPolicy:
+    automated:
+      prune: false
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
+      - RespectIgnoreDifferences=true
+    retry:
+      limit: 10
+      backoff:
+        duration: 15s
+        factor: 2
+        maxDuration: 3m

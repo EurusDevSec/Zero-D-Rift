@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Guard tests for gitops/check.sh (DRF-51): each case copies gitops/ to a temp
+# Guard tests for gitops/check.sh (DRF-51; P6 rules 19-23, DRF-76): each case copies gitops/ to a temp
 # directory, breaks exactly one rule, and expects check.sh to FAIL with that
 # rule's label. A rule that can never fail would otherwise look like a PASS.
 # Usage: bash gitops/tests/check_guards.sh   (needs python with PyYAML)
@@ -31,9 +31,13 @@ EOF
 # these tests. The fixture is placed in the copy under the live file's name.
 FIX="$src/tests/fixtures/request-tenant-a.yaml"
 REQ=requests/tenant-a-docs-qa.yaml
+# P6 (DRF-76): one enabled BatchTrainingJob from a fixture, the same way.
+BFIX="$src/tests/fixtures/batch-request-tenant-a.yaml"
+BREQ=requests/tenant-a-batch.yaml
 fresh() {
     rm -rf "$tmp/g" && cp -r "$src" "$tmp/g"
     cp "$FIX" "$tmp/g/$REQ"
+    cp "$BFIX" "$tmp/g/$BREQ"
 }
 
 # case NAME EXPECTED_FAIL_TEXT FILE PYTHON
@@ -42,6 +46,7 @@ case_() {
     n=$((n + 1))
     fresh
     if [[ "$file" == +* ]]; then
+        mkdir -p "$(dirname "$tmp/g/${file#+}")"
         printf '%s\n' "$code" > "$tmp/g/${file#+}"   # new file
     else
         mutate "$tmp/g/$file" "$code"
@@ -102,7 +107,7 @@ case_ "ConfigMap in requests" "requests/ holds only RAGSandbox" "+requests/extra
 kind: ConfigMap
 metadata: {name: extra, namespace: tenant-a}
 data: {a: b}'
-case_ "platform-config in Git" "no platform-config ConfigMap" "+platform/tenants/platform-config.yaml" 'apiVersion: v1
+case_ "platform-config in Git" "no platform-config or batch-config ConfigMap" "+platform/tenants/platform-config.yaml" 'apiVersion: v1
 kind: ConfigMap
 metadata: {name: platform-config, namespace: zdr-platform}
 data: {dbPort: "5432"}'
@@ -185,6 +190,66 @@ case_ "extra egress policy without policyTypes" "tenant-a: egress is exactly" "$
 case_ "tenant label on zdr-platform" "tenant label only on tenant namespaces" platform/tenants/namespaces.yaml 'next(d for d in docs if d["metadata"]["name"] == "zdr-platform")["metadata"].setdefault("labels", {})["rag.zero-drift.io/tenant"] = "zdr-platform"'
 case_ "tenant group bound in zdr-platform" "bound only in its own namespace" platform/tenants/rbac.yaml 'docs.append({"apiVersion": "rbac.authorization.k8s.io/v1", "kind": "RoleBinding", "metadata": {"name": "x", "namespace": "zdr-platform"}, "roleRef": {"apiGroup": "rbac.authorization.k8s.io", "kind": "ClusterRole", "name": "view"}, "subjects": [{"kind": "Group", "apiGroup": "rbac.authorization.k8s.io", "name": "zdr:tenant-a:developers"}]})'
 case_ "Kyverno digest in an unused key" "pinned by digest at the chart's keys" "$KY" 'v = '"$KV"'; b = v["backgroundController"]; b["unused"] = {"image": b.pop("image")}'
+
+# P6 (DRF-76): rules 19-23 and the P6 additions to rules 2, 5, 10, 15.
+BRGD=platform/rgd/batch-training-job.yaml
+SJ='node("scaledJob")["template"]["spec"]'
+TP='node("scaledJob")["template"]["spec"]["jobTargetRef"]["template"]["spec"]'
+NPF=platform/batch/nodepools.yaml
+NCF=platform/batch/ec2nodeclass.yaml
+KA=platform/apps/55-karpenter.yaml
+case_ "second enabled batch request" "at most one enabled BatchTrainingJob" "+requests/tenant-b-batch.yaml" "$(sed 's/tenant-a/tenant-b/' "$BFIX")"
+case_ "batch request in a subfolder" "only in requests/ or requests/disabled/" "+requests/tenant-a/smoke.yaml" "$(sed 's/smoke-1/smoke-2/' "$BFIX")"
+case_ "batch request in zdr-platform" "has no batch role" "$BREQ" 'docs[0]["metadata"]["namespace"] = "zdr-platform"'
+case_ "batch request name with --" "breaks the request name contract" "$BREQ" 'docs[0]["metadata"]["name"] = "smoke--1"'
+case_ "steps 0" "not an integer 1..1000" "$BREQ" 'docs[0]["spec"]["steps"] = 0'
+case_ "steps 1001" "not an integer 1..1000" "$BREQ" 'docs[0]["spec"]["steps"] = 1001'
+case_ "runAttempt 0" "not an integer 1..9999" "$BREQ" 'docs[0]["spec"]["runAttempt"] = 0'
+case_ "runAttempt as a string" "not an integer 1..9999" "$BREQ" 'docs[0]["spec"]["runAttempt"] = "2"'
+case_ "unknown failProfile" "not normal or fail-always" "$BREQ" 'docs[0]["spec"]["failProfile"] = "crash"'
+case_ "extra batch spec field" "unknown spec fields" "$BREQ" 'docs[0]["spec"]["instanceType"] = "p5.48xlarge"'
+case_ "two training Jobs at once" "max 1 Job" "$BRGD" "$SJ"'["maxReplicaCount"] = 2'
+case_ "in-flight messages ignored" "scaleOnInFlight" "$BRGD" "$SJ"'["triggers"][0]["metadata"]["scaleOnInFlight"] = "false"'
+case_ "lab endpoint in the RGD" "scaleOnInFlight" "$BRGD" "$SJ"'["triggers"][0]["metadata"]["awsEndpoint"] = "http://elasticmq.zdr-lab:9324"'
+case_ "per-request trigger auth" "via zdr-sqs" "$BRGD" "$SJ"'["triggers"][0]["authenticationRef"] = {"name": "my-keys"}'
+case_ "KEDA Jobs join kro's applyset" "do not inherit kro's applyset" "$BRGD" 'node("scaledJob")["template"]["metadata"]["annotations"]["scaledjob.keda.sh/job-excluded-labels"] = "kro.run/owned"'
+case_ "Job retries itself" "backoffLimit 0" "$BRGD" "$SJ"'["jobTargetRef"]["backoffLimit"] = 3'
+case_ "training Pod off the batch pool" "batch pool only" "$BRGD" "del $TP"'["tolerations"]'
+case_ "training Pod with an API token" "without API token" "$BRGD" "$TP"'["automountServiceAccountToken"] = True'
+case_ "training Pod bigger than D9" "D9 size" "$BRGD" "$TP"'["containers"][0]["resources"]["requests"]["cpu"] = "1"'
+case_ "writable root filesystem" "read-only" "$BRGD" "$TP"'["containers"][0]["securityContext"]["readOnlyRootFilesystem"] = False'
+case_ "heartbeat not under visibility" "heartbeat 40 s" "$BRGD" 'next(e for e in '"$TP"'["containers"][0]["env"] if e["name"] == "HEARTBEAT_SECONDS")["value"] = "150"'
+case_ "static key in the RGD" "no lab endpoint or static key" "$BRGD" "$TP"'["containers"][0]["env"].append({"name": "AWS_ACCESS_KEY_ID", "valueFrom": {"secretKeyRef": {"name": "k", "key": "id"}}})'
+case_ "submit Job in the tenant" "Jobs only in zdr-platform" "$BRGD" 'node("submit")["template"]["metadata"]["namespace"] = "${schema.metadata.namespace}"'
+case_ "submit before the ScaledJob" "created after the ScaledJob" "$BRGD" 'del node("submit")["template"]["metadata"]["labels"]["batch.zero-drift.io/scaledjob"]'
+case_ "batch-config in Git" "no platform-config or batch-config" "+platform/tenants/batch-config.yaml" 'apiVersion: v1
+kind: ConfigMap
+metadata: {name: batch-config, namespace: zdr-platform}
+data: {region: us-east-1}'
+case_ "queue URL in Git" "queue URL or ARN" "+platform/batch/q.yaml" 'apiVersion: v1
+kind: ConfigMap
+metadata: {name: q, namespace: karpenter}
+data: {url: "https://sqs.us-east-1.amazonaws.com/x/zero-drift-batch"}'
+case_ "TriggerAuthentication with keys" "KEDA auth" "+platform/batch/ta.yaml" 'apiVersion: keda.sh/v1alpha1
+kind: TriggerAuthentication
+metadata: {name: keys, namespace: tenant-a}
+spec: {secretTargetRef: [{parameter: awsAccessKeyID, name: k, key: id}]}'
+case_ "NodePool without a limit" "limits.cpu 2" "$NPF" 'del docs[0]["spec"]["limits"]'
+case_ "NodePool never expires" "expireAfter 2h" "$NPF" 'docs[1]["spec"]["template"]["spec"]["expireAfter"] = "Never"'
+case_ "GPU instance type" "only the D1 instance types" "$NPF" 'next(r for r in docs[0]["spec"]["template"]["spec"]["requirements"] if r["key"] == "node.kubernetes.io/instance-type")["values"].append("g4dn.xlarge")'
+case_ "Spot pool also On-Demand" "one capacity type" "$NPF" 'next(r for r in docs[0]["spec"]["template"]["spec"]["requirements"] if r["key"] == "karpenter.sh/capacity-type")["values"].append("on-demand")'
+case_ "On-Demand preferred" "Spot first" "$NPF" 'docs[0]["spec"]["weight"] = 1'
+case_ "batch pool without taint" "batch taint and label" "$NPF" 'del docs[1]["spec"]["template"]["spec"]["taints"]'
+case_ "Karpenter manages the profile" "pre-created instance profile" "$NCF" 'd = docs[0]["spec"]; del d["instanceProfile"]; d["role"] = "zero-drift-karpenter-node"'
+case_ "AMI alias drifts from system nodes" "= system node release" "$NCF" 'docs[0]["spec"]["amiSelectorTerms"] = [{"alias": "al2023@v20260101"}]'
+case_ "IMDS hop limit 2" "IMDSv2 hop 1" "$NCF" 'docs[0]["spec"]["metadataOptions"]["httpPutResponseHopLimit"] = 2'
+case_ "unencrypted root volume" "IMDSv2 hop 1, encrypted" "$NCF" 'docs[0]["spec"]["blockDeviceMappings"][0]["ebs"]["encrypted"] = False'
+case_ "Karpenter on its own nodes" "chart affinity kept" "$KA" 'docs[0]["spec"]["source"]["helm"]["valuesObject"]["affinity"] = {}'
+case_ "two Karpenter replicas" "1 replica" "$KA" 'docs[0]["spec"]["source"]["helm"]["valuesObject"]["replicas"] = 2'
+case_ "Karpenter image by tag only" "pinned by digest at the chart's keys" "$KA" 'del docs[0]["spec"]["source"]["helm"]["valuesObject"]["controller"]["image"]["digest"]'
+case_ "KEDA webhooks image by tag only" "pinned by digest at the chart's keys" platform/apps/50-keda.yaml 'docs[0]["spec"]["source"]["helm"]["valuesObject"]["image"]["webhooks"]["tag"] = "2.21.1"'
+case_ "quota above D9" "quota values are SPEC-P6 D9 exactly" platform/tenants/quota.yaml 'docs[0]["spec"]["hard"]["pods"] = "12"'
+case_ "batch-train SA missing in tenant-b" "tenant default and batch-train" platform/tenants/serviceaccounts.yaml 'docs[:] = [d for d in docs if not (d["metadata"]["name"] == "batch-train" and d["metadata"]["namespace"] == "tenant-b")]'
 
 echo
 if (( failed )); then echo "RESULT: FAIL"; exit 1; fi

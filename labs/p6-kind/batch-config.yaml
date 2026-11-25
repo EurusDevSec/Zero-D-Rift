@@ -1,0 +1,13 @@
+# LAB ONLY (DRF-76). Applied on its own in step 1 so the lab sees the gate:
+# without batch-config the graph waits at platformConfig and creates nothing.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: batch-config
+  namespace: zdr-platform
+data:
+  queueUrl: http://elasticmq.zdr-lab:9324/queue/zero-drift-batch
+  queueName: zero-drift-batch
+  region: us-east-1
+  runId: kind-lab
+  expiresAt: "2099-01-01T00:00:00Z"

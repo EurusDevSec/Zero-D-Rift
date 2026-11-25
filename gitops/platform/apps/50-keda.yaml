@@ -1,0 +1,58 @@
+# Wave 50 (P6, DRF-76, SPEC-P6 MUST "KEDA as a pinned Argo CD application"):
+# KEDA 2.21.1, chart sha256 76b45621...91d8fb883e (P6-T1 pins). The chart builds
+# registry/repository:tag, so each tag carries "2.21.1@sha256:..." and the three
+# images run by digest. KEDA only creates Jobs from queue length; it never
+# creates nodes (Karpenter, wave 55).
+# The operator reads the queue with its own IRSA role zero-drift-batch-keda
+# (ClusterTriggerAuthentication zdr-sqs, wave 57). The role ARN annotation on
+# ServiceAccount keda/keda-operator holds the account ID, so
+# infra/p6-window/window.sh annotate adds it with kubectl and restarts the
+# operator; this Application ignores that field.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: zdr-keda
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "50"
+spec:
+  project: default
+  source:
+    repoURL: https://kedacore.github.io/charts
+    chart: keda
+    targetRevision: 2.21.1
+    helm:
+      releaseName: keda
+      valuesObject:
+        image:
+          keda:
+            tag: "2.21.1@sha256:d09d92c0a310e3057a3c54df387b99abf2bf31352218dbe1adcb00e807886488"
+          metricsApiServer:
+            tag: "2.21.1@sha256:747e376b3e80dc4f72bf4f7043f47cc4cdb56f34b1aed9531789f474996e1c84"
+          webhooks:
+            tag: "2.21.1@sha256:5f4b0b0f7831b9f53738be85e99449a1747a5effa970305fe602455ab0f4fcd3"
+          pullPolicy: IfNotPresent
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: keda
+  ignoreDifferences:
+    - group: ""
+      kind: ServiceAccount
+      namespace: keda
+      name: keda-operator
+      jsonPointers:
+        - /metadata/annotations/eks.amazonaws.com~1role-arn
+  syncPolicy:
+    automated:
+      prune: false
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
+      - RespectIgnoreDifferences=true
+    retry:
+      limit: 10
+      backoff:
+        duration: 15s
+        factor: 2
+        maxDuration: 3m

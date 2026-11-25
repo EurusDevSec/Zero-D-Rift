@@ -122,7 +122,7 @@ are smoke runs (`official=false`).
 | A2 | Standard On-Demand 5 vCPU, Spot 5 vCPU | **Changed:** On-Demand read as 8 vCPU on 22/11 and 25/11. Spot not read since 28/09 | P5-T4.2 evidence §preflight; reread at T−30 |
 | A3 | P4 accepted (`RAGSandbox` end to end on EKS) | **True** (24/11) | P4 audit |
 | A4 | P5 accepted: `restricted`, quota (GPU 0), default-deny, Kyverno | **True technically** (25/11); delayed inventory and Bills on 26/11 | P5 audit §6 |
-| A5 | kro v0.9.4 can hold a KEDA `ScaledJob` and a Job in another namespace in one graph | **Unverified.** The P4 spike covered a Job and a ConfigMap; RAG uses a Job in `zdr-platform` | P6-T2.2 kind lab, step 1 |
+| A5 | kro v0.9.4 can hold a KEDA `ScaledJob` and a Job in another namespace in one graph | **Verified on kind 25/11** (Claude run; owner run pending): RGD `Active`, graph creates the ScaledJob in the tenant and the submit Job in `zdr-platform`. Condition found: KEDA Jobs must not inherit kro's applyset labels (`job-excluded-labels`), see `docs/evidence/p6/P6-T2.2_KIND_LAB_20261125.md` | P6-T2.2 kind lab, step 1 |
 | A6 | ADR-0008 identity pattern (Terraform pre-creates one role per tenant and workload; Crossplane has no IAM right) carries over | **True**; `rag-identity` creates `zero-drift-rag-<tenant>` the same way. P6 also keeps the batch ServiceAccount platform-owned (P6-T2.2), so the identity does not depend on a request | `infra/terraform/modules/rag-identity/main.tf` |
 | A7 | Crossplane S3 role can take a second bucket prefix | **True with a change:** today the role is `zero-drift-rag-crossplane-s3` in `rag-identity`; batch buckets need prefix `zero-drift-batch-` added | P6-T3 A |
 | A8 | Network baseline: public subnets with `map_public_ip_on_launch`, no NAT, S3 gateway endpoint, IMDSv2 hop 1 | **True** | `modules/network/main.tf` |
@@ -374,7 +374,7 @@ checked only at L3.
       second Job. Message never deleted → redelivery after the visibility timeout.
 - [ ] Training end to end against S3Mock; kill the Pod mid-run; resume from the
       checkpoint; one artifact.
-- [ ] kro graph with a `ScaledJob` node becomes Active (A5).
+- [x] kro graph with a `ScaledJob` node becomes Active (A5). (kind, 25/11)
 - [ ] Runbook step 5 reads the replacement Job with a guarded read and stops
       if no Job name came back, before `kubectl wait` (§9.3 L1).
 

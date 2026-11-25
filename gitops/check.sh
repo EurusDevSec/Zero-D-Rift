@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Static gate for gitops/ (SPEC-P3 Task 3, DRF-35; SPEC-P4 P4-T3.2 B, DRF-51; SPEC-P5 P5-T2.1 A, DRF-66; P5-T2.2 A, DRF-67; P5-T3, DRF-68). Touches no cluster and no AWS.
+# Static gate for gitops/ (SPEC-P3 Task 3, DRF-35; SPEC-P4 P4-T3.2 B, DRF-51; SPEC-P5 P5-T2.1 A, DRF-66; P5-T2.2 A, DRF-67; P5-T3, DRF-68; SPEC-P6 P6-T2.2 A, DRF-76). Touches no cluster and no AWS.
 # Usage: gitops/check.sh   (from anywhere in the repo)
 # Exit 0 only when every check passes. Needs python with PyYAML (YAML parsing only).
 set -euo pipefail
@@ -32,6 +32,9 @@ secrets="$(grep -l -E '^kind: *Secret *$' $files || true)"
 [[ -z "$secrets" ]] && pass "no Secret objects" || fail "Secret in: $secrets"
 ids="$(grep -n -E '(^|[^0-9])[0-9]{12}([^0-9]|$)|arn:aws:[a-z0-9-]*:[a-z0-9-]*:[0-9]{12}|(AKIA|ASIA)[A-Z0-9]{16}' $files || true)"
 [[ -z "$ids" ]] && pass "no account ID, account ARN or access key" || fail "sensitive: $ids"
+# P6 (DRF-76): a queue URL holds the account ID; it lives only in the window-only batch-config.
+qurl="$(grep -n -i -E 'https?://(sqs\.[a-z0-9-]+\.amazonaws\.com|([a-z0-9-]+\.)?queue\.amazonaws\.com)|arn:aws:sqs:' $files || true)"
+[[ -z "$qurl" ]] && pass "no SQS queue URL or queue ARN" || fail "queue URL or ARN: $qurl"
 
 # 3. Every container image and provider package is pinned by digest; no latest.
 latest="$(grep -n -E '(:|")latest("|$| )' $files || true)"
@@ -77,7 +80,8 @@ for f, d in apps:
         charts[s["chart"]] = s["targetRevision"]
     else:
         res(s["targetRevision"] == "main", f"{d['metadata']['name']}: Git source on main")
-res(charts == {"crossplane": "2.4.3", "kro": "0.9.4", "kyverno": "3.10.0"}, f"Helm charts pinned exactly: {charts}")
+res(charts == {"crossplane": "2.4.3", "kro": "0.9.4", "kyverno": "3.10.0", "keda": "2.21.1", "karpenter": "1.15.3"},
+    f"Helm charts pinned exactly: {charts}")
 # Chart images: the values must carry a digest (Crossplane: repository@sha256 +
 # ignoreTag; kro and Kyverno: tag v...@sha256), otherwise the chart default tag
 # is used. Every "image" block in the values counts; Kyverno has eight.
@@ -92,20 +96,32 @@ def image_blocks(node, path=()):
     elif isinstance(node, list):
         for x in node:
             yield from image_blocks(x, path)
-IMAGE_KEYS = {  # chart -> {path of the image block: field the template reads}
-    "crossplane": {(): "repository"},
-    "kro": {(): "tag"},
-    "kyverno": {p: "tag" for p in [("admissionController", "initContainer"), ("admissionController", "container"),
-                                   ("backgroundController",), ("reportsController",), ("upgrade", "legacyPolicyCheck"),
-                                   ("crds", "migration"), ("webhooksCleanup",), ("test",)]},
+IMAGE_KEYS = {  # chart -> {path of the image block: fields the template reads (dotted = nested)}
+    "crossplane": {(): ["repository"]},
+    "kro": {(): ["tag"]},
+    "kyverno": {p: ["tag"] for p in [("admissionController", "initContainer"), ("admissionController", "container"),
+                                     ("backgroundController",), ("reportsController",), ("upgrade", "legacyPolicyCheck"),
+                                     ("crds", "migration"), ("webhooksCleanup",), ("test",)]},
+    # P6: KEDA builds registry/repository:tag for three images in one block;
+    # Karpenter appends @<controller.image.digest> to repository:tag.
+    "keda": {(): ["keda.tag", "metricsApiServer.tag", "webhooks.tag"]},
+    "karpenter": {("controller",): ["digest"]},
 }
+def field(block, dotted):
+    for k in dotted.split("."):
+        block = block.get(k, "") if isinstance(block, dict) else ""
+    return str(block)
+def pinned(dotted, v):
+    if dotted.endswith("digest"):
+        return re.fullmatch(r"sha256:[0-9a-f]{64}", v)
+    return re.search(r"@sha256:[0-9a-f]{64}$", v)
 for f, d in apps:
     s = d["spec"]["source"]
     if "chart" in s:
         blocks = dict(image_blocks(s.get("helm", {}).get("valuesObject", {})))
         want = IMAGE_KEYS.get(s["chart"], {})
         res(want and set(blocks) == set(want)
-            and all(re.search(r"@sha256:[0-9a-f]{64}$", str(blocks[p].get(k, ""))) for p, k in want.items()),
+            and all(pinned(k, field(blocks[p], k)) for p, ks in want.items() for k in ks),
             f"{d['metadata']['name']}: chart image pinned by digest at the chart's keys ({len(blocks)} image blocks)")
 for f, d in apps:
     a = d["spec"].get("syncPolicy", {}).get("automated", {})
@@ -141,7 +157,7 @@ for name, g in sorted(rgd.items()):
 # --- P4 (DRF-51, SPEC-P4 P4-T3.2 B) ---------------------------------------
 TENANTS = {"tenant-a", "tenant-b"}
 PLATFORM_NS = "zdr-platform"
-PLATFORM_SA = {"rag-db-admin", "rag-bootstrap"}
+PLATFORM_SA = {"rag-db-admin", "rag-bootstrap", "batch-submit"}  # batch-submit: P6 (DRF-76)
 NAME_RE = re.compile(r"[a-z](?:[a-z0-9-]{0,30}[a-z0-9])?")  # ragsandbox/names.py
 
 def walk(node):
@@ -188,15 +204,17 @@ for f, d in docs:
         res(key not in seen, f"{who}: unique")
         seen.add(key)
 
-# 8b. The requests app syncs only RAGSandbox objects. Anything else there (a
-#     ConfigMap, a Job...) would bypass the request rules; platform-config is
-#     window-only (window.sh, after db-init) and must not exist in any source.
+# 8b. The requests app syncs only RAGSandbox and BatchTrainingJob objects (P6).
+#     Anything else there (a ConfigMap, a Job...) would bypass the request
+#     rules; platform-config and batch-config are window-only (window.sh) and
+#     must not exist in any source.
 others = [f"{f}: {d.get('kind')} {d.get('metadata', {}).get('name')}" for f, d in docs
           if f.replace("\\", "/").startswith("requests/") and "/disabled/" not in f.replace("\\", "/")
-          and d.get("kind") != "RAGSandbox"]
-res(not others, "requests/ holds only RAGSandbox objects" + (f": {others}" if others else ""))
-pc = [f for f, d in docs if d.get("kind") == "ConfigMap" and d.get("metadata", {}).get("name") == "platform-config"]
-res(not pc, "no platform-config ConfigMap in Git (window-only)" + (f": {pc}" if pc else ""))
+          and d.get("kind") not in ("RAGSandbox", "BatchTrainingJob")]
+res(not others, "requests/ holds only RAGSandbox and BatchTrainingJob objects" + (f": {others}" if others else ""))
+pc = [f for f, d in docs if d.get("kind") == "ConfigMap"
+      and d.get("metadata", {}).get("name") in ("platform-config", "batch-config")]
+res(not pc, "no platform-config or batch-config ConfigMap in Git (window-only)" + (f": {pc}" if pc else ""))
 
 # 9. No secret value anywhere: no password/token-like key, and no env var whose
 #    name says password/token/key with a literal value.
@@ -239,8 +257,8 @@ res(not bad, "platform ServiceAccounts and Jobs only in zdr-platform; namespaces
 nss = {d["metadata"]["name"] for f, d in docs if d.get("kind") == "Namespace"}
 sas = {(d["metadata"].get("namespace"), d["metadata"]["name"]) for f, d in docs if d.get("kind") == "ServiceAccount"}
 res(TENANTS | {PLATFORM_NS} <= nss
-    and sas == {(PLATFORM_NS, s) for s in PLATFORM_SA} | {(t, "default") for t in TENANTS},
-    "Git has tenant-a, tenant-b, zdr-platform, the two platform ServiceAccounts and the tenant default ones")
+    and sas == {(PLATFORM_NS, s) for s in PLATFORM_SA} | {(t, n) for t in TENANTS for n in ("default", "batch-train")},
+    "Git has tenant-a, tenant-b, zdr-platform, the three platform ServiceAccounts, tenant default and batch-train")
 
 # 11. RAGSandbox RGD contract (part A): graph, readiness, retry, status.
 g = rgd.get("rag-sandbox")
@@ -357,6 +375,10 @@ for t in sorted(TENANTS):
     res(need <= set(hard) and str(hard.get("requests.nvidia.com/gpu")) == "0"
         and str(hard.get("services.loadbalancers")) == "0" and str(hard.get("services.nodeports")) == "0",
         f"{t}: one ResourceQuota with pods/cpu/memory/services/jobs, GPU 0, no LoadBalancer or NodePort")
+    # P6 (SPEC-P6 D9): raised by exactly one training Pod and its Jobs, no more.
+    d9 = {"pods": "10", "requests.cpu": "900m", "requests.memory": "1152Mi", "limits.memory": "2048Mi",
+          "count/jobs.batch": "6", "services": "4"}
+    res({k: str(hard.get(k)) for k in d9} == d9, f"{t}: quota values are SPEC-P6 D9 exactly")
     lr = [d for f, d in objs_of("LimitRange", t)]
     c = next((l for d in lr for l in d.get("spec", {}).get("limits", []) if l.get("type") == "Container"), {})
     res(len(lr) == 1 and {"cpu", "memory"} <= set(c.get("defaultRequest", {}))
@@ -373,8 +395,9 @@ dest = sorted((x.get("server"), x.get("namespace")) for x in ps.get("destination
 res(len(proj) == 1 and ps.get("sourceRepos") == [REPO]
     and dest == [("https://kubernetes.default.svc", t) for t in sorted(TENANTS)]
     and ps.get("clusterResourceWhitelist") == []
-    and ps.get("namespaceResourceWhitelist") == [{"group": "kro.run", "kind": "RAGSandbox"}],
-    "AppProject zdr-requests: this repo, tenant-a/b, nothing cluster-scoped, only RAGSandbox")
+    and ps.get("namespaceResourceWhitelist") == [{"group": "kro.run", "kind": "RAGSandbox"},
+                                                 {"group": "kro.run", "kind": "BatchTrainingJob"}],
+    "AppProject zdr-requests: this repo, tenant-a/b, nothing cluster-scoped, only RAGSandbox and BatchTrainingJob")
 in_proj = sorted(d["metadata"]["name"] for f, d in apps if d["spec"].get("project") == "zdr-requests")
 req = next((d for f, d in apps if d["metadata"]["name"] == "zdr-requests"), {})
 res(in_proj == ["zdr-requests"] and req.get("spec", {}).get("destination", {}).get("namespace") in TENANTS
@@ -492,6 +515,204 @@ vexc = {e for f, d in objs_of("NetworkPolicy") for r in d.get("spec", {}).get("e
         for p in r.get("to") or [] for e in p.get("ipBlock", {}).get("except", []) if e != "169.254.0.0/16"}
 res(vpc is not None and cidrs == dbs and vexc == {str(vpc)},
     f"NetworkPolicy DB subnets {sorted(cidrs)} and VPC except {sorted(vexc)} match Terraform vpc_cidr {vpc}")
+
+# --- P6 (DRF-76, SPEC-P6 P6-T2.2 A) ----------------------------------------
+# 19. BatchTrainingJob requests: at most one enabled (D5), directly in
+#     requests/; otherwise only in requests/disabled/ (zdr-requests does not
+#     recurse, so a file in any other subfolder looks enabled but never syncs).
+#     Every one, enabled or disabled, follows the request contract, so moving a
+#     disabled one up is safe. The worker checks the same limits (runkey.py).
+BTJ_FIELDS = {"steps", "runAttempt", "failProfile"}
+def int_in(v, lo, hi):
+    return isinstance(v, int) and not isinstance(v, bool) and lo <= v <= hi
+def batch_problems(d):
+    meta, spec = d.get("metadata", {}), d.get("spec") or {}
+    out = []
+    if meta.get("namespace") not in TENANTS:
+        out.append(f"namespace {meta.get('namespace')!r} has no batch role")
+    n = meta.get("name", "")
+    if not (NAME_RE.fullmatch(n) and "--" not in n):
+        out.append(f"name {n!r} breaks the request name contract")
+    extra = sorted(set(spec) - BTJ_FIELDS)
+    if extra:
+        out.append(f"unknown spec fields {extra}")
+    if "steps" in spec and not int_in(spec["steps"], 1, 1000):
+        out.append(f"steps {spec['steps']!r} is not an integer 1..1000")
+    if "runAttempt" in spec and not int_in(spec["runAttempt"], 1, 9999):
+        out.append(f"runAttempt {spec['runAttempt']!r} is not an integer 1..9999")
+    if spec.get("failProfile", "normal") not in ("normal", "fail-always"):
+        out.append(f"failProfile {spec.get('failProfile')!r} is not normal or fail-always")
+    return out
+enabled, misplaced = [], []
+for f, d in docs:
+    if d.get("kind") != "BatchTrainingJob":
+        continue
+    path = f.replace("\\", "/")
+    m = d["metadata"]
+    who = f"batch request {m.get('namespace')}/{m.get('name')} ({path})"
+    probs = batch_problems(d)
+    res(not probs, f"{who}: known tenant, name contract, steps/runAttempt/failProfile in range"
+        + (f" ({'; '.join(probs)})" if probs else ""))
+    if re.fullmatch(r"requests/[^/]+", path):
+        enabled.append(who)
+    elif not re.fullmatch(r"requests/disabled/[^/]+", path):
+        misplaced.append(who)
+res(len(enabled) <= 1, f"at most one enabled BatchTrainingJob (D5): {len(enabled)}"
+    + (f": {enabled}" if len(enabled) > 1 else ""))
+res(not misplaced, "BatchTrainingJob only in requests/ or requests/disabled/" + (f": {misplaced}" if misplaced else ""))
+
+# 20. BatchTrainingJob RGD contract: graph order, gate, ScaledJob (D5, D8),
+#     training Pod (identity, placement, D9 size, hardening), submit Job.
+g = rgd.get("batch-training-job")
+res(g is not None, "RGD batch-training-job exists")
+if g is not None:
+    nodes = {r["id"]: r for r in g["spec"]["resources"]}
+    res(list(nodes) == ["platformConfig", "bucket", "scaledJob", "submit"],
+        f"batch-training-job: nodes in order {list(nodes)}")
+    pc = nodes.get("platformConfig", {}).get("externalRef", {})
+    res(pc.get("kind") == "ConfigMap" and pc.get("metadata") == {"name": "batch-config", "namespace": PLATFORM_NS},
+        "batch-training-job: platformConfig is an externalRef to ConfigMap batch-config in zdr-platform")
+    sch = g["spec"]["schema"]
+    sp = {k: str(v) for k, v in sch.get("spec", {}).items()}
+    res(set(sp) == BTJ_FIELDS and "minimum=1" in sp.get("steps", "") and "maximum=1000" in sp.get("steps", "")
+        and "minimum=1" in sp.get("runAttempt", "") and "maximum=9999" in sp.get("runAttempt", "")
+        and 'enum="normal,fail-always"' in sp.get("failProfile", ""),
+        "batch-training-job: spec steps 1..1000, runAttempt 1..9999, failProfile normal|fail-always")
+    need = {"queue", "bucket", "runAttempt", "submitJob", "submitState", "outcome"}
+    res(need <= set(sch.get("status", {})), f"batch-training-job: status has {sorted(need)}")
+    bt = nodes.get("bucket", {}).get("template", {})
+    res(bt.get("metadata", {}).get("name", "").startswith('${"zero-drift-batch-" + schema.metadata.namespace')
+        and bt.get("spec", {}).get("forProvider", {}).get("forceDestroy") is True,
+        "batch-training-job: bucket zero-drift-batch-<tenant>-<name> with forceDestroy")
+    sj = nodes.get("scaledJob", {}).get("template", {})
+    ss = sj.get("spec", {})
+    trig = ss.get("triggers", [])
+    t0 = trig[0] if len(trig) == 1 else {}
+    md = t0.get("metadata", {})
+    res(sj.get("kind") == "ScaledJob" and sj.get("metadata", {}).get("namespace") == "${schema.metadata.namespace}"
+        and ss.get("pollingInterval") == 10 and ss.get("maxReplicaCount") == 1 and ss.get("minReplicaCount", 0) == 0
+        and ss.get("successfulJobsHistoryLimit") == 1 and ss.get("failedJobsHistoryLimit") == 1
+        and t0.get("type") == "aws-sqs-queue" and md.get("queueLength") == "1" and md.get("scaleOnInFlight") == "true"
+        and "awsEndpoint" not in md
+        and t0.get("authenticationRef") == {"kind": "ClusterTriggerAuthentication", "name": "zdr-sqs"},
+        "batch-training-job: ScaledJob in the tenant, one SQS trigger via zdr-sqs, queueLength 1, "
+        "scaleOnInFlight, max 1 Job, poll 10 s, history 1/1")
+    # Kind lab 25/11: KEDA copies ScaledJob labels onto its Jobs; with kro's
+    # applyset label on them, kro pruned every training Job (the graph holds a
+    # Job kind too) and KEDA started a new one each poll.
+    exl = set(str(sj.get("metadata", {}).get("annotations", {})
+                  .get("scaledjob.keda.sh/job-excluded-labels", "")).split(","))
+    res({"applyset.kubernetes.io/part-of", "kro.run/owned", "kro.run/node-id", "kro.run/instance-id",
+         "kro.run/instance-name", "kro.run/instance-namespace"} <= exl,
+        "batch-training-job: KEDA Jobs do not inherit kro's applyset and ownership labels")
+    jt = ss.get("jobTargetRef", {})
+    ps = jt.get("template", {}).get("spec", {})
+    plab = jt.get("template", {}).get("metadata", {}).get("labels", {})
+    cs = ps.get("containers", [])
+    c0 = cs[0] if len(cs) == 1 else {}
+    rs = c0.get("resources", {})
+    res(jt.get("backoffLimit") == 0 and jt.get("activeDeadlineSeconds") == 2700
+        and ps.get("serviceAccountName") == "batch-train" and ps.get("automountServiceAccountToken") is False
+        and ps.get("nodeSelector") == {"zero-drift.io/pool": "batch"}
+        and ps.get("tolerations") == [{"key": "zero-drift.io/batch", "operator": "Equal", "value": "true",
+                                       "effect": "NoSchedule"}]
+        and plab.get("app.kubernetes.io/name") == "batch-train"
+        and plab.get("rag.zero-drift.io/tenant") == "${schema.metadata.namespace}"
+        and rs.get("requests") == {"cpu": "500m", "memory": "384Mi"} and rs.get("limits") == {"memory": "512Mi"}
+        and "initContainers" not in ps,
+        "batch-training-job: training Job backoffLimit 0, deadline 2700 s, batch-train SA without API token, "
+        "batch pool only, D9 size")
+    sec = c0.get("securityContext", {})
+    res(ps.get("securityContext", {}).get("runAsNonRoot") is True and sec.get("allowPrivilegeEscalation") is False
+        and sec.get("capabilities", {}).get("drop") == ["ALL"] and sec.get("readOnlyRootFilesystem") is True,
+        "batch-training-job: training container non-root, read-only, no capabilities")
+    env = {e.get("name"): e.get("value") for e in c0.get("env", [])}
+    res(env.get("HEARTBEAT_SECONDS") == "40" and env.get("VISIBILITY_TIMEOUT") == "120"
+        and not any(str(k).endswith("_ENDPOINT_URL") for k in env) and "AWS_ACCESS_KEY_ID" not in env,
+        "batch-training-job: heartbeat 40 s, visibility 120 s (D8); no lab endpoint or static key")
+    sb = nodes.get("submit", {})
+    st = sb.get("template", {})
+    sjs = st.get("spec", {})
+    sps = sjs.get("template", {}).get("spec", {})
+    res(st.get("kind") == "Job" and st.get("metadata", {}).get("namespace") == PLATFORM_NS
+        and st.get("metadata", {}).get("name", "").endswith("string(schema.spec.runAttempt)}")
+        and sps.get("serviceAccountName") == "batch-submit" and sps.get("automountServiceAccountToken") is False
+        and isinstance(sjs.get("backoffLimit"), int) and isinstance(sjs.get("activeDeadlineSeconds"), int)
+        and "ttlSecondsAfterFinished" not in sjs
+        and any('c.type == "Complete"' in w for w in sb.get("readyWhen", []))
+        and "scaledJob." in yaml.safe_dump(st.get("metadata", {})),
+        "batch-training-job: submit Job in zdr-platform named by runAttempt, batch-submit SA, "
+        "readyWhen Complete, created after the ScaledJob")
+
+# 21. KEDA reads the queue only through the platform-owned
+#     ClusterTriggerAuthentication zdr-sqs with its own IRSA identity; no
+#     per-namespace TriggerAuthentication (it could carry keys).
+ctas = {d["metadata"]["name"]: d.get("spec", {}) for f, d in objs_of("ClusterTriggerAuthentication")}
+tas = [f for f, d in objs_of("TriggerAuthentication")]
+res(ctas == {"zdr-sqs": {"podIdentity": {"provider": "aws", "identityOwner": "keda"}}} and not tas,
+    "KEDA auth: only ClusterTriggerAuthentication zdr-sqs, the operator's own AWS identity, no keys")
+
+# 22. Karpenter capacity (D1, D6, D7, negative boundaries 1-3): two NodePools,
+#     one capacity type each, allowlisted types and zones, one node, expiry,
+#     batch taint and label; one EC2NodeClass with the pre-created profile, the
+#     system node AMI release, IMDSv2 hop 1, encrypted root, discovery tags.
+TYPES = ["c6i.large", "m5.large", "m6i.large"]
+pools = {d["metadata"]["name"]: d.get("spec", {}) for f, d in objs_of("NodePool")}
+res(sorted(pools) == ["batch-ondemand", "batch-spot"],
+    f"Karpenter: exactly NodePools batch-spot and batch-ondemand: {sorted(pools)}")
+def pool_req(spec, key):
+    return [r for r in spec.get("template", {}).get("spec", {}).get("requirements", []) if r.get("key") == key]
+for n, sp in sorted(pools.items()):
+    ts = sp.get("template", {}).get("spec", {})
+    cap = pool_req(sp, "karpenter.sh/capacity-type")
+    it = pool_req(sp, "node.kubernetes.io/instance-type")
+    zs = pool_req(sp, "topology.kubernetes.io/zone")
+    keys = {str(r.get("key")) for r in ts.get("requirements", [])}
+    res(len(cap) == 1 and cap[0].get("operator") == "In"
+        and cap[0].get("values") == {"batch-spot": ["spot"], "batch-ondemand": ["on-demand"]}.get(n)
+        and len(it) == 1 and it[0].get("operator") == "In" and sorted(it[0].get("values", [])) == TYPES
+        and len(zs) == 1 and zs[0].get("operator") == "In" and sorted(zs[0].get("values", [])) == ["us-east-1a", "us-east-1b"]
+        and not any("gpu" in k.lower() or "accelerator" in k.lower() for k in keys),
+        f"{n}: one capacity type, only the D1 instance types and zones, no GPU requirement")
+    res(sp.get("limits") == {"cpu": "2"} and ts.get("expireAfter") == "2h"
+        and sp.get("disruption") == {"consolidationPolicy": "WhenEmpty", "consolidateAfter": "60s"},
+        f"{n}: limits.cpu 2 (one node), expireAfter 2h, removed 60 s after empty")
+    res(ts.get("taints") == [{"key": "zero-drift.io/batch", "value": "true", "effect": "NoSchedule"}]
+        and sp.get("template", {}).get("metadata", {}).get("labels") == {"zero-drift.io/pool": "batch"}
+        and ts.get("nodeClassRef") == {"group": "karpenter.k8s.aws", "kind": "EC2NodeClass", "name": "batch"},
+        f"{n}: batch taint and label, EC2NodeClass batch")
+res([pools.get(n, {}).get("weight") for n in ("batch-spot", "batch-ondemand")] == [100, 10],
+    "Karpenter: Spot first (weight 100), On-Demand fallback (weight 10)")
+ncs = {d["metadata"]["name"]: d.get("spec", {}) for f, d in objs_of("EC2NodeClass")}
+nc = ncs.get("batch", {})
+tf_ami = re.search(r'variable "system_node_ami_release_version"[^}]*?default\s*=\s*"1\.35\.[0-9]+-([0-9]{8})"', tf, re.S)
+want_alias = f"al2023@v{tf_ami.group(1)}" if tf_ami else None
+ami = [t.get("alias") for t in nc.get("amiSelectorTerms", [])]
+res(list(ncs) == ["batch"] and nc.get("instanceProfile") == "zero-drift-karpenter-node" and "role" not in nc
+    and want_alias is not None and ami == [want_alias],
+    f"EC2NodeClass batch: pre-created instance profile (D6); AMI {ami} = system node release {want_alias}")
+mo = nc.get("metadataOptions", {})
+bdm = nc.get("blockDeviceMappings", [])
+ebs = bdm[0].get("ebs", {}) if len(bdm) == 1 else {}
+res(mo.get("httpTokens") == "required" and mo.get("httpPutResponseHopLimit") == 1
+    and ebs.get("encrypted") is True and ebs.get("volumeType") == "gp3" and ebs.get("volumeSize") == "20Gi"
+    and ebs.get("deleteOnTermination") is True
+    and all(nc.get("tags", {}).get(k) for k in ("Project", "Owner", "Environment")),
+    "EC2NodeClass batch: IMDSv2 hop 1, encrypted gp3 20Gi deleted with the node, project tags")
+disc = {"tags": {"karpenter.sh/discovery": "zero-drift"}}
+res(nc.get("subnetSelectorTerms") == [disc] and nc.get("securityGroupSelectorTerms") == [disc],
+    "EC2NodeClass batch: subnets and security groups only by the discovery tag")
+
+# 23. Karpenter controller: one replica, this cluster and its interruption
+#     queue; the chart's affinity (never on a node it provisions) is not
+#     overridden; no role ARN in Git (window.sh annotate adds it).
+kp = next((d["spec"]["source"].get("helm", {}).get("valuesObject", {}) for f, d in apps
+           if d["spec"]["source"].get("chart") == "karpenter"), None)
+res(kp is not None and kp.get("replicas") == 1 and kp.get("settings", {}).get("clusterName") == "zero-drift"
+    and kp.get("settings", {}).get("interruptionQueue") == "zero-drift-karpenter"
+    and not {"affinity", "nodeSelector", "tolerations"} & set(kp)
+    and not kp.get("serviceAccount", {}).get("annotations"),
+    "zdr-karpenter: 1 replica, cluster zero-drift, interruption queue; chart affinity kept; no role ARN in Git")
 sys.exit(0 if ok else 1)
 EOF
 

@@ -1,0 +1,11 @@
+# LAB ONLY (DRF-76). A BatchTrainingJob for the kind lab (tenant-a), applied
+# with kubectl, never from gitops/requests. One at a time (D5).
+apiVersion: kro.run/v1alpha1
+kind: BatchTrainingJob
+metadata:
+  name: lab-bad
+  namespace: tenant-a
+spec:
+  steps: 50
+  runAttempt: 1
+  failProfile: fail-always

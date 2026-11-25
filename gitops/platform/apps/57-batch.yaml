@@ -1,0 +1,33 @@
+# Wave 57 (P6, DRF-76, SPEC-P6 D6, D7, P6-T2.2 A): the batch capacity and the
+# queue authentication, after the KEDA (50) and Karpenter (55) CRDs exist:
+# ClusterTriggerAuthentication zdr-sqs, EC2NodeClass batch and the two
+# NodePools batch-spot and batch-ondemand. No prune: NodePools are removed only
+# by the teardown order of SPEC-P6 §9.5, never while a NodeClaim exists.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: zdr-batch
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "57"
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/EurusDevSec/Zero-D-Rift.git
+    targetRevision: main
+    path: gitops/platform/batch
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: karpenter
+  syncPolicy:
+    automated:
+      prune: false
+      selfHeal: true
+    syncOptions:
+      - SkipDryRunOnMissingResource=true
+    retry:
+      limit: 10
+      backoff:
+        duration: 15s
+        factor: 2
+        maxDuration: 3m

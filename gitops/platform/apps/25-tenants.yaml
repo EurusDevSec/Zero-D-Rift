@@ -7,6 +7,9 @@
 # - the platform-config ConfigMap in zdr-platform (RDS endpoint, role ARN prefix,
 #   run ID), applied with kubectl only after db-init succeeded. Argo does not
 #   track it. The RGD reads it by externalRef, so no bootstrap Job starts before it.
+# P6 (DRF-76): the same for the batch identities (batch-submit in zdr-platform,
+# batch-train in each tenant) and for batch-config in zdr-platform (queue URL,
+# written by infra/p6-window/window.sh batch-config).
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
@@ -34,6 +37,24 @@ spec:
       kind: ServiceAccount
       namespace: zdr-platform
       name: rag-bootstrap
+      jsonPointers:
+        - /metadata/annotations/eks.amazonaws.com~1role-arn
+    - group: ""
+      kind: ServiceAccount
+      namespace: zdr-platform
+      name: batch-submit
+      jsonPointers:
+        - /metadata/annotations/eks.amazonaws.com~1role-arn
+    - group: ""
+      kind: ServiceAccount
+      namespace: tenant-a
+      name: batch-train
+      jsonPointers:
+        - /metadata/annotations/eks.amazonaws.com~1role-arn
+    - group: ""
+      kind: ServiceAccount
+      namespace: tenant-b
+      name: batch-train
       jsonPointers:
         - /metadata/annotations/eks.amazonaws.com~1role-arn
   syncPolicy:
