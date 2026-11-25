@@ -103,6 +103,9 @@ Trước một bước dài (suite khoảng 10 phút, `terraform destroy` khoả
 
 - Đo A6 (Claude đọc, ghi vào evidence): số Pod đang chạy so với allocatable `pods`, và tổng memory request so với allocatable memory của từng node.
 - `zdr-kyverno` và `zdr-kyverno-policies` `Synced Healthy`. Ba policy ở `Audit`. Webhook `Fail` và chỉ bắt namespace tenant (như lab kind bước 0).
+  **Chạy lại sau 25/11:** `main` đã ở `Deny` từ PR #76, mà Argo CD đọc `main`, nên dựng thẳng thì policy vào `Deny` ngay và bước C3 không còn gì để chuyển.
+  Trước bước B, mở và merge một PR revert PR #76: ba file `gitops/platform/policies/` về `validationActions: [Audit]`, như ở `5b56624` (bản Audit cuối, chỉ khác dòng đó).
+  Ở C3, PR Deny là revert của PR revert đó (Codex review P5-T4.3, mục 5).
 - NetworkPolicy của VPC CNI đã bật. Container node agent có sẵn từ VPC CNI v1.14 dù tính năng bật hay tắt, nên phải xem **cờ**, không chỉ tên container.
   Container tên `aws-eks-nodeagent`, còn image của nó tên `aws-network-policy-agent` (window 25/11, F9):
   `kubectl -n kube-system get ds aws-node -o jsonpath='{.spec.template.spec.containers[?(@.name=="aws-eks-nodeagent")].args}'`.
@@ -137,7 +140,12 @@ Trước một bước dài (suite khoảng 10 phút, `terraform destroy` khoả
 **E. Dọn** (từ giờ freeze, hoặc sớm hơn nếu đã xong).
 
 1. Làm `P4_RAG_SANDBOX.md` J bước 1–2: xoá request (cascade), chạy cleanup, xoá secret bootstrap.
-2. Gỡ guardrail trước controller P4. Xoá app `zdr-kyverno-policies`, rồi `zdr-kyverno` (cascade). Sau đó chạy `kubectl get validatingwebhookconfigurations,mutatingwebhookconfigurations -o name | grep -ci kyverno`, phải ra `0`.
+2. Gỡ guardrail trước controller P4. Xoá app `zdr-kyverno-policies`, rồi `zdr-kyverno` (cascade). Sau đó đếm webhook Kyverno, phải ra `webhook kyverno: 0`.
+   Lệnh chỉ đếm khi `kubectl get` đọc được. Nếu nó lỗi (hết MFA, `Forbidden`), lệnh in `LỖI` chứ không in `0`; khi đó dừng E2, sửa quyền rồi đếm lại (Codex review P5-T4.3, mục 2):
+
+   ```bash
+   if w="$(kubectl get validatingwebhookconfigurations,mutatingwebhookconfigurations -o name)"; then echo "webhook kyverno: $(grep -ci kyverno <<< "$w")"; else echo "LỖI: không đọc được webhook, DỪNG E2"; fi
+   ```
    Window 25/11 (F7, điều kiện G2): sau 3 phút vẫn ra `8`. Các webhook này do Kyverno tự tạo lúc chạy, nên không thuộc chart, và xoá app không xoá chúng.
    Webhook `Fail` mồ côi sẽ chặn mọi Pod ở tenant. Làm theo G2: xoá theo nhãn, ghi thành lỗi, đếm lại phải ra `0`, rồi mới làm bước 3:
 
