@@ -175,7 +175,8 @@ resource "aws_iam_role_policy" "this" {
   for_each = local.policies
 
   name = "batch-${each.key}"
-  role = aws_iam_role.this[each.key].id
+  # name, not id: known in the plan, so plan_assert can check the attachment.
+  role = aws_iam_role.this[each.key].name
   policy = jsonencode({
     Version   = "2012-10-17"
     Statement = each.value

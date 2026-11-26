@@ -552,6 +552,30 @@
    "expect": "implicitDeny",
    "action": "ssm:GetParameter",
    "resource": "arn:aws:ssm:us-east-1:ACCT:parameter/zero-drift/secret"
+  },
+  {
+   "role": "karpenter",
+   "expect": "allowed",
+   "action": "iam:GetInstanceProfile",
+   "resource": "arn:aws:iam::ACCT:instance-profile/zero-drift_1234567890123456789"
+  },
+  {
+   "role": "karpenter",
+   "expect": "implicitDeny",
+   "action": "iam:DeleteInstanceProfile",
+   "resource": "arn:aws:iam::ACCT:instance-profile/zero-drift_1234567890123456789"
+  },
+  {
+   "role": "karpenter",
+   "expect": "implicitDeny",
+   "action": "iam:RemoveRoleFromInstanceProfile",
+   "resource": "arn:aws:iam::ACCT:instance-profile/zero-drift_1234567890123456789"
+  },
+  {
+   "role": "karpenter",
+   "expect": "implicitDeny",
+   "action": "iam:GetInstanceProfile",
+   "resource": "arn:aws:iam::ACCT:instance-profile/zero-drift-rag-x"
   }
  ]
 }

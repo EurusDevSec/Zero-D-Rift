@@ -10,8 +10,12 @@
 #   capacity reservation interruption, is left out: P6 uses no reservation.
 # - Controller IRSA role (karpenter/karpenter) with the v1.15.3 release policy
 #   reduced per D6: no IAM write; iam:PassRole on the node role only;
-#   iam:GetInstanceProfile on the one profile; iam:ListInstanceProfiles scoped
-#   to instance profiles of this account (P6-T1 evidence §6).
+#   iam:GetInstanceProfile on the one profile and on the legacy generated name
+#   <cluster>_<hash>; iam:ListInstanceProfiles on "*" (read-only; IAM has no
+#   resource scope for this list call). The EC2NodeClass finalizer lists its own
+#   profile path and reads the legacy name before it deletes launch templates
+#   (v1.15.3 nodeclass controller), so without these reads teardown blocks
+#   (Codex P6 R1). Every instance-profile write stays denied (P6-T1 evidence §6).
 # The discovery tag karpenter.sh/discovery goes on the public subnets and the
 # node security group through the network and cluster modules (root main.tf).
 #
@@ -193,18 +197,20 @@ locals {
       Resource = ["*"]
     },
     {
-      # Upstream "*"; scoped here to instance profiles of this account (read-only).
+      # Upstream "*", kept: ListInstanceProfiles takes no resource scope, and the
+      # finalizer calls it with PathPrefix /karpenter/<region>/<cluster>/<uid>/.
       Sid      = "AllowScopedInstanceProfileListAction"
       Effect   = "Allow"
       Action   = ["iam:ListInstanceProfiles"]
-      Resource = ["arn:aws:iam::${local.account}:instance-profile/*"]
+      Resource = ["*"]
     },
     {
-      # Upstream instance-profile/*; narrowed to the one pre-created profile (D6).
+      # Upstream instance-profile/*; narrowed to the pre-created profile (D6) and
+      # the legacy name <cluster>_<hash> the finalizer reads (NotFound is fine).
       Sid      = "AllowInstanceProfileReadActions"
       Effect   = "Allow"
       Action   = ["iam:GetInstanceProfile"]
-      Resource = [local.profile_arn]
+      Resource = [local.profile_arn, "arn:aws:iam::${local.account}:instance-profile/${local.c}_*"]
     },
   ]
 }
@@ -308,7 +314,8 @@ resource "aws_iam_role" "controller" {
 
 resource "aws_iam_role_policy" "controller" {
   name = "karpenter-controller"
-  role = aws_iam_role.controller.id
+  # name, not id: known in the plan, so plan_assert can check the attachment.
+  role = aws_iam_role.controller.name
   policy = jsonencode({
     Version   = "2012-10-17"
     Statement = local.controller_statements

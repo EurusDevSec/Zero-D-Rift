@@ -71,7 +71,9 @@ check kms_customer_aliases  0 aws kms list-aliases --query "length(Aliases[?!sta
 # by the controller, so a destroy cannot see them; count them here. Instances
 # still shutting down are counted (they bill until terminated).
 check p6_karpenter_instances 0 aws ec2 describe-instances --filters Name=tag-key,Values=karpenter.sh/nodepool Name=instance-state-name,Values=pending,running,shutting-down,stopping,stopped --query 'length(Reservations[].Instances[])' --output text
-check p6_karpenter_launch_templates 0 aws ec2 describe-launch-templates --filters Name=tag-key,Values=karpenter.k8s.aws/cluster --query 'length(LaunchTemplates)' --output text
+# v1.15.3 tags its launch templates eks:eks-cluster-name and karpenter.k8s.aws/ec2nodeclass
+# (pkg/apis/v1/labels.go; DeleteAll filters on both). Either tag counts.
+check p6_karpenter_launch_templates 0 aws ec2 describe-launch-templates --filters Name=tag-key,Values=eks:eks-cluster-name,karpenter.k8s.aws/ec2nodeclass --query 'length(LaunchTemplates)' --output text
 check spot_requests_open    0 aws ec2 describe-spot-instance-requests --filters Name=state,Values=open,active --query 'length(SpotInstanceRequests)' --output text
 check p6_iam_roles          0 aws iam list-roles --query "length(Roles[?starts_with(RoleName, 'zero-drift-batch-') || starts_with(RoleName, 'zero-drift-karpenter-')])" --output text
 check p6_instance_profiles  0 aws iam list-instance-profiles --query "length(InstanceProfiles[?starts_with(InstanceProfileName, 'zero-drift-')])" --output text

@@ -133,7 +133,7 @@ for g in "P6 queue settings" "P6 redrive target" "P6 queues not public" "P6 poli
          "P6 karpenter no-iam-write" "P6 no-iam-star" "P6 PassRole" "P6 tenant separation" "P6 submit list" \
          "P6 trust zero-drift-batch-keda" "P6 trust zero-drift-batch-submit" "P6 trust zero-drift-batch-tenant-a" \
          "P6 trust zero-drift-batch-tenant-b" "P6 trust zero-drift-karpenter-controller" \
-         "P6 node role" "P6 interruption" "P6 discovery tag"; do
+         "P6 node role" "P6 interruption" "P6 discovery tag" "P6 policy attachment"; do
     expect6 PASS "$g" "good-${g//[ :]/-}" "$p6good"
 done
 expect6 FAIL "P6 queue settings"    visibility-30            "$(q6 zero-drift-batch '.visibility_timeout_seconds = 30')"
@@ -150,6 +150,9 @@ expect6 FAIL "P6 policies approved" tenant-b-policy-missing  "$(p6 '.resource_ch
 expect6 FAIL "P6 policies approved" submit-any-object-key    "$(pol6 batch-submit '(.Statement[] | select(.Sid == "WriteSubmitMarkers") | .Resource) = ["'"$a6"'*/*"]')"
 expect6 FAIL "P6 karpenter no-iam-write" plus-CreateInstanceProfile "$(pol6 karpenter-controller '.Statement += [{Sid: "X", Effect: "Allow", Action: ["iam:CreateInstanceProfile"], Resource: ["arn:aws:iam::000000000000:instance-profile/*"]}]')"
 expect6 FAIL "P6 karpenter no-iam-write" plus-iam-star          "$(pol6 karpenter-controller '.Statement[0].Action += ["iam:*"]')"
+expect6 FAIL "P6 policy attachment" tenant-a-policy-on-tenant-b "$(p6 '(.resource_changes[] | select(.type == "aws_iam_role_policy" and .change.after.name == "batch-tenant-a") | .change.after.role) = "zero-drift-batch-tenant-b"')"
+expect6 FAIL "P6 policy attachment" role-unknown             "$(p6 '(.resource_changes[] | select(.type == "aws_iam_role_policy" and .change.after.name == "batch-keda") | .change.after) |= del(.role)')"
+expect6 FAIL "P6 no-iam-star"       get-profile-star         "$(pol6 karpenter-controller '(.Statement[] | select(.Sid == "AllowInstanceProfileReadActions") | .Resource) = ["*"]')"
 expect6 FAIL "P6 no-iam-star"       passrole-resource-star   "$(pol6 karpenter-controller "(.Statement[] | $passrole | .Resource) = [\"*\"]")"
 expect6 FAIL "P6 PassRole"          passrole-any-service     "$(pol6 karpenter-controller "(.Statement[] | $passrole) |= del(.Condition)")"
 expect6 FAIL "P6 PassRole"          passrole-other-role      "$(pol6 karpenter-controller "(.Statement[] | $passrole | .Resource) = [\"arn:aws:iam::000000000000:role/zero-drift-bootstrap\"]")"

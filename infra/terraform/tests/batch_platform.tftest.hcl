@@ -146,9 +146,16 @@ run "karpenter_has_no_iam_write" {
   assert {
     condition = alltrue([
       for s in module.karpenter[0].statements.karpenter-controller :
-      alltrue([for r in s.Resource : r != "*"]) if anytrue([for a in s.Action : startswith(a, "iam:")])
+      alltrue([for r in s.Resource : r != "*"]) if anytrue([for a in s.Action : startswith(a, "iam:")]) && s.Action != ["iam:ListInstanceProfiles"]
     ])
-    error_message = "No IAM action on resource *."
+    error_message = "No IAM action on resource *, except the read-only ListInstanceProfiles (no resource scope in IAM)."
+  }
+
+  assert {
+    condition = one([
+      for s in module.karpenter[0].statements.karpenter-controller : s.Resource if contains(s.Action, "iam:GetInstanceProfile")
+    ]) == ["arn:aws:iam::000000000000:instance-profile/zero-drift-karpenter-node", "arn:aws:iam::000000000000:instance-profile/zero-drift_*"]
+    error_message = "iam:GetInstanceProfile only for the node profile and the legacy name <cluster>_<hash>."
   }
 
   assert {

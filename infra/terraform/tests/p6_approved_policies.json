@@ -368,7 +368,7 @@
      "iam:ListInstanceProfiles"
     ],
     "Resource": [
-     "arn:aws:iam::ACCT:instance-profile/*"
+     "*"
     ]
    },
    {
@@ -378,7 +378,8 @@
      "iam:GetInstanceProfile"
     ],
     "Resource": [
-     "arn:aws:iam::ACCT:instance-profile/zero-drift-karpenter-node"
+     "arn:aws:iam::ACCT:instance-profile/zero-drift-karpenter-node",
+     "arn:aws:iam::ACCT:instance-profile/zero-drift_*"
     ]
    }
   ]

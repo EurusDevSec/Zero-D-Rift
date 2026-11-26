@@ -386,7 +386,12 @@ if [[ "${P6_WINDOW:-0}" == 1 ]]; then
     # 20. P6 inline policies equal tests/p6_approved_policies.json (account
     #     masked as ACCT), plus named guards so a failure says what broke.
     p6pol="$(q '[.resource_changes[] | select(.type == "aws_iam_role_policy" and ((.change.after.name // "") | test("^(batch-|karpenter-controller$)")))
-        | {name: .change.after.name, unknown: (.change.after_unknown.policy // false), doc: (.change.after.policy // "{\"Statement\":[]}" | fromjson)}]')"
+        | {name: .change.after.name, role: (.change.after.role // null), unknown: (.change.after_unknown.policy // false), doc: (.change.after.policy // "{\"Statement\":[]}" | fromjson)}]')"
+    # The right policy on the wrong role is as bad as a wrong policy (Codex P6 R1):
+    # policy NAME must sit on role zero-drift-NAME. The modules pass the role name,
+    # which is known in the plan.
+    wrongrole="$(jq -r '[.[] | select(.role != ("zero-drift-" + .name)) | "\(.name)->\(.role // "unknown")"] | join(" ")' <<< "$p6pol" 2>/dev/null || echo unparsable)"
+    [[ -z "$wrongrole" ]] && pass "P6 policy attachment: each policy NAME on role zero-drift-NAME" || fail "P6 policy attachment: $wrongrole"
     unknown="$(jq -r '[.[] | select(.unknown) | .name] | join(" ")' <<< "$p6pol")"
     [[ -z "$unknown" ]] && pass "P6 policies known in the plan" || fail "P6 policies known in the plan: unknown (they are built from names): $unknown"
     norm='map(.doc.Statement |= (map(.Action |= ([.] | flatten | sort)
@@ -399,8 +404,11 @@ if [[ "${P6_WINDOW:-0}" == 1 ]]; then
     iamw="$(jq -r '[.[] | .doc.Statement[] | [.Action] | flatten[] | select(test("^iam:|^\\*$"; "i"))
         | select(. != "iam:PassRole" and . != "iam:GetInstanceProfile" and . != "iam:ListInstanceProfiles")] | unique | join(" ")' <<< "$p6pol" 2>/dev/null || echo unparsable)"
     [[ -z "$iamw" ]] && pass "P6 karpenter no-iam-write: only PassRole, GetInstanceProfile, ListInstanceProfiles" || fail "P6 karpenter no-iam-write: $iamw"
-    iamstar="$(jq -r '[.[] | .doc.Statement[] | select([.Action] | flatten | any(test("^(iam|sts):"; "i"))) | [.Resource] | flatten[] | select(. == "*")] | length' <<< "$p6pol" 2>/dev/null || echo 1)"
-    [[ "$iamstar" == 0 ]] && pass "P6 no-iam-star: no IAM action on resource \"*\"" || fail "P6 no-iam-star: $iamstar IAM statement resource(s) are \"*\""
+    # One exception: a statement whose only action is the read-only
+    # iam:ListInstanceProfiles (IAM has no resource scope for it).
+    iamstar="$(jq -r '[.[] | .doc.Statement[] | select([.Action] | flatten | any(test("^(iam|sts):"; "i")))
+        | select(([.Action] | flatten) != ["iam:ListInstanceProfiles"]) | [.Resource] | flatten[] | select(. == "*")] | length' <<< "$p6pol" 2>/dev/null || echo 1)"
+    [[ "$iamstar" == 0 ]] && pass "P6 no-iam-star: no IAM action on resource \"*\" (except ListInstanceProfiles alone)" || fail "P6 no-iam-star: $iamstar IAM statement resource(s) are \"*\""
     pass_ok="$(jq -r '[.[] | .doc.Statement[] | select([.Action] | flatten | index("iam:PassRole"))
         | (([.Resource] | flatten) as $r | ($r | length == 1) and ($r[0] | test(":role/zero-drift-karpenter-node$"))
            and (.Condition.StringEquals["iam:PassedToService"] == "ec2.amazonaws.com"))] | (length == 1 and all)' <<< "$p6pol" 2>/dev/null || echo false)"

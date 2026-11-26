@@ -49,5 +49,5 @@ def tls(n): {Sid: "DenyInsecureTransport", Effect: "Deny", Principal: "*", Actio
   | map(.[0] as $d | .[1] as $s
         | kar("aws_cloudwatch_event_rule"; $d; {event_pattern: ({source: [$s], "detail-type": [$d]} | tojson)}),
           kar("aws_cloudwatch_event_target"; $d; {arn: qarn("zero-drift-karpenter")}))))
-+ [$ok | to_entries[] | rc("aws_iam_role_policy"; .key; {name: .key, policy: ({Version: "2012-10-17", Statement: .value} | tojson)})]
++ [$ok | to_entries[] | rc("aws_iam_role_policy"; .key; {name: .key, role: ("zero-drift-" + .key), policy: ({Version: "2012-10-17", Statement: .value} | tojson)})]
 )}
