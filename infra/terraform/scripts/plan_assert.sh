@@ -389,8 +389,9 @@ if [[ "${P6_WINDOW:-0}" == 1 ]]; then
         | {name: .change.after.name, role: (.change.after.role // null), unknown: (.change.after_unknown.policy // false), doc: (.change.after.policy // "{\"Statement\":[]}" | fromjson)}]')"
     # The right policy on the wrong role is as bad as a wrong policy (Codex P6 R1):
     # policy NAME must sit on role zero-drift-NAME. The modules pass the role name,
-    # which is known in the plan.
-    wrongrole="$(jq -r '[.[] | select(.role != ("zero-drift-" + .name)) | "\(.name)->\(.role // "unknown")"] | join(" ")' <<< "$p6pol" 2>/dev/null || echo unparsable)"
+    # which is known in the plan. Only the policy name and a fixed code are printed:
+    # a wrong role name could hold an account ID (Codex P6 R2).
+    wrongrole="$(jq -r '[.[] | select(.role != ("zero-drift-" + .name)) | "\(.name):\(if .role == null then "unknown-role" else "wrong-role" end)"] | join(" ")' <<< "$p6pol" 2>/dev/null || echo unparsable)"
     [[ -z "$wrongrole" ]] && pass "P6 policy attachment: each policy NAME on role zero-drift-NAME" || fail "P6 policy attachment: $wrongrole"
     unknown="$(jq -r '[.[] | select(.unknown) | .name] | join(" ")' <<< "$p6pol")"
     [[ -z "$unknown" ]] && pass "P6 policies known in the plan" || fail "P6 policies known in the plan: unknown (they are built from names): $unknown"

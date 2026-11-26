@@ -174,5 +174,12 @@ expect6 FAIL "P6 interruption"      target-other-queue       "$(p6 '(first(.reso
 expect6 FAIL "P6 discovery tag"     sg-untagged              "$(p6 '(.resource_changes[] | select(.type == "aws_security_group") | .change.after.tags) |= del(.["karpenter.sh/discovery"])')"
 expect6 FAIL "P6 discovery tag"     database-subnet-tagged   "$(p6 '(.resource_changes[] | select(.type == "aws_subnet" and .name == "database") | .change.after.tags["karpenter.sh/discovery"]) = "zero-drift"')"
 
+# A wrong role name is never printed: it could hold an account ID (Codex P6 R2).
+leak6="$tmp/p6-role-leak.json"
+p6 '(.resource_changes[] | select(.type == "aws_iam_role_policy" and .change.after.name == "batch-keda") | .change.after.role) = "zero-drift-000000000000"' > "$leak6"
+line="$(env ADMIN_WINDOW=1 P4_WINDOW=1 P6_WINDOW=1 bash "$pa" "$leak6" 2>/dev/null | grep -E "P6 policy attachment" | head -1 || true)"
+if [[ "$line" == "FAIL  P6 policy attachment: batch-keda:wrong-role" ]]; then echo "ok    p6-role-name-not-printed: $line"
+else echo "WRONG p6-role-name-not-printed: got '${line:-no line}'"; bad=1; fi
+
 if (( bad )); then echo "RESULT: FAIL"; exit 1; fi
 echo "RESULT: PASS (guards only; plan_assert on a real plan is still required)"
