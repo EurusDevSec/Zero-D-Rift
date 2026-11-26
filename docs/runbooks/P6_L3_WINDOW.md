@@ -5,7 +5,7 @@
 > Trạng thái: **sẵn sàng chạy khi được duyệt** (25/11): `infra/p6-window/window.sh` và `gitops/tests/batch-suite.sh` đã viết (DRF-79). Chỉ chạy khi PR P6-T2.2, P6-T3, P6-T4.1 đã merge ·
 > Chi phí: ước tính ≈ 2,6 USD, trần P6 là 4 USD (D14) ·
 > Liên quan: SPEC-P6 §4, §5 P6-T4.2, §9.5, §10, D7, D8, D14; runbook `P5_L3_WINDOW.md` (B, E, 5a), `P4_RAG_SANDBOX.md` (C, D, J) ·
-> Mục lục: 1 Đơn · 2 Bạn chọn · 3 Việc trước window · 4 Cổng T−30 · 5 Luồng window · 5b Micro-lab · 6 Điều kiện dừng · 7 Chi phí
+> Mục lục: 1 Đơn · 2 Bạn chọn · 3 Việc trước window · 4 Cổng T−30 · 5 Luồng window · 5b Micro-lab · 5c Kiểm bổ sung §4 · 6 Điều kiện dừng · 7 Chi phí
 
 Mọi kết quả batch trong window này mang nhãn `CPU_SUBSTITUTE_FOR_GPU` (ADR-0009). Đây là smoke run (`official=false`),
 không phải trial của H2, H3 hay H5.
@@ -252,6 +252,66 @@ không dán tên node hay instance ID vào chat.
 | M3 | `kubectl describe nodeclaim <tên> \| grep -A3 Taints` | Vì sao Pod thường không lên được node này? | | taint `zero-drift.io/batch=true:NoSchedule` |
 | M4 | `kubectl -n tenant-b get pods -o wide -l app.kubernetes.io/name=batch-train` | Pod training nằm trên node nào? | | đúng node ở M2 |
 | M5 | `kubectl get nodeclaims -w` sau khi Job xong (đợi tối đa 5 phút) | Ai xoá node, và sau bao lâu? | | Karpenter xoá vì node rỗng (`WhenEmpty`), sau `consolidateAfter: 60s` và thời gian drain |
+
+### 5c. Kiểm bổ sung cho SPEC §4 (Claude chạy, chỉ đọc)
+
+Suite không chấm sáu dòng dưới đây của SPEC §4, nhưng audit T4.3 cần bằng chứng L3 cho từng dòng (SPEC §8).
+Mọi lệnh chỉ in khoá, số đếm hoặc trạng thái, không in ID, ARN hay tên node. Lệnh đọc lỗi thì in `READ_FAILED`, không bao giờ in `0`.
+Đặt một lần:
+
+```bash
+b=zero-drift-batch-tenant-a-smoke-1; p=runs/smoke-1
+```
+
+**K1** · ở C3, khi node batch đã `Ready` · §4 "every Karpenter node carries the project tags and the batch taint":
+
+```bash
+kubectl get nodes -l karpenter.sh/nodepool -o jsonpath='{range .items[*]}{.spec.taints[*].key}:{.spec.taints[*].effect}{"\n"}{end}' || echo READ_FAILED
+aws ec2 describe-instances --filters Name=tag-key,Values=karpenter.sh/nodepool Name=instance-state-name,Values=running --query 'Reservations[].Instances[].Tags[?Key==`Project`||Key==`Owner`||Key==`Environment`||Key==`ManagedBy`].Key' --output text || echo READ_FAILED
+```
+
+**Phải thấy:** `zero-drift.io/batch:NoSchedule`; đủ 4 khoá `Project Owner Environment ManagedBy` (từ `EC2NodeClass` `batch`).
+
+**K2** · ở C4, sau B04 · §4 "TRAINING_STARTED with device=cpu, the run attempt and its node name":
+
+```bash
+aws s3 cp "s3://$b/$p/1/TRAINING_STARTED" - 2>/dev/null | jq -c '{device, attempt: (.run_key | split("/")[-1]), node_set: ((.node // "") != "")}' || echo READ_FAILED
+```
+
+**Phải thấy:** `{"device":"cpu","attempt":"1","node_set":true}`. B04 chỉ kiểm marker có mặt, không đọc nội dung.
+
+**K3** · ở D1, khi attempt 2 đã xong · §4 "exactly one final artifact exists" sau resume:
+
+```bash
+o=$(aws s3api list-objects-v2 --bucket "$b" --prefix "$p/2/artifact/" --query KeyCount --output text) && echo "artifacts_attempt2=$o" || echo READ_FAILED
+```
+
+**Phải thấy:** `artifacts_attempt2=1`.
+
+**K4** · ở D3, 15 phút sau B08 · §4 "no batch node keeps running":
+
+```bash
+nc=$(kubectl get nodeclaims -o name) && echo "nodeclaims: $(printf '%s' "$nc" | grep -c .)" || echo "nodeclaims: READ_FAILED"
+```
+
+**Phải thấy:** `nodeclaims: 0`.
+
+**K5** · ở C1, ngay sau khi merge P1b, lặp mỗi 10 giây tới `ACTIVE` · §4 "Ready only after the bucket is Ready and the message is sent":
+
+```bash
+kubectl -n tenant-a get batchtrainingjob smoke-1 -o jsonpath='{.status.state} submit={.status.submitState}{"\n"}' || echo READ_FAILED
+```
+
+**Phải thấy:** chưa `ACTIVE` khi chưa có `submit=Submitted`; ghi giờ đổi trạng thái vào bảng smoke.
+
+**K6** · ở F1, sau `window.sh cleanup` từng tenant · §4 "its bucket and leftover messages are gone" (tenant-b: đổi `b`):
+
+```bash
+if aws s3api head-bucket --bucket "$b" >/dev/null 2>&1; then echo bucket=present; elif aws s3api head-bucket --bucket "$b" 2>&1 | grep -q '(404)'; then echo bucket=gone; else echo bucket=READ_FAILED; fi
+bash gitops/tests/batch-suite.sh stats
+```
+
+**Phải thấy:** `bucket=gone`; `visible=0 inflight=0`. Dòng §4 "volume is gone" không có lệnh riêng: `inventory.sh` ở F5 đếm volume.
 
 ## 6. Điều kiện dừng
 
