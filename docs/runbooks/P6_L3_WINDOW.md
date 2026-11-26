@@ -99,11 +99,18 @@ Trước một bước dài (một run khoảng 8 phút, `terraform destroy` kho
 
 1. Làm `P4_RAG_SANDBOX.md` từ mục D tới khi các app platform `Synced Healthy`. Hai request RAG giữ **tắt**: P6 không cần sandbox,
    và quota tenant còn chỗ cho cả hai nếu bạn chọn regression P5 ở mục 2b.
-2. `zdr-keda` và `zdr-karpenter` `Synced Healthy`, tức ServiceAccount `keda/keda-operator` và `karpenter/karpenter` đã có. Pod Karpenter nằm trên node system
-   (`kubectl -n karpenter get pods -o wide` cho thấy tên node thuộc node group, không phải node do Karpenter tạo; chỉ ghi "system", không ghi tên node).
-   Chạy **ngay** `bash infra/p6-window/window.sh annotate`: gắn IRSA cho `keda-operator`, `karpenter`, `batch-submit`, `batch-train` của hai tenant
+2. **Không đợi** `zdr-keda` và `zdr-karpenter` Healthy trước khi gắn IRSA. Karpenter v1.15.3 thoát ngay khi lần gọi EC2 lúc khởi động
+   thất bại, nên khi chưa có IRSA, Pod của nó restart liên tục và app không bao giờ Healthy (Codex P6 R2). Chỉ đợi Deployment và ServiceAccount
+   **tồn tại**:
+   ```bash
+   kubectl -n keda get deploy/keda-operator sa/keda-operator -o name && kubectl -n karpenter get deploy/karpenter sa/karpenter -o name
+   ```
+   **Phải thấy:** đủ 4 dòng `deployment.apps/...` và `serviceaccount/...`. Thiếu dòng nào thì đợi Argo tạo, chạy lại lệnh.
+   Rồi chạy **ngay** `bash infra/p6-window/window.sh annotate`: gắn IRSA cho `keda-operator`, `karpenter`, `batch-submit`, `batch-train` của hai tenant
    rồi restart KEDA và Karpenter. Thiếu bước này thì Karpenter không gọi được EC2, nên `EC2NodeClass` không bao giờ `Ready` (Codex P6 R1).
-3. Sau annotate: app `zdr-batch` `Synced Healthy`; `kubectl get nodepools` có `batch-spot` (weight 100) và `batch-ondemand` (weight 10);
+   Sau annotate mới đợi `zdr-keda` và `zdr-karpenter` `Synced Healthy`. Pod Karpenter nằm trên node system
+   (`kubectl -n karpenter get pods -o wide` cho thấy tên node thuộc node group, không phải node do Karpenter tạo; chỉ ghi "system", không ghi tên node).
+3. Sau đó: app `zdr-batch` `Synced Healthy`; `kubectl get nodepools` có `batch-spot` (weight 100) và `batch-ondemand` (weight 10);
    `kubectl get ec2nodeclass batch` `Ready=True`. Rồi đặt run ID của đơn window (dùng tiếp cho suite ở C) và chạy batch-config,
    như `window.sh platform-config` ở P4:
    ```bash

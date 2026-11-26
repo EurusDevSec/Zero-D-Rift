@@ -86,8 +86,8 @@ annotate_sa() { # namespace sa arn expected-role
 }
 
 restart() { # namespace deployment
-  kubectl -n "$1" rollout restart "deploy/$2" >/dev/null
-  kubectl -n "$1" rollout status "deploy/$2" --timeout=240s >/dev/null || die "deploy $1/$2 did not become ready after the restart"
+  kubectl -n "$1" rollout restart "deploy/$2" >/dev/null 2>&1 || die "restart deploy $1/$2: WRITE_FAILED"
+  kubectl -n "$1" rollout status "deploy/$2" --timeout=240s >/dev/null 2>&1 || die "deploy $1/$2 did not become ready after the restart: NOT_READY"
   echo "OK    deploy $1/$2 restarted (new Pods get the IRSA token)"
 }
 
@@ -179,11 +179,11 @@ cmd_cleanup() {
               securityContext:{allowPrivilegeEscalation:false,readOnlyRootFilesystem:true,capabilities:{drop:["ALL"]}},
               resources:{requests:{cpu:"50m",memory:"96Mi"},limits:{memory:"192Mi"}}}]}}}}' \
     | kubectl apply -f - >/dev/null 2>&1 || die "cleanup Job: WRITE_FAILED"
-  if ! kubectl -n "$t" wait --for=condition=complete "job/$n" --timeout=300s >/dev/null; then
-    kubectl -n "$t" logs "job/$n" | grep -E '"event"' || true
-    die "cleanup Job did not complete"
+  if ! kubectl -n "$t" wait --for=condition=complete "job/$n" --timeout=300s >/dev/null 2>&1; then
+    kubectl -n "$t" logs "job/$n" 2>/dev/null | grep -E '"event"' || true
+    die "cleanup Job did not complete: NOT_COMPLETE"
   fi
-  kubectl -n "$t" logs "job/$n" | grep -E '"event": "CLEANUP"' || true
+  kubectl -n "$t" logs "job/$n" 2>/dev/null | grep -E '"event": "CLEANUP"' || echo "INFO  cleanup Job log: READ_FAILED"
   kubectl -n "$t" delete jobs -l "scaledjob.keda.sh/name=batch-$r" --wait=true --timeout=120s >/dev/null 2>&1 || die "delete Jobs of $t/$r: WRITE_FAILED"
   # Success only after a successful final read with no Job and no Pod left.
   local j p

@@ -68,6 +68,13 @@ record() { # ID EXPECTED OBSERVED EVIDENCE
      "$OUT" > "$OUT.tmp" && mv "$OUT.tmp" "$OUT" || { echo "FAIL  cannot write $OUT"; exit 1; }
 }
 skip_eks() { record "$1" "$2" SKIPPED_NEEDS_EKS "${3:-kind has no $1 path}"; }
+# invalidate ID... : a phase that starts again first marks its old rows, so a rerun
+# that stops early cannot leave the earlier PASS in place for `report` (Codex P6 R2).
+invalidate() {
+  [[ -s "$OUT" ]] || return 0
+  jq --arg ids " $* " '[.[] | if (.id as $i | $ids | contains(" " + $i + " ")) then .result = "RERUN_INCOMPLETE" | .observed = "phase restarted; no new result" else . end]' \
+     "$OUT" > "$OUT.tmp" && mv "$OUT.tmp" "$OUT" || { echo "FAIL  cannot write $OUT"; exit 1; }
+}
 num_of() { # FIELD STATS -> the number after FIELD= in a qstats line, or READ_FAILED
   local v; v="$(grep -oE "(^| )$1=[0-9]+" <<<"$2" | head -1 | cut -d= -f2)"; echo "${v:-READ_FAILED}"; }
 
@@ -240,7 +247,10 @@ phase_run() { # TENANT REQUEST CAPACITY
     || { record B02 "jobs=1" "jobs=0" "no Job within 600 s"; return; }
   record B02 "jobs=1" "jobs=$(jobs_of "$t" "$r")" "attempt $a"
 
-  # B03: still one Job (and one live Pod) after three polls.
+  # B03: still one Job (and one live Pod) three polls after the worker took the
+  # message. The polls are counted from inflight=1, not from Job creation: a node
+  # that starts slowly must not fail B03 (Codex P6 R2).
+  wait_until 1200 bash -c "[[ \" \$(MODE=$MODE CTX=$CTX OUT=/dev/null $SELF stats) \" == *' inflight=1 '* ]]" \n    || { record B03 "jobs=1 pods=1 inflight=1" "inflight-never-1" "the worker did not take the message within 20 min"; return; }
   sleep $((3 * POLL + 5))
   st="$(qstats)"
   record B03 "jobs=1 pods=1 inflight=1" "jobs=$(jobs_of "$t" "$r") pods=$(live_pods "$t" "$r") inflight=$(num_of inflight "$st")" "after 3 polls: $st"
@@ -339,7 +349,7 @@ running_wait() { # TENANT REQUEST SECONDS -> 0 when a training Pod is Running
 resume_verdict() { [[ -n "$1" && "$1" -gt 0 ]] && echo "resumed>0" || echo "resumed=${1:-none}"; }
 job_of() { $K -n "$1" get "$2" -o jsonpath='{.metadata.labels.job-name}' 2>/dev/null; }
 blocked() { local c; for c in "$@"; do record "$c" "${EXP[$c]}" "blocked:$BLOCK" "an earlier step of this phase failed"; done; }
-declare -A EXP=([B06]="resumed>0" [B07]="resumed>0" [B09]="sent=1 active=1 pods=1 nodeclaims=1 msgs>=2")
+declare -A EXP=([B06]="resumed>0" [B07]="resumed>0" [B09]="sent=1 active=1 jobs=1 pods=1 nodeclaims=1 msgs>=2")
 
 phase_resume() { # TENANT REQUEST (a new attempt of a normal request, 300 steps)
   local t=$1 r=$2 a pod node nc t0 n e u oj st
@@ -393,18 +403,21 @@ phase_resume() { # TENANT REQUEST (a new attempt of a normal request, 300 steps)
   sleep $((3 * POLL + 5))
   # Still active: a Pod of this attempt is Running when B09 is scored.
   act="$(cnt $K -n "$t" get pods -l "app.kubernetes.io/name=batch-train,batch.zero-drift.io/request=$r,batch.zero-drift.io/attempt=$a" --field-selector=status.phase=Running -o name)"
+  # One Job of this ScaledJob is active (two active Jobs with one Pod must FAIL, Codex P6 R2).
+  local jj ja=READ_FAILED
+  jj="$($K -n "$t" get jobs -l "scaledjob.keda.sh/name=batch-$r" -o json 2>/dev/null)" \n    && ja="$(jq '[.items[] | select((.status.active // 0) > 0)] | length' <<<"$jj" 2>/dev/null)" && [[ -n "$ja" ]] || ja=READ_FAILED
   st="$(qstats)"
   tot="msgs=READ_FAILED"
   if [[ "$st" == visible=* ]]; then
     tot=$(( $(num_of visible "$st") + $(num_of inflight "$st") ))
     if (( tot >= 2 )); then tot="msgs>=2"; else tot="msgs=$tot"; fi
   fi
-  record B09 "${EXP[B09]}" "sent=$sent active=$act pods=$(live_pods "$t" "$r") nodeclaims=$(nodeclaims) $tot" \
+  record B09 "${EXP[B09]}" "sent=$sent active=$act jobs=$ja pods=$(live_pods "$t" "$r") nodeclaims=$(nodeclaims) $tot" \
     "extra message (own run key) sent while attempt $a trained; $st"
 }
 
 phase_dlq() { # TENANT REQUEST (fail-always attempt; queue and DLQ purged before)
-  local t=$1 r=$2 a ks rc s dl x8="received=3 dlq_own=1 succeeded=0"
+  local t=$1 r=$2 a ks rc s dl x8="received=1,2,3 dlq_own=1 succeeded=0"
   a="$(attempt "$t" "$r")" || a=""; [[ -n "$a" ]] || { record B08 "$x8" READ_FAILED "request not readable"; return; }
   [[ "$($K -n "$t" get batchtrainingjob "$r" -o jsonpath='{.spec.failProfile}' 2>/dev/null)" == fail-always ]] \
     || { echo "FAIL  $t/$r is not failProfile fail-always"; exit 1; }
@@ -413,8 +426,9 @@ phase_dlq() { # TENANT REQUEST (fail-always attempt; queue and DLQ purged before
   ks="$(keys "$t" "$r" "$a")"; s="$(qstats)"
   dl="$(dlq_own "$t" "$r" "$a")"
   if [[ "$ks" == READ_FAILED || "$s" == READ_FAILED || "$dl" == READ_FAILED ]]; then record B08 "$x8" READ_FAILED "keys/stats/dlq read failed"; return; fi
-  rc="$(grep -c '^RECEIVED-' <<<"$ks" || true)"
-  record B08 "$x8" "received=$rc dlq_own=$(num_of own "$dl") succeeded=$(grep -c '^SUCCEEDED' <<<"$ks" || true)" \
+  # Exactly RECEIVED-1..3: a marker set like 1,3,4 must FAIL (Codex P6 R2).
+  rc="$(cut -f1 <<<"$ks" | grep -oE '^RECEIVED-[0-9]+$' | cut -d- -f2 | sort -n | paste -sd, - || true)"
+  record B08 "$x8" "received=${rc:-none} dlq_own=$(num_of own "$dl") succeeded=$(grep -c '^SUCCEEDED' <<<"$ks" || true)" \
     "attempt $a; $s; DLQ $dl (bodies matched on tenant/request/attempt); Failed Jobs not counted (history limit 1)"
 }
 
@@ -524,11 +538,11 @@ phase_report() {
 
 case "${1:-}" in
   stats) qstats ;;
-  run) shift; trap cleanup EXIT; phase_run "$@" ;;
-  b01) shift; phase_b01 "$@" ;;
-  resume) shift; trap cleanup EXIT; phase_resume "$@" ;;
-  dlq) shift; phase_dlq "$@" ;;
-  negatives) trap cleanup EXIT; phase_negatives ;;
+  run) shift; invalidate B02 B03 B04 B14 B05; trap cleanup EXIT; phase_run "$@" ;;
+  b01) shift; invalidate B01; phase_b01 "$@" ;;
+  resume) shift; invalidate B06 B07 B09; trap cleanup EXIT; phase_resume "$@" ;;
+  dlq) shift; invalidate B08; phase_dlq "$@" ;;
+  negatives) invalidate B10 B11 B12 B13; trap cleanup EXIT; phase_negatives ;;
   report) phase_report ;;
   _keys) shift; keys "$@" ;;                                   # internal (wait loops)
   _resumed) shift; resumed_step "$@" >/dev/null ;;             # internal (wait loops)

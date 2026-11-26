@@ -99,3 +99,40 @@ Claude applied every finding on 26/11; none was disputed. #93 fixes are on its o
 | M6 | leaks through errors | suite `scrub` masks numeric IPs; B11 errors are fixed codes; `window.sh` and `batch_iam_check.sh` discard aws/kubectl stderr and print fixed codes; `check.sh` prints only file:line for a refused ID or queue URL | scrub stub; guard case "refused secret reported by file:line only" |
 
 Found while fixing (not in the review): on Windows, `OUT=$HOME/...` is a `/c/...` path that native `jq` cannot open, so `record` failed and the suite stopped without a message. The suite now converts `OUT` with `cygpath -m` and fails loudly if it cannot write.
+
+### Round 2 (26/11/2026): REQUEST CHANGES
+
+Codex re-checked, read-only, PR #93 at `9624ba5` and PR #96 at `181b033` against the upstream code pinned
+for Karpenter v1.15.3. It ran `git diff --check`, `bash -n`, `gitops/check.sh`, `check-context` and offline stubs;
+no AWS, kind or Terraform apply. Summary of its verdict (owner pasted it in Vietnamese; local links turned into repo paths):
+
+| # | Status | Codex note |
+|---|---|---|
+| H1 | Closed | finalizer has the reads it needs with the pre-made profile; `ListInstanceProfiles` alone on `*`, `GetInstanceProfile` on the node profile and `zero-drift_*`; no IAM write, `PassRole` only for the node role via EC2 |
+| H2 | Closed | Spot off and both pools off pass; CPU `"4"` refused |
+| H3 | **Open, HIGH** | B2 still waits for `zdr-karpenter` Healthy before `annotate`, but v1.15.3 exits when its start-up EC2 check fails (`pkg/operator/operator.go` L104-120). Wait for Deployment and ServiceAccount to exist, annotate, then wait Healthy and `EC2NodeClass Ready` |
+| H4 | **Open, HIGH** | B09 counts only Pods and NodeClaims: a stub with two active Jobs, one Pod and one NodeClaim passes. Require exactly one active Job (`gitops/tests/batch-suite.sh` B09) |
+| H5 | Closed | `providerID` read while the Pod runs; node gone only on `NotFound` or a successful list without it |
+| M1 | Closed | inventory uses the two pinned Karpenter launch template tags |
+| M2 | Closed | attachment guard; missing or empty matrix `rc=1`; rows simulated = rows in the matrix |
+| M3 | Closed | full `Complete=True` expression; always-true fixture refused |
+| M4 | **Open, MEDIUM** | B08 passes with markers `1,3,4`: check exactly `1,2,3`. A `resume` rerun that fails leaves `report` PASS on the old rows of the same `RUN_ID`: invalidate a phase's rows when it starts |
+| M5 | Closed | Job or Pod left, read error and request still present all `rc=1` |
+| M6 | **Open, MEDIUM** | `rollout`, `wait`, `logs` in `infra/p6-window/window.sh` still pass `kubectl` stderr through; a connection-error stub printed an IP |
+| new | MEDIUM | B03 can FAIL on a slow node: the 35 s start at Job creation; a worker that takes the message at 36 s fails. Wait for `inflight=1` within the start-up limit, then count three polls |
+| new | LOW | the attachment guard prints the wrong role name; a role name holding an account ID would reach the log. Print only the policy name and `wrong-role` |
+
+Least privilege (Codex): `ListInstanceProfiles` needs `*` (IAM has no resource scoping for it); `zero-drift_*` is narrow
+enough for P6, though wider than the single legacy name derivable from region and EC2NodeClass name. Kept as is: the hash
+is Karpenter's internal detail and pinning it would break on a region or name change.
+
+### Round 2 fixes
+
+| # | Change | Checked |
+|---|---|---|
+| H3 | runbook B2: wait only until `deploy/keda-operator`, `sa/keda-operator`, `deploy/karpenter`, `sa/karpenter` exist, run `annotate`, then wait for `zdr-keda`, `zdr-karpenter` Healthy; B3 unchanged (`zdr-batch`, `EC2NodeClass Ready`, `batch-config`) | read-through |
+| H4 | B09 adds `jobs=N`: Jobs of the request's ScaledJob with `status.active > 0`; expected `jobs=1` (with `active=1` Running Pod of the attempt) | fixture: two active Jobs → 2, one active + one done → 1, none → 0 |
+| M4 | B08 records the sorted `RECEIVED-n` set, expected `received=1,2,3`. Each phase first marks its old rows `RERUN_INCOMPLETE` (`invalidate`), so a rerun that stops early makes `report` FAIL | stubs: markers 1,3,4 → FAIL, 1,2,3 → PASS; 14 PASS rows + `dlq` stopped early → B08 `RERUN_INCOMPLETE`, `report` rc 1 |
+| M6 | `window.sh` `rollout restart`, `rollout status`, `wait`, `logs` discard stderr and print `WRITE_FAILED`, `NOT_READY`, `NOT_COMPLETE`, `READ_FAILED`; no `kubectl` or `aws` call left without a redirect | grep of every call |
+| B03 | B03 waits (≤ 20 min) for `inflight=1`, then three polls; never seeing it records `inflight-never-1` (FAIL) | stub: worker takes the message at the 8th stats read (~40 s) → B03 PASS |
+| LOW | attachment guard prints `NAME:wrong-role` or `NAME:unknown-role`, never the role | guard case: role `zero-drift-<12 digits>` → `FAIL  P6 policy attachment: batch-keda:wrong-role` |
