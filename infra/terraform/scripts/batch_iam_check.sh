@@ -52,7 +52,9 @@ declare -A policy=()  # role key -> policy JSON (plan mode)
 if [[ "$src" != "--principal" ]]; then
     plan_json="$(terraform show -json "$src")"
     for key in "${!role_name[@]}"; do
-        doc="$(jq -c --arg n "${policy_name[$key]}" '
+        # -r: the plan holds the policy as a JSON string; -c would pass it quoted
+        # and every simulation would fail InvalidInput (P6 window gate, 26/11).
+        doc="$(jq -r --arg n "${policy_name[$key]}" '
             [.resource_changes[] | select(.type == "aws_iam_role_policy" and .change.after.name == $n) | .change.after.policy // empty]
             | first // empty' <<< "$plan_json")"
         [[ -z "$doc" ]] && { fail "no known policy for $key: was the plan made with enable_batch_platform=true?"; continue; }

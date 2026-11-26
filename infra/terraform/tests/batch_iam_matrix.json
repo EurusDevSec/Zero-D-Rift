@@ -431,7 +431,8 @@
    "role": "karpenter",
    "expect": "allowed",
    "action": "iam:ListInstanceProfiles",
-   "resource": "arn:aws:iam::ACCT:instance-profile/"
+   "resource": "*",
+   "why": "ListInstanceProfiles has no resource-level scope: the simulator gives implicitDeny for any instance-profile ARN even under Resource \"*\", so the row simulates \"*\" (P6 window gate, 26/11)"
   },
   {
    "role": "karpenter",
