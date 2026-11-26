@@ -136,3 +136,24 @@ is Karpenter's internal detail and pinning it would break on a region or name ch
 | M6 | `window.sh` `rollout restart`, `rollout status`, `wait`, `logs` discard stderr and print `WRITE_FAILED`, `NOT_READY`, `NOT_COMPLETE`, `READ_FAILED`; no `kubectl` or `aws` call left without a redirect | grep of every call |
 | B03 | B03 waits (≤ 20 min) for `inflight=1`, then three polls; never seeing it records `inflight-never-1` (FAIL) | stub: worker takes the message at the 8th stats read (~40 s) → B03 PASS |
 | LOW | attachment guard prints `NAME:wrong-role` or `NAME:unknown-role`, never the role | guard case: role `zero-drift-<12 digits>` → `FAIL  P6 policy attachment: batch-keda:wrong-role` |
+
+### Round 3 (26/11/2026): REQUEST CHANGES
+
+Codex re-checked, read-only, PR #93 at `b1ec0ba` and PR #96 at `35d8a24` (`git diff --check`, `bash -n`,
+`gitops/check.sh`, `check-context`, offline stubs; no AWS, kind or Terraform apply). 5 of 6 closed:
+H3, M4, M6, B03 and LOW Closed. **H4 Open, HIGH:** `gitops/tests/batch-suite.sh` B09 line held a literal `\n`,
+so Bash ran a command `n` and B09 recorded `jobs=READ_FAILED` even with one Job. With the line break fixed,
+counting `status.active > 0` still saw one Job when a second, just-created Job had no status yet. Fix asked:
+count Jobs without `Complete=True` or `Failed=True`, compare Job UIDs before and after the extra message so a
+new Job that already ended is seen, keep `READ_FAILED` on a list or parse error, and test four cases.
+
+### Round 3 fixes
+
+Cause: a Python replacement in the round 2 fix wrote `\n` as two characters at two line continuations,
+B09 and B03. B03 worked only by chance (the stray `n` became `$0` of `bash -c`). Both are real line breaks now;
+a scan of the whole P6 diff for a literal `\n` outside strings finds nothing else.
+
+| # | Change | Checked |
+|---|---|---|
+| H4 | `job_list` reads the request's Jobs as `{uid, done}` (done = `Complete=True` or `Failed=True`), non-zero on a list or parse error. B09 reads it before the extra submit (unreadable → `blocked:jobs-unread`, nothing sent) and `jobs_verdict` after: `jobs=<unfinished> new_jobs=<uids not seen before>`, expected `jobs=1 new_jobs=0` | stubs: one running + one history → `jobs=1 new_jobs=0` PASS; + new Job without status → `jobs=2 new_jobs=1` FAIL; + new Job already Complete → `jobs=1 new_jobs=1` FAIL; list error → `READ_FAILED` FAIL; bad JSON → `READ_FAILED`; list error before submit → rc 1 |
+| B03 | real line continuation | stub rerun: worker takes the message at the 8th stats read → B02, B03 PASS |

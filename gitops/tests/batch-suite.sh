@@ -250,7 +250,8 @@ phase_run() { # TENANT REQUEST CAPACITY
   # B03: still one Job (and one live Pod) three polls after the worker took the
   # message. The polls are counted from inflight=1, not from Job creation: a node
   # that starts slowly must not fail B03 (Codex P6 R2).
-  wait_until 1200 bash -c "[[ \" \$(MODE=$MODE CTX=$CTX OUT=/dev/null $SELF stats) \" == *' inflight=1 '* ]]" \n    || { record B03 "jobs=1 pods=1 inflight=1" "inflight-never-1" "the worker did not take the message within 20 min"; return; }
+  wait_until 1200 bash -c "[[ \" \$(MODE=$MODE CTX=$CTX OUT=/dev/null $SELF stats) \" == *' inflight=1 '* ]]" \
+    || { record B03 "jobs=1 pods=1 inflight=1" "inflight-never-1" "the worker did not take the message within 20 min"; return; }
   sleep $((3 * POLL + 5))
   st="$(qstats)"
   record B03 "jobs=1 pods=1 inflight=1" "jobs=$(jobs_of "$t" "$r") pods=$(live_pods "$t" "$r") inflight=$(num_of inflight "$st")" "after 3 polls: $st"
@@ -349,7 +350,20 @@ running_wait() { # TENANT REQUEST SECONDS -> 0 when a training Pod is Running
 resume_verdict() { [[ -n "$1" && "$1" -gt 0 ]] && echo "resumed>0" || echo "resumed=${1:-none}"; }
 job_of() { $K -n "$1" get "$2" -o jsonpath='{.metadata.labels.job-name}' 2>/dev/null; }
 blocked() { local c; for c in "$@"; do record "$c" "${EXP[$c]}" "blocked:$BLOCK" "an earlier step of this phase failed"; done; }
-declare -A EXP=([B06]="resumed>0" [B07]="resumed>0" [B09]="sent=1 active=1 jobs=1 pods=1 nodeclaims=1 msgs>=2")
+declare -A EXP=([B06]="resumed>0" [B07]="resumed>0" [B09]="sent=1 active=1 jobs=1 new_jobs=0 pods=1 nodeclaims=1 msgs>=2")
+# job_list TENANT REQUEST -> [{uid, done}] of the request's Jobs; non-zero on a read or parse error.
+# done = a Complete=True or Failed=True condition; a new Job without status counts as unfinished.
+job_list() {
+  local j; j="$($K -n "$1" get jobs -l "scaledjob.keda.sh/name=batch-$2" -o json 2>/dev/null)" || return 1
+  jq -ec '[.items[] | {uid: .metadata.uid, done: any(.status.conditions[]?; (.type == "Complete" or .type == "Failed") and .status == "True")}]' <<<"$j" 2>/dev/null
+}
+# jobs_verdict TENANT REQUEST PRE -> "jobs=N new_jobs=M" (unfinished Jobs; Jobs whose uid is not in PRE) | READ_FAILED
+jobs_verdict() {
+  local post; post="$(job_list "$1" "$2")" || { echo "jobs=READ_FAILED new_jobs=READ_FAILED"; return; }
+  jq -rn --argjson a "$3" --argjson p "$post" '([$a[].uid]) as $old
+    | "jobs=\([$p[] | select(.done | not)] | length) new_jobs=\([$p[] | select(.uid as $u | $old | index($u) | not)] | length)"' 2>/dev/null \
+    || echo "jobs=READ_FAILED new_jobs=READ_FAILED"
+}
 
 phase_resume() { # TENANT REQUEST (a new attempt of a normal request, 300 steps)
   local t=$1 r=$2 a pod node nc t0 n e u oj st
@@ -392,6 +406,9 @@ phase_resume() { # TENANT REQUEST (a new attempt of a normal request, 300 steps)
   # released three times and ends in the DLQ. Purge before B08 (window.sh purge).
   if [[ "$MODE" == kind ]]; then skip_eks B09 "${EXP[B09]}" "kind has no NodeClaims"; return; fi
   running_wait "$t" "$r" 900 || { BLOCK=no-running-pod; blocked B09; return; }
+  # The Jobs before the extra message, so a Job made because of it is seen even
+  # if it already ended when B09 is scored (Codex P6 R3).
+  local pre; pre="$(job_list "$t" "$r")" || { BLOCK=jobs-unread; blocked B09; return; }
   # A fresh attempt number, so a rerun is never ALREADY_SUBMITTED (no message sent).
   local xa=$(( $(date +%s) % 9000 + 1000 )) sent act tot
   u="$(qurl)"
@@ -403,16 +420,15 @@ phase_resume() { # TENANT REQUEST (a new attempt of a normal request, 300 steps)
   sleep $((3 * POLL + 5))
   # Still active: a Pod of this attempt is Running when B09 is scored.
   act="$(cnt $K -n "$t" get pods -l "app.kubernetes.io/name=batch-train,batch.zero-drift.io/request=$r,batch.zero-drift.io/attempt=$a" --field-selector=status.phase=Running -o name)"
-  # One Job of this ScaledJob is active (two active Jobs with one Pod must FAIL, Codex P6 R2).
-  local jj ja=READ_FAILED
-  jj="$($K -n "$t" get jobs -l "scaledjob.keda.sh/name=batch-$r" -o json 2>/dev/null)" \n    && ja="$(jq '[.items[] | select((.status.active // 0) > 0)] | length' <<<"$jj" 2>/dev/null)" && [[ -n "$ja" ]] || ja=READ_FAILED
+  # One unfinished Job and no Job made since the extra message (Codex P6 R2, R3).
+  local jobs; jobs="$(jobs_verdict "$t" "$r" "$pre")"
   st="$(qstats)"
   tot="msgs=READ_FAILED"
   if [[ "$st" == visible=* ]]; then
     tot=$(( $(num_of visible "$st") + $(num_of inflight "$st") ))
     if (( tot >= 2 )); then tot="msgs>=2"; else tot="msgs=$tot"; fi
   fi
-  record B09 "${EXP[B09]}" "sent=$sent active=$act jobs=$ja pods=$(live_pods "$t" "$r") nodeclaims=$(nodeclaims) $tot" \
+  record B09 "${EXP[B09]}" "sent=$sent active=$act $jobs pods=$(live_pods "$t" "$r") nodeclaims=$(nodeclaims) $tot" \
     "extra message (own run key) sent while attempt $a trained; $st"
 }
 
@@ -546,5 +562,7 @@ case "${1:-}" in
   report) phase_report ;;
   _keys) shift; keys "$@" ;;                                   # internal (wait loops)
   _resumed) shift; resumed_step "$@" >/dev/null ;;             # internal (wait loops)
+  _joblist) shift; job_list "$@" ;;                            # internal (offline B09 stubs)
+  _jobsverdict) shift; jobs_verdict "$@" ;;                    # internal (offline B09 stubs)
   *) sed -n '2,17p' "${SELF#bash }"; exit 2 ;;
 esac
