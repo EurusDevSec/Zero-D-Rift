@@ -157,3 +157,15 @@ a scan of the whole P6 diff for a literal `\n` outside strings finds nothing els
 |---|---|---|
 | H4 | `job_list` reads the request's Jobs as `{uid, done}` (done = `Complete=True` or `Failed=True`), non-zero on a list or parse error. B09 reads it before the extra submit (unreadable → `blocked:jobs-unread`, nothing sent) and `jobs_verdict` after: `jobs=<unfinished> new_jobs=<uids not seen before>`, expected `jobs=1 new_jobs=0` | stubs: one running + one history → `jobs=1 new_jobs=0` PASS; + new Job without status → `jobs=2 new_jobs=1` FAIL; + new Job already Complete → `jobs=1 new_jobs=1` FAIL; list error → `READ_FAILED` FAIL; bad JSON → `READ_FAILED`; list error before submit → rc 1 |
 | B03 | real line continuation | stub rerun: worker takes the message at the 8th stats read → B02, B03 PASS |
+
+### Round 4 (26/11/2026): APPROVE
+
+Codex re-checked, read-only, PR #96 at `58c9982` (`bash -n`, `git diff --check`, offline stubs; no file changed,
+no AWS, kind or Terraform apply). H4/B09 Closed: one running Job with a history Job is valid; a second Job is
+caught with no status or already ended; a list or parse error blocks B09 before the submit, or records
+`READ_FAILED` at scoring; no new false PASS seen. B03 Closed: real line break; the remaining `\n` in the
+script sit inside `printf` or `tr` strings.
+
+**Outcome of the P6 review (rounds 1-4):** every finding of rounds 1-3 is Closed. PR #93 last reviewed at
+`b1ec0ba` (round 3: its LOW Closed, nothing open), PR #96 approved at `58c9982`. Commits after these SHAs
+on either branch hold evidence text only.
