@@ -1,8 +1,8 @@
-# DRF-72 (P5-T4.3): bản audit nghiệm thu P5 (bản nháp 25/11/2026)
+# DRF-72 (P5-T4.3): bản audit nghiệm thu P5 (25/11/2026, chốt 26/11)
 
 > **TL;DR** · Window `P5-L3-20261125-01`, suite **82/82** ở `ded7014`; 8/10 kịch bản §4 đạt trên EKS, 2 một phần (chấp nhận là giới hạn) ·
 > Đã xong: suite, Kyverno sập, micro-lab, teardown `CLEAN`, 3 PR sửa sau window (#85, #86, #87), Codex review (REQUEST CHANGES → 5 finding sửa → **APPROVE**) ·
-> **Chưa xong (P5 chưa hoàn thành theo §8):** inventory trễ và Bills gross (26/11) · Teach-back §7: **đạt** (25/11) · Kịch bản admission: đã tách (25/11) ·
+> **P5 hoàn thành theo §8 (26/11):** inventory trễ `CLEAN`, Bills gross tháng 11 1,62 USD cả tài khoản (P5 ≈ 0,89, trần 4) · Teach-back §7: **đạt** (25/11) · Kịch bản admission: đã tách (25/11) ·
 > Mục lục: 1 Quy tắc §8 · 2 Run và phiên bản · 3 Kịch bản §4 · 4 Cô lập mềm và giới hạn · 5 Review độc lập ·
 > 6 Inventory trễ và billing · 7 Teach-back · 8 Việc sau window
 
@@ -19,8 +19,8 @@
 | Mọi kịch bản §4 có bằng chứng L3 trên EKS | đạt với giới hạn: 8/10 đạt; 2 một phần được chấp nhận là giới hạn (mục 3.1) | window §11 |
 | Hai sandbox RAG PASS với mọi guardrail ở `Enforce` | đạt | window §4 C4: tạo lại dưới `Deny`, Ready, `probe sandbox` ×2 PASS |
 | Suite PASS từ checkout sạch ở revision đã ghi | đạt một phần | lượt 2 PASS trên `main` `ded7014`. `acceptance.json` không ghi revision hay trạng thái `git status`; revision lấy từ dòng thời gian của window |
-| Teardown và inventory trễ sạch | teardown đạt; **inventory trễ chờ 26/11** | window §8; mục 6 |
-| Billing đã đọc | **chờ owner 26/11** | mục 6 |
+| Teardown và inventory trễ sạch | **đạt**: teardown 25/11; inventory trễ 26/11 `CLEAN`, chỉ mục tag chỉ còn bucket state | window §8; mục 6 |
+| Billing đã đọc | **đạt** 26/11: gross tháng 11 1,62 USD cả tài khoản, credits 1,62, net 0; P5 ≈ 0,89 USD, dưới trần 4 USD | mục 6 |
 | Review độc lập ghi finding và giới hạn | Codex REQUEST CHANGES 25/11; kiểm lại 4/5 đóng; kiểm lần ba **APPROVE**, cả 5 finding đóng | mục 5 |
 | Owner đạt `PRACTICED` + `EXPLAINED` cho RBAC, Pod Security, NetworkPolicy, quota, Kyverno | **đạt** 25/11: `PRACTICED` (lab kind 24/11, micro-lab EKS 25/11) + `EXPLAINED` (teach-back 7/7 và câu quota) | mục 7 |
 | Văn bản nghiệm thu nói rõ cô lập mềm và giới hạn | đạt | mục 4 |
@@ -169,9 +169,30 @@ APPROVE này áp dụng cho bản sửa chưa commit. Commit gộp các file đ�
 
 ## 6. Inventory trễ và billing
 
-**Chờ 26/11.**
-- Owner chạy `infra/terraform/scripts/inventory.sh` (MFA, profile `zdr-tf`) và dán output. Tại window, chỉ mục tag còn liệt kê 1 SG, 1 SG rule, 1 VPC endpoint trong khi API đếm 0. P4 lệch y hệt và đã hết sau một ngày.
-- Owner đọc Bills gross tháng 11, đối chiếu mốc 0,73 USD trước window. Ước tính của window ≈ 1,36 USD, trần P5 4 USD.
+**Đạt (26/11).**
+
+**Inventory trễ.** Owner làm mới MFA; Claude chạy `infra/terraform/scripts/inventory.sh` (profile `zdr-tf`,
+chỉ đọc) lúc 2026-11-26T04:00:14Z, khoảng 21 giờ sau destroy. Mọi bộ đếm EKS, EC2, EBS, VPC, NAT, EIP,
+VPC endpoint, ENI, SG, LB, RDS (gồm snapshot và automated backup), SQS, secret (gồm secret chờ xoá),
+`p4_*`, KMS, log group, OIDC, `p3_iam_roles` đều 0; `s3_buckets=1` (bucket state). Chỉ mục tag
+`Project=Zero-D-Rift` chỉ còn `1 s3:bucket`: 1 SG, 1 SG rule, 1 VPC endpoint lúc window đã hết, giống P4.
+`RESULT: CLEAN (only the retain allowlist remains)`, exit 0.
+
+**Bills tháng 11** (owner đọc trên console Billing ngày 26/11, cả tài khoản, `us-east-1`):
+
+| Trang | Số đọc được |
+|---|---|
+| Bills, Highest AWS Region spend | 1,62 USD (US East, N. Virginia) |
+| Charges by service | 13 dịch vụ, tổng trước thuế 0,00 USD (sau credits) |
+| Savings, Credits | 1,62 USD: EC2 0,80, EKS 0,59, RDS 0,16, VPC 0,05, Secrets Manager 0,01, Data Transfer 0,01, S3 0,00 |
+
+- Gross tháng 11 = 1,62 USD cả tài khoản, credits bù đủ, net 0. Gồm P3 window 05/11, hai window P4
+  và window P5.
+- Mốc trước window (25/11): gross 0,73 USD. Phần của P5 ≈ 1,62 − 0,73 = **0,89 USD**. Dù tính trọn
+  1,62 vào P5 vẫn dưới trần P5 4 USD. Ước tính của window là 1,36 USD (mục 13 của window), cao hơn số đọc.
+- Hoá đơn tháng còn ở trạng thái ước tính; số chốt khi phát hành không còn là cổng của P5 (giống P4 mục 6.1).
+- Giới hạn: số đọc từ console do owner dán, không có export CUR; chia theo window là phép trừ hai lần đọc,
+  không theo tag.
 
 ## 7. Teach-back §7
 
