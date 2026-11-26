@@ -1,0 +1,29 @@
+# P6 (DRF-76, SPEC-P6 P6-T2.2 A). Extra rights aggregated into kro for the
+# BatchTrainingJob graph, self-contained like the P4 role:
+# - configmaps: read only; the graph only reads batch-config (externalRef).
+# - buckets: the Crossplane checkpoint bucket.
+# - scaledjobs: the KEDA ScaledJob in the tenant namespace. kro never touches
+#   the Jobs KEDA creates from it.
+# - jobs: the submit Job in zdr-platform. No Pod rights (as in P4).
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: kro-zdr-p6-children
+  labels:
+    rbac.kro.run/aggregate-to-controller: "true"
+rules:
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["s3.aws.m.upbound.io"]
+    resources: ["buckets"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: ["keda.sh"]
+    resources: ["scaledjobs"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: ["batch"]
+    resources: ["jobs"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: ["kro.run"]
+    resources: ["batchtrainingjobs", "batchtrainingjobs/status"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]

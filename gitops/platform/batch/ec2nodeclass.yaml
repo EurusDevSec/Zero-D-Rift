@@ -1,0 +1,43 @@
+# P6 (DRF-76, SPEC-P6 D6, D7). The only EC2NodeClass. Batch nodes:
+# - use the instance profile Terraform pre-created (module karpenter), so
+#   Karpenter needs no IAM write (D6); the profile holds the node role with the
+#   three EKS worker policies and no SSM;
+# - boot the EKS AL2023 AMI of the same release as the system nodes
+#   (system_node_ami_release_version 1.35.9-20261026), never a moving alias;
+# - sit in the public subnets and the node security group, found by the
+#   karpenter.sh/discovery tag Terraform puts only there (no NAT, ADR-0006);
+# - require IMDSv2 with hop limit 1, so a Pod cannot reach node credentials (B14);
+# - get an encrypted 20 GiB gp3 root volume, deleted with the instance;
+# - carry the project tags (inventory.sh counts them).
+apiVersion: karpenter.k8s.aws/v1
+kind: EC2NodeClass
+metadata:
+  name: batch
+spec:
+  instanceProfile: zero-drift-karpenter-node
+  amiSelectorTerms:
+    - alias: al2023@v20261026
+  subnetSelectorTerms:
+    - tags:
+        karpenter.sh/discovery: zero-drift
+  securityGroupSelectorTerms:
+    - tags:
+        karpenter.sh/discovery: zero-drift
+  associatePublicIPAddress: true
+  metadataOptions:
+    httpEndpoint: enabled
+    httpProtocolIPv6: disabled
+    httpPutResponseHopLimit: 1
+    httpTokens: required
+  blockDeviceMappings:
+    - deviceName: /dev/xvda
+      ebs:
+        volumeSize: 20Gi
+        volumeType: gp3
+        encrypted: true
+        deleteOnTermination: true
+  tags:
+    Project: Zero-D-Rift
+    Owner: HoangLV
+    Environment: PoC
+    ManagedBy: Karpenter

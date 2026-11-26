@@ -1,0 +1,94 @@
+# P6 (DRF-76, SPEC-P6 D1, D7, negative boundaries 1-3). Two NodePools, one per
+# capacity type, so the capacity type of a node is explicit and is read from its
+# label karpenter.sh/capacity-type, never claimed (boundary 7). Karpenter tries
+# the higher weight first: Spot (100), then On-Demand (10). The On-Demand run is
+# forced by setting batch-spot's limits.cpu to "0", never by editing labels.
+# Each pool: the D1 allowlist (2 vCPU CPU types, no GPU), us-east-1a/b,
+# taint zero-drift.io/batch=true:NoSchedule so only batch Pods land there,
+# label zero-drift.io/pool=batch for their nodeSelector, at most one node
+# (limits.cpu "2"), removed 60 s after it is empty, and replaced after 2 h.
+apiVersion: karpenter.sh/v1
+kind: NodePool
+metadata:
+  name: batch-spot
+spec:
+  weight: 100
+  # One 2 vCPU node at most (negative boundary 2).
+  limits:
+    cpu: "2"
+  disruption:
+    consolidationPolicy: WhenEmpty
+    consolidateAfter: 60s
+  template:
+    metadata:
+      labels:
+        zero-drift.io/pool: batch
+    spec:
+      nodeClassRef:
+        group: karpenter.k8s.aws
+        kind: EC2NodeClass
+        name: batch
+      expireAfter: 2h
+      taints:
+        - key: zero-drift.io/batch
+          value: "true"
+          effect: NoSchedule
+      requirements:
+        - key: karpenter.sh/capacity-type
+          operator: In
+          values: [spot]
+        - key: node.kubernetes.io/instance-type
+          operator: In
+          values: [m6i.large, m5.large, c6i.large]
+        - key: topology.kubernetes.io/zone
+          operator: In
+          values: [us-east-1a, us-east-1b]
+        - key: kubernetes.io/arch
+          operator: In
+          values: [amd64]
+        - key: kubernetes.io/os
+          operator: In
+          values: [linux]
+---
+apiVersion: karpenter.sh/v1
+kind: NodePool
+metadata:
+  name: batch-ondemand
+spec:
+  weight: 10
+  # One 2 vCPU node at most (negative boundary 2).
+  limits:
+    cpu: "2"
+  disruption:
+    consolidationPolicy: WhenEmpty
+    consolidateAfter: 60s
+  template:
+    metadata:
+      labels:
+        zero-drift.io/pool: batch
+    spec:
+      nodeClassRef:
+        group: karpenter.k8s.aws
+        kind: EC2NodeClass
+        name: batch
+      expireAfter: 2h
+      taints:
+        - key: zero-drift.io/batch
+          value: "true"
+          effect: NoSchedule
+      requirements:
+        - key: karpenter.sh/capacity-type
+          operator: In
+          values: [on-demand]
+        - key: node.kubernetes.io/instance-type
+          operator: In
+          values: [m6i.large, m5.large, c6i.large]
+        - key: topology.kubernetes.io/zone
+          operator: In
+          values: [us-east-1a, us-east-1b]
+        - key: kubernetes.io/arch
+          operator: In
+          values: [amd64]
+        - key: kubernetes.io/os
+          operator: In
+          values: [linux]

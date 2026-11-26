@@ -1,0 +1,16 @@
+# LAB ONLY (DRF-76, D12). KEDA reads ElasticMQ with the static lab keys of
+# Secret lab-aws (batch.sh setup). On EKS the platform-owned
+# ClusterTriggerAuthentication zdr-sqs uses the KEDA operator's IRSA role instead.
+apiVersion: keda.sh/v1alpha1
+kind: TriggerAuthentication
+metadata:
+  name: lab-sqs
+  namespace: tenant-a
+spec:
+  secretTargetRef:
+    - parameter: awsAccessKeyID
+      name: lab-aws
+      key: AWS_ACCESS_KEY_ID
+    - parameter: awsSecretAccessKey
+      name: lab-aws
+      key: AWS_SECRET_ACCESS_KEY

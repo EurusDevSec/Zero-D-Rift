@@ -1,0 +1,145 @@
+# LAB ONLY (DRF-76, SPEC-P6 D12). Stand-ins for SQS and S3 in namespace
+# zdr-lab, pinned by digest (P6-T1 pins), plus a toolbox for the helper
+# labs/p6-kind/batch.sh. Never in gitops/. No AWS, no real keys: the workers
+# use the static lab keys of Secret lab-aws (batch.sh setup creates it).
+#
+# Queue numbers are short so the lab does not wait (EKS values in brackets, D8):
+# visibility timeout 20 s (120 s), maxReceiveCount 3 to the DLQ (3).
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: zdr-lab
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: elasticmq
+  namespace: zdr-lab
+data:
+  elasticmq.conf: |
+    include classpath("application.conf")
+    node-address {
+      protocol = http
+      host = elasticmq.zdr-lab
+      port = 9324
+      context-path = ""
+    }
+    rest-sqs {
+      enabled = true
+      bind-port = 9324
+      bind-hostname = "0.0.0.0"
+      sqs-limits = strict
+    }
+    queues {
+      zero-drift-batch-dlq {
+        defaultVisibilityTimeout = 20 seconds
+      }
+      zero-drift-batch {
+        defaultVisibilityTimeout = 20 seconds
+        deadLettersQueue {
+          name = "zero-drift-batch-dlq"
+          maxReceiveCount = 3
+        }
+      }
+    }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: elasticmq
+  namespace: zdr-lab
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {app: elasticmq}
+  template:
+    metadata:
+      labels: {app: elasticmq}
+    spec:
+      containers:
+        - name: elasticmq
+          image: docker.io/softwaremill/elasticmq-native:1.7.1@sha256:e4580ab9ad1bd5cd37b4ba04911bc5ccc8cd2d9ab4de56ece65acee71c24e05c
+          ports:
+            - containerPort: 9324
+          volumeMounts:
+            - {name: conf, mountPath: /opt/elasticmq.conf, subPath: elasticmq.conf}
+          readinessProbe:
+            tcpSocket: {port: 9324}
+            periodSeconds: 3
+      volumes:
+        - name: conf
+          configMap: {name: elasticmq}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: elasticmq
+  namespace: zdr-lab
+spec:
+  selector: {app: elasticmq}
+  ports:
+    - {port: 9324, targetPort: 9324}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: s3mock
+  namespace: zdr-lab
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {app: s3mock}
+  template:
+    metadata:
+      labels: {app: s3mock}
+    spec:
+      containers:
+        - name: s3mock
+          image: docker.io/adobe/s3mock:5.2.3@sha256:ab01a6946750f451ca215a47e91030695b260e4003b8a5a6201d25029b8fca92
+          env:
+            # The checkpoint buckets of the lab requests (the real graph asks
+            # Crossplane; the lab graph has a ConfigMap in that place).
+            - name: COM_ADOBE_TESTING_S3MOCK_STORE_INITIAL_BUCKETS
+              value: zero-drift-batch-tenant-a-lab-1,zero-drift-batch-tenant-a-lab-bad
+          ports:
+            - containerPort: 9090
+          readinessProbe:
+            tcpSocket: {port: 9090}
+            periodSeconds: 3
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: s3mock
+  namespace: zdr-lab
+spec:
+  selector: {app: s3mock}
+  ports:
+    - {port: 9090, targetPort: 9090}
+---
+# Runs the worker image's Python with boto3 for batch.sh (stats, marks, purge).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: toolbox
+  namespace: zdr-lab
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {app: toolbox}
+  template:
+    metadata:
+      labels: {app: toolbox}
+    spec:
+      containers:
+        - name: toolbox
+          image: zdr-batch:lab
+          imagePullPolicy: Never
+          command: ["sleep", "infinity"]
+          env:
+            - {name: AWS_REGION, value: us-east-1}
+            - {name: AWS_DEFAULT_REGION, value: us-east-1}
+            - {name: AWS_ACCESS_KEY_ID, value: lab}
+            - {name: AWS_SECRET_ACCESS_KEY, value: lab}
+            - {name: S3_ENDPOINT_URL, value: "http://s3mock.zdr-lab:9090"}
+            - {name: SQS_ENDPOINT_URL, value: "http://elasticmq.zdr-lab:9324"}

@@ -1,0 +1,14 @@
+# P6 (DRF-76, SPEC-P6 P6-T2.2 A, D3, D5). A valid BatchTrainingJob, disabled:
+# zdr-requests syncs only files directly in gitops/requests/, so this file is
+# never synced here. To enable it, purge the queue first (D3, D8), then move it
+# up one level in a PR; at most one BatchTrainingJob may be enabled (check.sh
+# rule 19). Before moving it back, run cleanup (SPEC-P6 §9.5).
+apiVersion: kro.run/v1alpha1
+kind: BatchTrainingJob
+metadata:
+  name: smoke-1
+  namespace: tenant-b
+spec:
+  steps: 300
+  runAttempt: 1
+  failProfile: normal

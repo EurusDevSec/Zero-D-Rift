@@ -1,0 +1,12 @@
+# P6 (DRF-76, SPEC-P6 P6-T2.2 A). Platform-owned, not per request: every
+# BatchTrainingJob's ScaledJob reads the shared queue through this object, with
+# the KEDA operator's own IRSA identity (role zero-drift-batch-keda, which can
+# only call sqs:GetQueueAttributes on the one queue). No keys, no role ARN here.
+apiVersion: keda.sh/v1alpha1
+kind: ClusterTriggerAuthentication
+metadata:
+  name: zdr-sqs
+spec:
+  podIdentity:
+    provider: aws
+    identityOwner: keda

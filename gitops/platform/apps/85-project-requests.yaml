@@ -2,8 +2,8 @@
 # request path: the zdr-requests Application (wave 9) may only create RAGSandbox
 # objects in tenant-a and tenant-b from this repository, and nothing
 # cluster-scoped. CI (check.sh rule 8b) refuses anything else first; this
-# project still refuses it if a bad file reaches main. BatchTrainingJob joins
-# the list in P6. The root app syncs this file itself, so the project exists
+# project still refuses it if a bad file reaches main. P6 (DRF-76, SPEC-P5 D4):
+# BatchTrainingJob joins the list. The root app syncs this file itself, so the project exists
 # before the Application that names it.
 apiVersion: argoproj.io/v1alpha1
 kind: AppProject
@@ -13,7 +13,7 @@ metadata:
   annotations:
     argocd.argoproj.io/sync-wave: "8"
 spec:
-  description: Tenant requests only (RAGSandbox in tenant-a, tenant-b)
+  description: Tenant requests only (RAGSandbox, BatchTrainingJob in tenant-a, tenant-b)
   sourceRepos:
     - https://github.com/EurusDevSec/Zero-D-Rift.git
   destinations:
@@ -25,3 +25,5 @@ spec:
   namespaceResourceWhitelist:
     - group: kro.run
       kind: RAGSandbox
+    - group: kro.run
+      kind: BatchTrainingJob

@@ -1,0 +1,233 @@
+# P6 (DRF-76, SPEC-P6 P6-T2.2 A; ADR-0008, ADR-0009; D2-D5, D8-D10). One
+# BatchTrainingJob = one checkpoint bucket, one KEDA ScaledJob that turns
+# messages of the shared queue into training Jobs, and one submit Job that puts
+# this run attempt on the queue.
+#
+# Tenant = the request's namespace; request ID = metadata.name. The worker
+# checks both again (batchtraining/runkey.py: DNS labels, attempt 1..9999,
+# steps 1..1000); gitops/check.sh is the static layer (rule 19).
+#
+# Order (kro waits for readyWhen before creating dependents):
+#   platformConfig (externalRef batch-config in zdr-platform, window-only)
+#     -> bucket (Crossplane, tenant namespace) -> scaledJob (tenant namespace)
+#       -> submit Job (zdr-platform)
+# Until window.sh writes batch-config, the graph waits at platformConfig and
+# creates nothing: that is the gate (no queue, no Job).
+#
+# Ready (D4) = bucket Ready and the submit Job Complete, i.e. "submitted". It is
+# not a training outcome: the outcome is the SUCCEEDED marker and the artifact
+# under status.outcome, read by the suite (B04). kro does not own the Jobs KEDA
+# creates, so it never reports them.
+#
+# New attempt: raise spec.runAttempt in Git. The submit Job name ends in it, so
+# a new Job is created instead of patching an immutable one; the ScaledJob gets
+# the new RUN_ATTEMPT, so its workers release messages of older attempts.
+#
+# Identity (A6): the training Pods use the platform-owned ServiceAccount
+# batch-train of their tenant (gitops/platform/tenants/serviceaccounts.yaml,
+# IRSA role zero-drift-batch-<tenant>); the submit Job uses batch-submit in
+# zdr-platform. KEDA reads the queue with its own identity (ClusterTrigger-
+# Authentication zdr-sqs). No Kubernetes API token is mounted anywhere.
+#
+# Window-only values come from batch-config (never in Git, it holds the queue
+# URL and so the account ID): queueUrl, queueName, region, runId, expiresAt.
+apiVersion: kro.run/v1alpha1
+kind: ResourceGraphDefinition
+metadata:
+  name: batch-training-job
+spec:
+  schema:
+    apiVersion: v1alpha1
+    kind: BatchTrainingJob
+    spec:
+      steps: integer | default=300 minimum=1 maximum=1000
+      runAttempt: integer | default=1 minimum=1 maximum=9999
+      failProfile: string | default="normal" enum="normal,fail-always"
+    status:
+      queue: ${platformConfig.data.queueName}
+      bucket: ${bucket.metadata.name}
+      runAttempt: ${submit.metadata.labels["batch.zero-drift.io/attempt"]}
+      scaledJob: ${scaledJob.metadata.name}
+      submitJob: ${submit.metadata.name}
+      submitState: '${submit.status.?conditions.orValue([]).exists(c, c.type == "Complete" && c.status == "True") ? "Submitted" : (submit.status.?conditions.orValue([]).exists(c, c.type == "Failed" && c.status == "True") ? "Failed" : "Running")}'
+      # Outcome pointer (D4): markers, checkpoints and the artifact of this attempt.
+      outcome: ${"s3://" + bucket.metadata.name + "/runs/" + schema.metadata.name + "/" + string(schema.spec.runAttempt) + "/"}
+  resources:
+    - id: platformConfig
+      externalRef:
+        apiVersion: v1
+        kind: ConfigMap
+        metadata:
+          name: batch-config
+          namespace: zdr-platform
+
+    - id: bucket
+      readyWhen:
+        - ${bucket.status.?conditions.orValue([]).exists(c, c.type == "Ready" && c.status == "True")}
+      template:
+        apiVersion: s3.aws.m.upbound.io/v1beta1
+        kind: Bucket
+        metadata:
+          # zero-drift-batch-<tenant>-<name>, at most 58 characters (name <= 32).
+          # The Crossplane role may manage zero-drift-batch-* (A7); the tenant
+          # role only zero-drift-batch-<tenant>-* (Terraform batch-platform).
+          name: ${"zero-drift-batch-" + schema.metadata.namespace + "-" + schema.metadata.name}
+          namespace: ${schema.metadata.namespace}
+          labels:
+            batch.zero-drift.io/request: ${schema.metadata.name}
+        spec:
+          forProvider:
+            region: ${platformConfig.data.region}
+            # Deleting the request deletes the bucket with its checkpoints.
+            forceDestroy: true
+            tags:
+              Project: Zero-D-Rift
+              Owner: HoangLV
+              Environment: PoC
+              ManagedBy: Crossplane
+              RunId: ${platformConfig.data.runId}
+              ExpiresAt: ${platformConfig.data.expiresAt}
+
+    - id: scaledJob
+      template:
+        apiVersion: keda.sh/v1alpha1
+        kind: ScaledJob
+        metadata:
+          name: ${"batch-" + schema.metadata.name}
+          namespace: ${schema.metadata.namespace}
+          labels:
+            batch.zero-drift.io/request: ${schema.metadata.name}
+          annotations:
+            # Kind lab finding (DRF-76, 25/11): KEDA copies every ScaledJob
+            # label onto the Jobs it creates, including kro's applyset label.
+            # The graph also holds a Job (submit), so kro then pruned each KEDA
+            # Job as a stale member and left its Pod running without an owner;
+            # KEDA, seeing no Job, created another one every poll. KEDA leaves
+            # out the labels listed here (scale_jobs.go, v2.21.1), so its Jobs
+            # are never members of this instance.
+            scaledjob.keda.sh/job-excluded-labels: applyset.kubernetes.io/part-of,kro.run/owned,kro.run/node-id,kro.run/instance-id,kro.run/instance-name,kro.run/instance-namespace,kro.run/instance-kind,kro.run/instance-group,kro.run/instance-version,kro.run/kro-version,app.kubernetes.io/managed-by
+        spec:
+          # D5: at most one training Job at a time; in-flight messages count,
+          # so a message being trained never starts a second Job.
+          pollingInterval: 10
+          minReplicaCount: 0
+          maxReplicaCount: 1
+          successfulJobsHistoryLimit: 1
+          failedJobsHistoryLimit: 1
+          triggers:
+            - type: aws-sqs-queue
+              authenticationRef:
+                kind: ClusterTriggerAuthentication
+                name: zdr-sqs
+              metadata:
+                queueURL: ${platformConfig.data.queueUrl}
+                awsRegion: ${platformConfig.data.region}
+                queueLength: "1"
+                scaleOnInFlight: "true"
+          jobTargetRef:
+            # Retry is the queue's job (visibility timeout, maxReceiveCount 3 to
+            # the DLQ, D8), never the Job's.
+            backoffLimit: 0
+            activeDeadlineSeconds: 2700
+            template:
+              metadata:
+                # KEDA labels the Job itself (scaledjob.keda.sh/name); this
+                # label is on the Pod only. Counts select Jobs by the KEDA label.
+                labels:
+                  app.kubernetes.io/name: batch-train
+                  rag.zero-drift.io/tenant: ${schema.metadata.namespace}
+                  batch.zero-drift.io/request: ${schema.metadata.name}
+                  batch.zero-drift.io/attempt: ${string(schema.spec.runAttempt)}
+              spec:
+                restartPolicy: Never
+                serviceAccountName: batch-train
+                automountServiceAccountToken: false
+                # Only the Karpenter batch pools (D7) carry this taint and label.
+                nodeSelector:
+                  zero-drift.io/pool: batch
+                tolerations:
+                  - key: zero-drift.io/batch
+                    operator: Equal
+                    value: "true"
+                    effect: NoSchedule
+                securityContext:
+                  runAsNonRoot: true
+                  seccompProfile: {type: RuntimeDefault}
+                containers:
+                  - name: train
+                    image: ghcr.io/eurusdevsec/zero-d-rift/batch-training@sha256:d2bb517d884710dd269285773b6fd5de74b631a4faafdb2fd2a3c0020cbb470e
+                    args: ["train"]
+                    env:
+                      - {name: TENANT, value: "${schema.metadata.namespace}"}
+                      - {name: REQUEST_ID, value: "${schema.metadata.name}"}
+                      - {name: RUN_ATTEMPT, value: "${string(schema.spec.runAttempt)}"}
+                      - {name: FAIL_PROFILE, value: "${schema.spec.failProfile}"}
+                      - {name: BUCKET, value: "${bucket.metadata.name}"}
+                      - {name: QUEUE_URL, value: "${platformConfig.data.queueUrl}"}
+                      - {name: AWS_REGION, value: "${platformConfig.data.region}"}
+                      - {name: AWS_DEFAULT_REGION, value: "${platformConfig.data.region}"}
+                      # D8: heartbeat 40 s inside a 120 s visibility timeout.
+                      - {name: HEARTBEAT_SECONDS, value: "40"}
+                      - {name: VISIBILITY_TIMEOUT, value: "120"}
+                      - name: POD_NAME
+                        valueFrom: {fieldRef: {fieldPath: metadata.name}}
+                      - name: NODE_NAME
+                        valueFrom: {fieldRef: {fieldPath: spec.nodeName}}
+                    securityContext: &hardened
+                      allowPrivilegeEscalation: false
+                      readOnlyRootFilesystem: true
+                      capabilities: {drop: ["ALL"]}
+                    # D9: one training Pod; memory limit inside the LimitRange max.
+                    resources:
+                      requests: {cpu: 500m, memory: 384Mi}
+                      limits: {memory: 512Mi}
+
+    - id: submit
+      readyWhen:
+        - ${submit.status.?conditions.orValue([]).exists(c, c.type == "Complete" && c.status == "True")}
+      template:
+        apiVersion: batch/v1
+        kind: Job
+        metadata:
+          name: ${schema.metadata.namespace + "-" + schema.metadata.name + "-submit-" + string(schema.spec.runAttempt)}
+          namespace: zdr-platform
+          labels:
+            app.kubernetes.io/name: batch-submit
+            rag.zero-drift.io/tenant: ${schema.metadata.namespace}
+            batch.zero-drift.io/request: ${schema.metadata.name}
+            batch.zero-drift.io/attempt: ${string(schema.spec.runAttempt)}
+            # Graph edge: the message is sent only once the ScaledJob exists.
+            batch.zero-drift.io/scaledjob: ${scaledJob.metadata.name}
+        spec:
+          backoffLimit: 0
+          activeDeadlineSeconds: 300
+          template:
+            metadata:
+              labels:
+                app.kubernetes.io/name: batch-submit
+                rag.zero-drift.io/tenant: ${schema.metadata.namespace}
+                batch.zero-drift.io/request: ${schema.metadata.name}
+            spec:
+              restartPolicy: Never
+              serviceAccountName: batch-submit
+              automountServiceAccountToken: false
+              securityContext:
+                runAsNonRoot: true
+                seccompProfile: {type: RuntimeDefault}
+              containers:
+                - name: submit
+                  image: ghcr.io/eurusdevsec/zero-d-rift/batch-training@sha256:d2bb517d884710dd269285773b6fd5de74b631a4faafdb2fd2a3c0020cbb470e
+                  args: ["submit"]
+                  env:
+                    - {name: TENANT, value: "${schema.metadata.namespace}"}
+                    - {name: REQUEST_ID, value: "${schema.metadata.name}"}
+                    - {name: RUN_ATTEMPT, value: "${string(schema.spec.runAttempt)}"}
+                    - {name: STEPS, value: "${string(schema.spec.steps)}"}
+                    - {name: BUCKET, value: "${bucket.metadata.name}"}
+                    - {name: QUEUE_URL, value: "${platformConfig.data.queueUrl}"}
+                    - {name: AWS_REGION, value: "${platformConfig.data.region}"}
+                    - {name: AWS_DEFAULT_REGION, value: "${platformConfig.data.region}"}
+                  securityContext: *hardened
+                  resources:
+                    requests: {cpu: 50m, memory: 96Mi}
+                    limits: {memory: 192Mi}

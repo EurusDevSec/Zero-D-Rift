@@ -8,6 +8,12 @@
 # requests.nvidia.com/gpu stays 0 for the whole project (ADR-0009, P6 on CPU).
 # No CPU limit quota: the app has none by design (P4), and limits.cpu here would
 # force one on every Pod.
+# P6 (DRF-76, SPEC-P6 D9, A14): raised by exactly one training Pod and its Jobs.
+# The training container requests 500m / 384Mi with a 512Mi memory limit (inside
+# the LimitRange max), and KEDA keeps at most one running Job plus one finished
+# Job of each kind (history limit 1):
+#   pods 8 -> 10, requests.cpu 400m -> 900m, requests.memory 768Mi -> 1152Mi,
+#   limits.memory 1536Mi -> 2048Mi, count/jobs.batch 4 -> 6. GPU stays 0.
 apiVersion: v1
 kind: ResourceQuota
 metadata:
@@ -15,15 +21,15 @@ metadata:
   namespace: tenant-a
 spec:
   hard:
-    pods: "8"
-    requests.cpu: 400m
-    requests.memory: 768Mi
-    limits.memory: 1536Mi
+    pods: "10"
+    requests.cpu: 900m
+    requests.memory: 1152Mi
+    limits.memory: 2048Mi
     requests.nvidia.com/gpu: "0"
     services: "4"
     services.loadbalancers: "0"
     services.nodeports: "0"
-    count/jobs.batch: "4"
+    count/jobs.batch: "6"
 ---
 # A container without requests or a memory limit gets these defaults, so a Pod
 # that forgets them is counted instead of rejected; one that asks for more than
@@ -47,15 +53,15 @@ metadata:
   namespace: tenant-b
 spec:
   hard:
-    pods: "8"
-    requests.cpu: 400m
-    requests.memory: 768Mi
-    limits.memory: 1536Mi
+    pods: "10"
+    requests.cpu: 900m
+    requests.memory: 1152Mi
+    limits.memory: 2048Mi
     requests.nvidia.com/gpu: "0"
     services: "4"
     services.loadbalancers: "0"
     services.nodeports: "0"
-    count/jobs.batch: "4"
+    count/jobs.batch: "6"
 ---
 apiVersion: v1
 kind: LimitRange

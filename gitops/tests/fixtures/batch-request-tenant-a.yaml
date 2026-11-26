@@ -1,0 +1,11 @@
+# Guard-test fixture (DRF-76): a valid enabled BatchTrainingJob. The guard
+# cases copy it to requests/ in a temporary copy of gitops/ and break it.
+apiVersion: kro.run/v1alpha1
+kind: BatchTrainingJob
+metadata:
+  name: smoke-1
+  namespace: tenant-a
+spec:
+  steps: 300
+  runAttempt: 1
+  failProfile: normal
