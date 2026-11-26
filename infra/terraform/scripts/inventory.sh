@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Read-only AWS inventory for a P2-P4 window (COST_PLAN §11.1, SPEC-P2 Task 6, DRF-46).
+# Read-only AWS inventory for a P2-P6 window (COST_PLAN §11.1, SPEC-P2 Task 6, DRF-46, DRF-77).
 # Prints counts only, never IDs, ARNs or names, so the output can go into evidence.
 # Run it before create, after verify, and after destroy.
 # Usage: AWS_PROFILE=zdr-tf AWS_REGION=us-east-1 infra/terraform/scripts/inventory.sh
@@ -65,6 +65,20 @@ check rds_managed_secrets_incl_pending 0 aws secretsmanager list-secrets --inclu
 check p4_buckets            0 aws s3api list-buckets --query "length(Buckets[?starts_with(Name, 'zero-drift-rag-')])" --output text
 check p4_iam_roles          0 aws iam list-roles --query "length(Roles[?starts_with(RoleName, 'zero-drift-rag-')])" --output text
 check kms_customer_aliases  0 aws kms list-aliases --query "length(Aliases[?!starts_with(AliasName, 'alias/aws/')])" --output text
+
+# P6 (DRF-77): batch queues and roles, and what Karpenter launches outside
+# Terraform. Karpenter nodes, their launch templates and Spot requests are made
+# by the controller, so a destroy cannot see them; count them here. Instances
+# still shutting down are counted (they bill until terminated).
+check p6_karpenter_instances 0 aws ec2 describe-instances --filters Name=tag-key,Values=karpenter.sh/nodepool Name=instance-state-name,Values=pending,running,shutting-down,stopping,stopped --query 'length(Reservations[].Instances[])' --output text
+# v1.15.3 tags its launch templates eks:eks-cluster-name and karpenter.k8s.aws/ec2nodeclass
+# (pkg/apis/v1/labels.go; DeleteAll filters on both). Either tag counts.
+check p6_karpenter_launch_templates 0 aws ec2 describe-launch-templates --filters Name=tag-key,Values=eks:eks-cluster-name,karpenter.k8s.aws/ec2nodeclass --query 'length(LaunchTemplates)' --output text
+check spot_requests_open    0 aws ec2 describe-spot-instance-requests --filters Name=state,Values=open,active --query 'length(SpotInstanceRequests)' --output text
+check p6_iam_roles          0 aws iam list-roles --query "length(Roles[?starts_with(RoleName, 'zero-drift-batch-') || starts_with(RoleName, 'zero-drift-karpenter-')])" --output text
+check p6_instance_profiles  0 aws iam list-instance-profiles --query "length(InstanceProfiles[?starts_with(InstanceProfileName, 'zero-drift-')])" --output text
+check p6_eventbridge_rules  0 aws events list-rules --name-prefix zero-drift-karpenter --query 'length(Rules)' --output text
+check p6_buckets            0 aws s3api list-buckets --query "length(Buckets[?starts_with(Name, 'zero-drift-batch-')])" --output text
 
 # Logs and identity in the project boundary
 check eks_log_groups        0 aws logs describe-log-groups --log-group-name-prefix /aws/eks --query 'length(logGroups)' --output text

@@ -26,6 +26,10 @@ locals {
   bootstrap_secret = "${local.secret_arn}${var.secret_prefix}platform/bootstrap-??????"
   tenant_secrets   = { for t in var.tenants : t => "${local.secret_arn}${var.secret_prefix}${t}/*" }
 
+  # Bucket prefixes the Crossplane S3 role may manage: RAG always, plus the P6
+  # checkpoint buckets in a batch window (SPEC-P6 A7, DRF-77).
+  crossplane_prefixes = concat([var.bucket_prefix], var.extra_bucket_prefixes)
+
   # name, Kubernetes subject, condition operator for the subject
   roles = merge(
     {
@@ -140,14 +144,14 @@ locals {
               "s3:ListBucketVersions",
               "s3:PutBucketTagging",
             ]
-            Resource = ["arn:aws:s3:::${var.bucket_prefix}*"]
+            Resource = [for p in local.crossplane_prefixes : "arn:aws:s3:::${p}*"]
           },
           {
             # D7: forceDestroy empties a sandbox bucket before deleting it.
             Sid      = "ForceDestroyObjects"
             Effect   = "Allow"
             Action   = ["s3:DeleteObject", "s3:DeleteObjectVersion"]
-            Resource = ["arn:aws:s3:::${var.bucket_prefix}*/*"]
+            Resource = [for p in local.crossplane_prefixes : "arn:aws:s3:::${p}*/*"]
           },
         ]
       }

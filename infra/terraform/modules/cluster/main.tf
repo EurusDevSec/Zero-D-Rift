@@ -57,6 +57,10 @@ module "eks" {
 
   enable_irsa = true
 
+  # P6 (DRF-77, D6): the Karpenter discovery tag on the node security group,
+  # only in a batch window; empty otherwise.
+  node_security_group_tags = var.node_security_group_tags
+
   # Kubernetes secrets use EKS default envelope encryption with an AWS-owned key;
   # no customer KMS key (1 USD/month each, plus a 7-day deletion wait).
   create_kms_key    = false

@@ -12,4 +12,7 @@ locals {
   # One public and one DB /24 per AZ, same layout as the TF-T01 lab.
   public_subnet_cidrs = [for i, az in var.azs : cidrsubnet(var.vpc_cidr, 8, i)]
   db_subnet_cidrs     = [for i, az in var.azs : cidrsubnet(var.vpc_cidr, 8, i + 10)]
+
+  # P6 (D6): EC2NodeClass selects subnets and the node security group by this tag.
+  karpenter_discovery = var.enable_batch_platform ? { "karpenter.sh/discovery" = var.cluster_name } : {}
 }

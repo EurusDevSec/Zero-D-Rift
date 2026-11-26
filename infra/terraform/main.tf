@@ -12,6 +12,9 @@ module "network" {
   azs                 = var.azs
   public_subnet_cidrs = local.public_subnet_cidrs
   db_subnet_cidrs     = local.db_subnet_cidrs
+
+  # P6 (DRF-77): Karpenter subnet discovery, only in a batch window.
+  extra_public_subnet_tags = local.karpenter_discovery
 }
 
 module "cluster" {
@@ -30,6 +33,7 @@ module "cluster" {
   node_instance_type           = var.system_node_instance_type
   node_desired_size            = var.system_node_desired_size
   node_max_size                = var.system_node_max_size
+  node_security_group_tags     = local.karpenter_discovery
 }
 
 # DRF-36 (SPEC-P3 Task 4): Crossplane provider IRSA role, created only for the
@@ -64,4 +68,32 @@ module "rag_identity" {
   oidc_issuer_url   = module.cluster.oidc_issuer_url
   region            = var.region
   master_secret_arn = module.shared_rds[0].master_secret_arn
+
+  # P6 (SPEC-P6 A7): the same Crossplane role manages the batch checkpoint buckets.
+  extra_bucket_prefixes = var.enable_batch_platform ? ["zero-drift-batch-"] : []
+}
+
+# DRF-77 (SPEC-P6 P6-T3, D2, D6, D8): shared batch queue, dead-letter queue and
+# batch IRSA roles; Karpenter node role, instance profile, access entry,
+# interruption queue and controller role. Only for an approved batch window
+# (enable_batch_platform = true, which requires enable_rag_platform for the
+# Crossplane S3 role) and destroyed with it. Karpenter-launched instances are
+# not in this state: SPEC-P6 §9.5 removes them before terraform destroy.
+module "batch_platform" {
+  source = "./modules/batch-platform"
+  count  = var.enable_batch_platform ? 1 : 0
+
+  oidc_provider_arn = module.cluster.oidc_provider_arn
+  oidc_issuer_url   = module.cluster.oidc_issuer_url
+  region            = var.region
+}
+
+module "karpenter" {
+  source = "./modules/karpenter"
+  count  = var.enable_batch_platform ? 1 : 0
+
+  cluster_name      = var.cluster_name
+  region            = var.region
+  oidc_provider_arn = module.cluster.oidc_provider_arn
+  oidc_issuer_url   = module.cluster.oidc_issuer_url
 }

@@ -3,7 +3,10 @@
 #   check 13: P3 role policy accepts only the approved bucket-level S3 actions;
 #   check 7:  endpoint statement 2 must name exactly the 4 layer buckets
 #             (both Codex review 14/11/2026, DRF-38);
-#   checks 14-17: P4 RDS, ingress, inline policies and trust (DRF-46).
+#   checks 14-17: P4 RDS, ingress, inline policies and trust (DRF-46);
+#   check 18: P5 vpc-cni network policy (DRF-68);
+#   checks 19-21: P6 queues, batch and Karpenter policies, trust, node role,
+#             interruption rules and discovery tags (DRF-77).
 # Builds small synthetic plan JSON in memory (no AWS, no Terraform), runs
 # plan_assert.sh on it and reads only the line of the guard under test; other
 # checks fail on the synthetic plan and are ignored.
@@ -109,6 +112,74 @@ expect5 PASS network-policy-standard "$(cni '{"enableNetworkPolicy":"true","env"
 expect5 FAIL no-configuration        "$(cni '')"
 expect5 FAIL network-policy-off      "$(cni '{"enableNetworkPolicy":"false","env":{"NETWORK_POLICY_ENFORCING_MODE":"standard"}}')"
 expect5 FAIL strict-mode             "$(cni '{"enableNetworkPolicy":"true","env":{"NETWORK_POLICY_ENFORCING_MODE":"strict"}}')"
+
+# --- P6 (DRF-77) --------------------------------------------------------------
+# The good P6 plan (tests/p6_good_plan.jq) carries the approved policies from
+# tests/p6_approved_policies.json with a fake account; each case below changes
+# exactly one thing and must turn its guard line to FAIL.
+ok6="$(sed 's/ACCT/000000000000/g' tests/p6_approved_policies.json | tr -d '\r' | jq -c .policies)"
+p6good="$(jq -n --argjson ok "$ok6" -f tests/p6_good_plan.jq)"
+p6() { jq -c "$1" <<< "$p6good"; }
+# pol6 <policy-name> <filter>; tru6 <role-name> <filter>; qp6 <queue-policy-name> <filter>
+pol6() { p6 "(.resource_changes[] | select(.type == \"aws_iam_role_policy\" and .change.after.name == \"$1\") | .change.after.policy) |= (fromjson | $2 | tojson)"; }
+tru6() { p6 "(.resource_changes[] | select(.type == \"aws_iam_role\" and .change.after.name == \"$1\") | .change.after.assume_role_policy) |= (fromjson | $2 | tojson)"; }
+qp6()  { p6 "(.resource_changes[] | select(.type == \"aws_sqs_queue_policy\" and .name == \"$1\") | .change.after.policy) |= (fromjson | $2 | tojson)"; }
+q6()   { p6 "(.resource_changes[] | select(.type == \"aws_sqs_queue\" and .change.after.name == \"$1\") | .change.after) |= ($2)"; }
+expect6() { run_case "$1" "$2" "p6-$3" "$4" ADMIN_WINDOW=1 P4_WINDOW=1 P6_WINDOW=1; }
+passrole='select([.Action] | flatten | index("iam:PassRole"))'
+a6='arn:aws:s3:::zero-drift-batch-'
+
+for g in "P6 queue settings" "P6 redrive target" "P6 queues not public" "P6 policies known" "P6 policies approved" \
+         "P6 karpenter no-iam-write" "P6 no-iam-star" "P6 PassRole" "P6 tenant separation" "P6 submit list" \
+         "P6 trust zero-drift-batch-keda" "P6 trust zero-drift-batch-submit" "P6 trust zero-drift-batch-tenant-a" \
+         "P6 trust zero-drift-batch-tenant-b" "P6 trust zero-drift-karpenter-controller" \
+         "P6 node role" "P6 interruption" "P6 discovery tag" "P6 policy attachment"; do
+    expect6 PASS "$g" "good-${g//[ :]/-}" "$p6good"
+done
+expect6 FAIL "P6 queue settings"    visibility-30            "$(q6 zero-drift-batch '.visibility_timeout_seconds = 30')"
+expect6 FAIL "P6 queue settings"    retention-4-days         "$(q6 zero-drift-batch '.message_retention_seconds = 345600')"
+expect6 FAIL "P6 queue settings"    max-receive-5            "$(q6 zero-drift-batch '.redrive_policy |= (fromjson | .maxReceiveCount = 5 | tojson)')"
+expect6 FAIL "P6 queue settings"    dlq-no-sse               "$(q6 zero-drift-batch-dlq '.sqs_managed_sse_enabled = false')"
+expect6 FAIL "P6 redrive target"    redrive-to-other-queue   "$(q6 zero-drift-batch '.redrive_policy |= (fromjson | .deadLetterTargetArn = "arn:aws:sqs:us-east-1:000000000000:other" | tojson)')"
+expect6 FAIL "P6 queues not public" allow-principal-star     "$(qp6 main '.Statement += [{Effect: "Allow", Principal: "*", Action: "sqs:SendMessage", Resource: "x"}]')"
+expect6 FAIL "P6 queues not public" allow-aws-principal      "$(qp6 dlq '.Statement += [{Effect: "Allow", Principal: {AWS: "*"}, Action: "sqs:ReceiveMessage", Resource: "x"}]')"
+expect6 FAIL "P6 queues not public" dlq-allows-http          "$(qp6 dlq '.Statement = []')"
+expect6 FAIL "P6 policies known"    keda-policy-unknown      "$(p6 '(.resource_changes[] | select(.type == "aws_iam_role_policy" and .change.after.name == "batch-keda") | .change) |= (.after.policy = null | .after_unknown = {policy: true})')"
+expect6 FAIL "P6 policies approved" keda-plus-ReceiveMessage "$(pol6 batch-keda '.Statement[0].Action += ["sqs:ReceiveMessage"]')"
+expect6 FAIL "P6 policies approved" tenant-b-policy-missing  "$(p6 '.resource_changes |= map(select(.change.after.name != "batch-tenant-b"))')"
+expect6 FAIL "P6 policies approved" submit-any-object-key    "$(pol6 batch-submit '(.Statement[] | select(.Sid == "WriteSubmitMarkers") | .Resource) = ["'"$a6"'*/*"]')"
+expect6 FAIL "P6 karpenter no-iam-write" plus-CreateInstanceProfile "$(pol6 karpenter-controller '.Statement += [{Sid: "X", Effect: "Allow", Action: ["iam:CreateInstanceProfile"], Resource: ["arn:aws:iam::000000000000:instance-profile/*"]}]')"
+expect6 FAIL "P6 karpenter no-iam-write" plus-iam-star          "$(pol6 karpenter-controller '.Statement[0].Action += ["iam:*"]')"
+expect6 FAIL "P6 policy attachment" tenant-a-policy-on-tenant-b "$(p6 '(.resource_changes[] | select(.type == "aws_iam_role_policy" and .change.after.name == "batch-tenant-a") | .change.after.role) = "zero-drift-batch-tenant-b"')"
+expect6 FAIL "P6 policy attachment" role-unknown             "$(p6 '(.resource_changes[] | select(.type == "aws_iam_role_policy" and .change.after.name == "batch-keda") | .change.after) |= del(.role)')"
+expect6 FAIL "P6 no-iam-star"       get-profile-star         "$(pol6 karpenter-controller '(.Statement[] | select(.Sid == "AllowInstanceProfileReadActions") | .Resource) = ["*"]')"
+expect6 FAIL "P6 no-iam-star"       passrole-resource-star   "$(pol6 karpenter-controller "(.Statement[] | $passrole | .Resource) = [\"*\"]")"
+expect6 FAIL "P6 PassRole"          passrole-any-service     "$(pol6 karpenter-controller "(.Statement[] | $passrole) |= del(.Condition)")"
+expect6 FAIL "P6 PassRole"          passrole-other-role      "$(pol6 karpenter-controller "(.Statement[] | $passrole | .Resource) = [\"arn:aws:iam::000000000000:role/zero-drift-bootstrap\"]")"
+expect6 FAIL "P6 tenant separation" tenant-a-names-tenant-b  "$(pol6 batch-tenant-a '(.Statement[] | select(.Sid == "OwnObjects") | .Resource) += ["'"$a6"'tenant-b-*/*"]')"
+expect6 FAIL "P6 tenant separation" tenant-b-any-batch-bucket "$(pol6 batch-tenant-b '(.Statement[] | select(.Sid == "ListOwnBuckets") | .Resource) = ["'"$a6"'*"]')"
+expect6 FAIL "P6 submit list"       submit-list-no-prefix    "$(pol6 batch-submit '(.Statement[] | select(.Sid == "ListSubmittedMarkerOnly")) |= del(.Condition)')"
+expect6 FAIL "P6 submit list"       submit-list-any-prefix   "$(pol6 batch-submit '(.Statement[] | select(.Sid == "ListSubmittedMarkerOnly") | .Condition.StringLike["s3:prefix"]) = ["runs/*"]')"
+expect6 FAIL "P6 submit list"       submit-plus-GetObject    "$(pol6 batch-submit '.Statement[0].Action += ["s3:GetObject"]')"
+expect6 FAIL "P6 trust zero-drift-batch-tenant-a"  tenant-a-pattern  "$(tru6 zero-drift-batch-tenant-a '.Statement[0].Condition |= {StringEquals: (.StringEquals | with_entries(select(.key | endswith(":aud")))), StringLike: (.StringEquals | with_entries(select(.key | endswith(":sub"))) | map_values("system:serviceaccount:tenant-*:batch-train"))}')"
+expect6 FAIL "P6 trust zero-drift-batch-submit"    submit-from-tenant "$(tru6 zero-drift-batch-submit '.Statement[0].Condition.StringEquals |= with_entries(if (.key | endswith(":sub")) then .value = "system:serviceaccount:tenant-a:batch-submit" else . end)')"
+expect6 FAIL "P6 trust zero-drift-karpenter-controller" no-audience "$(tru6 zero-drift-karpenter-controller '.Statement[0].Condition.StringEquals |= with_entries(select(.key | endswith(":aud") | not))')"
+expect6 FAIL "P6 trust zero-drift-batch-keda"      second-statement  "$(tru6 zero-drift-batch-keda '.Statement += [.Statement[0]]')"
+expect6 INFO "P6 trust zero-drift-batch-keda"      unknown-first-plan "$(p6 '(.resource_changes[] | select(.type == "aws_iam_role" and .change.after.name == "zero-drift-batch-keda") | .change) |= (.after.assume_role_policy = null | .after_unknown = {assume_role_policy: true})')"
+expect6 FAIL "P6 node role"         plus-SSM-attachment      "$(p6 '.resource_changes += [first(.resource_changes[] | select(.type == "aws_iam_role_policy_attachment")) | .change.after.policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"]')"
+expect6 FAIL "P6 node role"         no-instance-profile      "$(p6 '.resource_changes |= map(select(.type != "aws_iam_instance_profile"))')"
+expect6 FAIL "P6 node role"         node-trusts-lambda       "$(tru6 zero-drift-karpenter-node '.Statement[0].Principal.Service = "lambda.amazonaws.com"')"
+expect6 FAIL "P6 interruption"      three-rules              "$(p6 '.resource_changes |= (map(select(.type != "aws_cloudwatch_event_rule" or .name != "AWS Health Event")))')"
+expect6 FAIL "P6 interruption"      target-other-queue       "$(p6 '(first(.resource_changes[] | select(.type == "aws_cloudwatch_event_target")) | .change.after.arn) = "arn:aws:sqs:us-east-1:000000000000:zero-drift-batch"')"
+expect6 FAIL "P6 discovery tag"     sg-untagged              "$(p6 '(.resource_changes[] | select(.type == "aws_security_group") | .change.after.tags) |= del(.["karpenter.sh/discovery"])')"
+expect6 FAIL "P6 discovery tag"     database-subnet-tagged   "$(p6 '(.resource_changes[] | select(.type == "aws_subnet" and .name == "database") | .change.after.tags["karpenter.sh/discovery"]) = "zero-drift"')"
+
+# A wrong role name is never printed: it could hold an account ID (Codex P6 R2).
+leak6="$tmp/p6-role-leak.json"
+p6 '(.resource_changes[] | select(.type == "aws_iam_role_policy" and .change.after.name == "batch-keda") | .change.after.role) = "zero-drift-000000000000"' > "$leak6"
+line="$(env ADMIN_WINDOW=1 P4_WINDOW=1 P6_WINDOW=1 bash "$pa" "$leak6" 2>/dev/null | grep -E "P6 policy attachment" | head -1 || true)"
+if [[ "$line" == "FAIL  P6 policy attachment: batch-keda:wrong-role" ]]; then echo "ok    p6-role-name-not-printed: $line"
+else echo "WRONG p6-role-name-not-printed: got '${line:-no line}'"; bad=1; fi
 
 if (( bad )); then echo "RESULT: FAIL"; exit 1; fi
 echo "RESULT: PASS (guards only; plan_assert on a real plan is still required)"

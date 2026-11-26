@@ -16,6 +16,11 @@
 # A P5 window plan (DRF-68) must also turn on NetworkPolicy in the vpc-cni
 # add-on; check 18 inspects it:
 #   ADMIN_WINDOW=1 P4_WINDOW=1 P5_WINDOW=1 ./scripts/plan_assert.sh tfplan
+# A P6 window plan (enable_batch_platform = true, DRF-77; needs P4_WINDOW too)
+# adds the batch queues, four batch roles, the Karpenter node and controller
+# roles, instance profile, access entry, interruption queue and rules; checks
+# 19-21 compare every P6 inline policy with tests/p6_approved_policies.json:
+#   ADMIN_WINDOW=1 P4_WINDOW=1 P5_WINDOW=1 P6_WINDOW=1 ./scripts/plan_assert.sh tfplan
 # --approved prints the approved P4 policy statements (fake account) for the
 # guard tests. The plan JSON stays in a pipe: it is never written to disk or printed.
 set -euo pipefail
@@ -65,6 +70,22 @@ p4_trust='{
   "zero-drift-rag-tenant-a":      {"op": "StringLike",   "sub": "system:serviceaccount:tenant-a:rag-*"},
   "zero-drift-rag-tenant-b":      {"op": "StringLike",   "sub": "system:serviceaccount:tenant-b:rag-*"}
 }'
+# P6 (SPEC-P6 A7): in a batch window the Crossplane S3 role also manages the
+# zero-drift-batch- checkpoint buckets.
+if [[ "${P6_WINDOW:-0}" == 1 ]]; then
+    p4_approved="$(jq -c '(.["rag-crossplane-s3"][] | select(.Sid == "RagBuckets") | .Resource) |= (. + ["arn:aws:s3:::zero-drift-batch-*"] | sort)
+        | (.["rag-crossplane-s3"][] | select(.Sid == "ForceDestroyObjects") | .Resource) |= (. + ["arn:aws:s3:::zero-drift-batch-*/*"] | sort)' <<< "$p4_approved")"
+fi
+# P6 roles -> the only trusted subject (all StringEquals). The approved inline
+# policies live in a file shared with terraform test and the offline matrix.
+p6_trust='{
+  "zero-drift-batch-keda":           "system:serviceaccount:keda:keda-operator",
+  "zero-drift-batch-submit":         "system:serviceaccount:zdr-platform:batch-submit",
+  "zero-drift-batch-tenant-a":       "system:serviceaccount:tenant-a:batch-train",
+  "zero-drift-batch-tenant-b":       "system:serviceaccount:tenant-b:batch-train",
+  "zero-drift-karpenter-controller": "system:serviceaccount:karpenter:karpenter"
+}'
+p6_file="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/tests/p6_approved_policies.json"
 if [[ "${1:-}" == "--approved" ]]; then
     jq -c '(.. | strings) |= gsub("ACCT"; "000000000000")' <<< "$p4_approved"
     exit 0
@@ -118,6 +139,17 @@ if [[ "${P3_WINDOW:-0}" == 1 ]]; then plus aws_iam_role 1; plus aws_iam_role_pol
 if [[ "${P4_WINDOW:-0}" == 1 ]]; then
     plus aws_db_instance 1; plus aws_security_group 1; plus aws_vpc_security_group_ingress_rule 1
     plus aws_iam_role 5; plus aws_iam_role_policy 6
+fi
+#    P6 window: batch queue, DLQ and Karpenter interruption queue with their
+#    policies and the redrive allow policy; four batch roles plus the
+#    Karpenter controller and node roles; five inline policies; three node
+#    policy attachments; instance profile; EC2_LINUX access entry; four
+#    EventBridge rules and targets (DRF-77).
+if [[ "${P6_WINDOW:-0}" == 1 ]]; then
+    plus aws_sqs_queue 3; plus aws_sqs_queue_policy 3; plus aws_sqs_queue_redrive_allow_policy 1
+    plus aws_iam_role 6; plus aws_iam_role_policy 5; plus aws_iam_role_policy_attachment 3
+    plus aws_iam_instance_profile 1; plus aws_eks_access_entry 1
+    plus aws_cloudwatch_event_rule 4; plus aws_cloudwatch_event_target 4
 fi
 expected="$(for t in "${!want[@]}"; do echo "$t=${want[$t]}"; done | LC_ALL=C sort | tr '\n' ' ' | sed 's/ $//')"
 actual="$(q '[.resource_changes[] | select(.mode == "managed") | .type] | group_by(.) | map("\(.[0])=\(length)") | join(" ")')"
@@ -178,7 +210,8 @@ md="$(after aws_launch_template '.metadata_options[0] | "\(.http_tokens) \(.http
 #     role (stable role ARN, not a session); OIDC provider for later IRSA.
 ad="$(q '[.resource_changes[] | select(.type == "aws_eks_addon") | .change.after | "\(.addon_name)=\(.addon_version // "" | test("^v[0-9.]+-eksbuild[.][0-9]+$"))"] | sort | join(" ")')"
 [[ "$ad" == "coredns=true kube-proxy=true vpc-cni=true" ]] && pass "add-ons pinned: coredns, kube-proxy, vpc-cni" || fail "add-ons: $ad"
-ae="$(after aws_eks_access_entry '"\(.type) \(.principal_arn | test(":role/zero-drift-bootstrap$"))"')"
+# The P6 Karpenter EC2_LINUX entry is checked in check 21.
+ae="$(q '[.resource_changes[] | select(.type == "aws_eks_access_entry" and .change.after.type != "EC2_LINUX") | .change.after | "\(.type) \(.principal_arn | test(":role/zero-drift-bootstrap$"))"] | join(",")')"
 [[ "$ae" == "STANDARD true" ]] && pass "access entry: bootstrap role (STANDARD)" || fail "access entry: $ae"
 [[ "$(count aws_iam_openid_connect_provider)" == 1 ]] && pass "OIDC provider for IRSA" || fail "OIDC provider missing"
 
@@ -197,9 +230,12 @@ atts="$(q '[.resource_changes[] | select(.type == "aws_iam_role_policy_attachmen
 want_roles="zero-drift-cluster- zero-drift-system-node-"
 [[ "${P3_WINDOW:-0}" == 1 ]] && want_roles="$want_roles zero-drift-p3-crossplane-s3"
 [[ "${P4_WINDOW:-0}" == 1 ]] && want_roles="$want_roles $(jq -r 'keys | join(" ")' <<< "$p4_trust")"
+[[ "${P6_WINDOW:-0}" == 1 ]] && want_roles="$want_roles $(jq -r 'keys | join(" ")' <<< "$p6_trust") zero-drift-karpenter-node"
 want_roles="$(tr ' ' '\n' <<< "$want_roles" | LC_ALL=C sort | tr '\n' ' ' | sed 's/ $//')"
-[[ "$roles" == "$want_roles" && "$atts" == "AmazonEC2ContainerRegistryReadOnly AmazonEKSClusterPolicy AmazonEKSWorkerNodePolicy AmazonEKS_CNI_Policy" ]] \
-    && pass "IAM within scope (roles: $want_roles; 4 EKS managed policies)" || fail "IAM scope: roles='$roles' attachments='$atts'"
+want_atts="AmazonEC2ContainerRegistryReadOnly AmazonEKSClusterPolicy AmazonEKSWorkerNodePolicy AmazonEKS_CNI_Policy"
+[[ "${P6_WINDOW:-0}" == 1 ]] && want_atts="AmazonEC2ContainerRegistryPullOnly AmazonEC2ContainerRegistryReadOnly AmazonEKSClusterPolicy AmazonEKSWorkerNodePolicy AmazonEKSWorkerNodePolicy AmazonEKS_CNI_Policy AmazonEKS_CNI_Policy"
+[[ "$roles" == "$want_roles" && "$atts" == "$want_atts" ]] \
+    && pass "IAM within scope (roles: $want_roles; managed policies: $want_atts)" || fail "IAM scope: roles='$roles' attachments='$atts'"
 
 # 13. P3 provider IRSA role (DRF-36, SPEC-P3 Task 4). Default plan: no inline
 #     role policy. P3 window: web identity trust for exactly the provider-aws-s3
@@ -214,6 +250,7 @@ inline="$(q '[.resource_changes[] | select(.type == "aws_iam_role_policy") | .ch
 want_inline=""
 [[ "${P3_WINDOW:-0}" == 1 ]] && want_inline="p3-buckets"
 [[ "${P4_WINDOW:-0}" == 1 ]] && want_inline="$want_inline $(jq -r 'keys | join(" ")' <<< "$p4_approved")"
+[[ "${P6_WINDOW:-0}" == 1 ]] && want_inline="$want_inline $(jq -r '.policies | keys | join(" ")' "$p6_file")"
 want_inline="$(tr ' ' '\n' <<< "$want_inline" | sed '/^$/d' | LC_ALL=C sort | tr '\n' ' ' | sed 's/ $//')"
 [[ "$inline" == "$want_inline" ]] && pass "inline role policies: ${want_inline:-none}" || fail "inline role policies: '$inline', expected '${want_inline:-none}'"
 if [[ "${P3_WINDOW:-0}" == 1 ]]; then
@@ -324,6 +361,107 @@ if [[ "${P5_WINDOW:-0}" == 1 ]]; then
     ok="$(jq -r '(.enableNetworkPolicy == "true") and (.env.NETWORK_POLICY_ENFORCING_MODE == "standard")' <<< "$cni" 2>/dev/null || echo false)"
     [[ "$ok" == true ]] && pass "P5 vpc-cni: NetworkPolicy on, standard mode" \
         || fail "P5 vpc-cni: needs enableNetworkPolicy \"true\" and NETWORK_POLICY_ENFORCING_MODE standard"
+fi
+
+# 19-21: P6 window only (DRF-77, SPEC-P6 P6-T3). Outside it, checks 3, 12 and
+#        13 already forbid every P6 resource (enable_batch_platform off).
+if [[ "${P6_WINDOW:-0}" == 1 ]]; then
+    # 19. Queues per D8: shared queue 120 s visibility, 1 h retention, SSE-SQS,
+    #     redrive to the DLQ after 3 receives; DLQ 1 h, SSE; Karpenter
+    #     interruption queue 300 s, SSE. No queue policy allows any principal
+    #     "*" or an AWS principal (not public); every queue policy denies HTTP.
+    qs="$(q '[.resource_changes[] | select(.type == "aws_sqs_queue") | .change.after
+        | "\(.name):\(.visibility_timeout_seconds // "-"):\(.message_retention_seconds):\(.sqs_managed_sse_enabled):\((.redrive_policy // "{}") | fromjson | .maxReceiveCount // "-")"] | sort | join(" ")')"
+    [[ "$qs" == "zero-drift-batch-dlq:30:3600:true:- zero-drift-batch:120:3600:true:3 zero-drift-karpenter:30:300:true:-" ]] \
+        && pass "P6 queue settings: batch 120 s/1 h/SSE/maxReceive 3, DLQ 1 h/SSE, interruption 300 s/SSE" || fail "P6 queue settings: $qs"
+    redrive="$(q '[.resource_changes[] | select(.type == "aws_sqs_queue" and .change.after.name == "zero-drift-batch") | (.change.after.redrive_policy // "{}") | fromjson | (.deadLetterTargetArn // "") | test(":zero-drift-batch-dlq$")] | (length == 1 and all)')"
+    [[ "$redrive" == true ]] && pass "P6 redrive target: zero-drift-batch-dlq" || fail "P6 redrive target is not zero-drift-batch-dlq"
+    qp="$(q '[.resource_changes[] | select(.type == "aws_sqs_queue_policy") | (.change.after.policy // "{\"Statement\":[]}") | fromjson
+        | [(.Statement | any(.Effect == "Deny" and .Condition.Bool["aws:SecureTransport"] == "false")),
+           (.Statement | all(.Effect == "Deny" or ((.Principal | type) == "object" and (.Principal | has("AWS") | not)
+              and ([.Principal.Service] | flatten | all(. == "events.amazonaws.com" or . == "sqs.amazonaws.com")))))] | all] | (length == 3 and all)')"
+    [[ "$qp" == true ]] && pass "P6 queues not public: no Allow to \"*\" or an AWS principal; HTTP denied on all three" \
+        || fail "P6 queues not public: a queue policy allows a broad principal or does not deny HTTP"
+
+    # 20. P6 inline policies equal tests/p6_approved_policies.json (account
+    #     masked as ACCT), plus named guards so a failure says what broke.
+    p6pol="$(q '[.resource_changes[] | select(.type == "aws_iam_role_policy" and ((.change.after.name // "") | test("^(batch-|karpenter-controller$)")))
+        | {name: .change.after.name, role: (.change.after.role // null), unknown: (.change.after_unknown.policy // false), doc: (.change.after.policy // "{\"Statement\":[]}" | fromjson)}]')"
+    # The right policy on the wrong role is as bad as a wrong policy (Codex P6 R1):
+    # policy NAME must sit on role zero-drift-NAME. The modules pass the role name,
+    # which is known in the plan. Only the policy name and a fixed code are printed:
+    # a wrong role name could hold an account ID (Codex P6 R2).
+    wrongrole="$(jq -r '[.[] | select(.role != ("zero-drift-" + .name)) | "\(.name):\(if .role == null then "unknown-role" else "wrong-role" end)"] | join(" ")' <<< "$p6pol" 2>/dev/null || echo unparsable)"
+    [[ -z "$wrongrole" ]] && pass "P6 policy attachment: each policy NAME on role zero-drift-NAME" || fail "P6 policy attachment: $wrongrole"
+    unknown="$(jq -r '[.[] | select(.unknown) | .name] | join(" ")' <<< "$p6pol")"
+    [[ -z "$unknown" ]] && pass "P6 policies known in the plan" || fail "P6 policies known in the plan: unknown (they are built from names): $unknown"
+    norm='map(.doc.Statement |= (map(.Action |= ([.] | flatten | sort)
+            | .Resource |= ([.] | flatten | map(gsub(":[0-9]{12}:"; ":ACCT:")) | sort)
+            | (if .Condition then .Condition |= (tojson | gsub(":[0-9]{12}:"; ":ACCT:") | fromjson) else . end)) | sort_by(.Sid)))'
+    diffs="$(jq -r --slurpfile ok "$p6_file" "$norm"' | [.[] | .name as $n | select(.doc.Statement != ($ok[0].policies[$n] // [] | sort_by(.Sid))) | $n] | join(" ")' <<< "$p6pol" 2>/dev/null || echo unparsable)"
+    have="$(jq -r '[.[].name] | sort | join(" ")' <<< "$p6pol")"
+    [[ -z "$diffs" && "$have" == "$(jq -r '.policies | keys | sort | join(" ")' "$p6_file")" ]] \
+        && pass "P6 policies approved: every P6 policy equals tests/p6_approved_policies.json" || fail "P6 policies approved: differ or missing: ${diffs:-$have}"
+    iamw="$(jq -r '[.[] | .doc.Statement[] | [.Action] | flatten[] | select(test("^iam:|^\\*$"; "i"))
+        | select(. != "iam:PassRole" and . != "iam:GetInstanceProfile" and . != "iam:ListInstanceProfiles")] | unique | join(" ")' <<< "$p6pol" 2>/dev/null || echo unparsable)"
+    [[ -z "$iamw" ]] && pass "P6 karpenter no-iam-write: only PassRole, GetInstanceProfile, ListInstanceProfiles" || fail "P6 karpenter no-iam-write: $iamw"
+    # One exception: a statement whose only action is the read-only
+    # iam:ListInstanceProfiles (IAM has no resource scope for it).
+    iamstar="$(jq -r '[.[] | .doc.Statement[] | select([.Action] | flatten | any(test("^(iam|sts):"; "i")))
+        | select(([.Action] | flatten) != ["iam:ListInstanceProfiles"]) | [.Resource] | flatten[] | select(. == "*")] | length' <<< "$p6pol" 2>/dev/null || echo 1)"
+    [[ "$iamstar" == 0 ]] && pass "P6 no-iam-star: no IAM action on resource \"*\" (except ListInstanceProfiles alone)" || fail "P6 no-iam-star: $iamstar IAM statement resource(s) are \"*\""
+    pass_ok="$(jq -r '[.[] | .doc.Statement[] | select([.Action] | flatten | index("iam:PassRole"))
+        | (([.Resource] | flatten) as $r | ($r | length == 1) and ($r[0] | test(":role/zero-drift-karpenter-node$"))
+           and (.Condition.StringEquals["iam:PassedToService"] == "ec2.amazonaws.com"))] | (length == 1 and all)' <<< "$p6pol" 2>/dev/null || echo false)"
+    [[ "$pass_ok" == true ]] && pass "P6 PassRole: only zero-drift-karpenter-node, only to ec2.amazonaws.com" || fail "P6 PassRole: not exactly the node role to EC2"
+    cross="$(jq -r '[.[] | select(.name | test("^batch-tenant-")) | (.name | ltrimstr("batch-")) as $t
+        | .doc.Statement[] | [.Resource] | flatten[] | select(test("^arn:aws:s3:")) | select(([scan("tenant-[a-z]")] | unique) != [$t])] | length' <<< "$p6pol" 2>/dev/null || echo 1)"
+    [[ "$cross" == 0 ]] && pass "P6 tenant separation: a tenant policy names only its own buckets" || fail "P6 tenant separation: $cross bucket resource(s) name another tenant or no tenant"
+    sub_ok="$(jq -r '[.[] | select(.name == "batch-submit") | .doc.Statement[]] as $s
+        | ($s | length > 0)
+          and ([$s[] | [.Action] | flatten[]] | index("s3:GetObject") == null)
+          and ([$s[] | select([.Action] | flatten | index("s3:ListBucket"))] | length == 1 and all(.Condition.StringLike["s3:prefix"] | [.] | flatten == ["runs/*/submitted"]))' <<< "$p6pol" 2>/dev/null || echo false)"
+    [[ "$sub_ok" == true ]] && pass "P6 submit list: s3:ListBucket only with s3:prefix runs/*/submitted; no s3:GetObject" || fail "P6 submit list: missing prefix condition or has s3:GetObject"
+
+    # 21. Trust, node role and discovery. P6 IRSA roles: one web identity
+    #     statement, audience sts.amazonaws.com, one exact subject (StringEquals,
+    #     never a pattern); unknown before the cluster OIDC exists. Node role:
+    #     EC2 trust, three EKS worker policies, no SSM; instance profile of that
+    #     role; EC2_LINUX access entry; four interruption rules with targets;
+    #     discovery tag on both public subnets and the node security group only.
+    for name in $(jq -r 'keys | join(" ")' <<< "$p6_trust"); do
+        sel=".resource_changes[] | select(.type == \"aws_iam_role\" and .change.after.name == \"$name\")"
+        if [[ -z "$(q "$sel | .change.after.name")" ]]; then fail "P6 trust $name: role missing"; continue; fi
+        if [[ "$(q "$sel | .change.after_unknown.assume_role_policy // false")" == true ]]; then
+            echo "INFO  P6 trust $name: unknown until the cluster OIDC exists, verify after apply with batch_iam_check.sh --principal"; continue
+        fi
+        ok="$(q "$sel | .change.after.assume_role_policy" | jq -r --arg sub "$(jq -r --arg n "$name" '.[$n]' <<< "$p6_trust")" '
+            .Statement as $s | ($s[0].Condition // {}) as $c
+            | [($s | length == 1), $s[0].Effect == "Allow", $s[0].Action == "sts:AssumeRoleWithWebIdentity",
+               ($s[0].Principal.Federated | test(":oidc-provider/oidc[.]eks[.]us-east-1[.]amazonaws[.]com/id/")),
+               ([$c.StringEquals // {} | to_entries[] | select(.key | endswith(":aud")) | .value] == ["sts.amazonaws.com"]),
+               ([$c.StringEquals // {} | to_entries[] | select(.key | endswith(":sub")) | .value] == [$sub]),
+               (($c | keys) == ["StringEquals"])] | all' 2>/dev/null || echo false)"
+        [[ "$ok" == true ]] && pass "P6 trust $name: StringEquals $(jq -r --arg n "$name" '.[$n]' <<< "$p6_trust")" \
+            || fail "P6 trust $name: not the approved web identity, audience or subject"
+    done
+    node="$(q '[.resource_changes[] | select(.type == "aws_iam_role" and .change.after.name == "zero-drift-karpenter-node") | .change.after.assume_role_policy | fromjson
+        | (.Statement | length == 1) and .Statement[0].Principal.Service == "ec2.amazonaws.com" and .Statement[0].Action == "sts:AssumeRole"] | (length == 1 and all)')"
+    natt="$(q '[.resource_changes[] | select(.type == "aws_iam_role_policy_attachment" and (.address | test("module[.]karpenter"))) | .change.after.policy_arn | split("/") | last] | sort | join(" ")')"
+    prof="$(q '[.resource_changes[] | select(.type == "aws_iam_instance_profile") | .change.after | "\(.name)=\(.role)"] | join(" ")')"
+    ent="$(q '[.resource_changes[] | select(.type == "aws_eks_access_entry" and .change.after.type == "EC2_LINUX") | .address | test("module[.]karpenter")] | map(tostring) | join(" ")')"
+    [[ "$node" == true && "$natt" == "AmazonEC2ContainerRegistryPullOnly AmazonEKSWorkerNodePolicy AmazonEKS_CNI_Policy" \
+       && "$prof" == "zero-drift-karpenter-node=zero-drift-karpenter-node" && "$ent" == "true" ]] \
+        && pass "P6 node role: EC2 trust, 3 worker policies (no SSM), pre-created profile, one EC2_LINUX entry" \
+        || fail "P6 node role: trust=$node attachments='$natt' profile='$prof' ec2_linux_entries='$ent'"
+    rules="$(q '[.resource_changes[] | select(.type == "aws_cloudwatch_event_rule") | .change.after.event_pattern | fromjson | .["detail-type"][0]] | sort | join("|")')"
+    tgts="$(q '[.resource_changes[] | select(.type == "aws_cloudwatch_event_target") | .change.after.arn // "" | test(":zero-drift-karpenter$")] | (length == 4 and all)')"
+    [[ "$rules" == "AWS Health Event|EC2 Instance Rebalance Recommendation|EC2 Instance State-change Notification|EC2 Spot Instance Interruption Warning" && "$tgts" == true ]] \
+        && pass "P6 interruption: 4 rules, all targets on zero-drift-karpenter" || fail "P6 interruption: rules='$rules' targets=$tgts"
+    disc="$(q '[.resource_changes[] | select((.type == "aws_subnet" or .type == "aws_security_group") and ((.change.after.tags // {}) | has("karpenter.sh/discovery")))
+        | "\(.type):\(.name):\(.change.after.tags["karpenter.sh/discovery"])"] | sort | join(" ")')"
+    [[ "$disc" == "aws_security_group:node:zero-drift aws_subnet:public:zero-drift aws_subnet:public:zero-drift" ]] \
+        && pass "P6 discovery tag: 2 public subnets and the node security group only" || fail "P6 discovery tag: $disc"
 fi
 
 echo

@@ -92,3 +92,23 @@ output "vpc_cni_configuration" {
   description = "vpc-cni add-on configuration: NetworkPolicy on, standard mode (SPEC-P5 D5)."
   value       = module.cluster.vpc_cni_configuration
 }
+
+output "batch_platform" {
+  description = "P6 names and trusted subjects, or null when disabled. No ARN or URL: those are in batch_platform_config."
+  value = var.enable_batch_platform ? {
+    queues    = module.batch_platform[0].queue_names
+    roles     = module.batch_platform[0].role_names
+    subjects  = module.batch_platform[0].subjects
+    karpenter = module.karpenter[0].names
+  } : null
+}
+
+output "batch_platform_config" {
+  description = "Window-only values for ConfigMap batch-config and the ServiceAccount annotations (queue URL, role ARNs). Sensitive: pipe it, never print it."
+  sensitive   = true
+  value = var.enable_batch_platform ? {
+    queue_url                 = module.batch_platform[0].queue_url
+    role_arns                 = module.batch_platform[0].role_arns
+    karpenter_controller_role = module.karpenter[0].controller_role_arn
+  } : null
+}

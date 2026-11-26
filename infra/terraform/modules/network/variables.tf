@@ -37,3 +37,9 @@ variable "db_subnet_cidrs" {
     error_message = "Give exactly one DB subnet CIDR per AZ."
   }
 }
+
+variable "extra_public_subnet_tags" {
+  description = "Extra tags on the public subnets, e.g. the Karpenter discovery tag in a P6 window (DRF-77). Empty by default."
+  type        = map(string)
+  default     = {}
+}

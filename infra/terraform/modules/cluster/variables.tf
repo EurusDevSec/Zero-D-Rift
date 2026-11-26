@@ -62,3 +62,9 @@ variable "node_max_size" {
   description = "Maximum number of system nodes."
   type        = number
 }
+
+variable "node_security_group_tags" {
+  description = "Extra tags on the node security group, e.g. the Karpenter discovery tag in a P6 window (DRF-77). Empty by default."
+  type        = map(string)
+  default     = {}
+}
