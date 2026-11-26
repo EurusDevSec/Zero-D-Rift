@@ -2,7 +2,7 @@
 
 > **TL;DR** · Để làm gì: chạy đường batch thật trên EKS. Message vào SQS, KEDA tạo Job, Karpenter tạo node CPU, worker train
 > và checkpoint lên S3, rồi node bị thu hồi. Sau đó thử các ca lỗi, chạy cho tenant thứ hai trên On-Demand, và dọn sạch ·
-> Trạng thái: **bản kế hoạch 25/11**. Chỉ chạy khi P6-T2, P6-T3, P6-T4.1 đã merge và lab kind đã đạt ·
+> Trạng thái: **sẵn sàng chạy khi được duyệt** (25/11): `infra/p6-window/window.sh` và `gitops/tests/batch-suite.sh` đã viết (DRF-79). Chỉ chạy khi PR P6-T2.2, P6-T3, P6-T4.1 đã merge ·
 > Chi phí: ước tính ≈ 2,6 USD, trần P6 là 4 USD (D14) ·
 > Liên quan: SPEC-P6 §4, §5 P6-T4.2, §9.5, §10, D7, D8, D14; runbook `P5_L3_WINDOW.md` (B, E, 5a), `P4_RAG_SANDBOX.md` (C, D, J) ·
 > Mục lục: 1 Đơn · 2 Bạn chọn · 3 Việc trước window · 4 Cổng T−30 · 5 Luồng window · 5b Micro-lab · 6 Điều kiện dừng · 7 Chi phí
@@ -54,8 +54,10 @@ tức khoảng 0,1 USD. Nên chọn có nếu bạn muốn bằng chứng rằng
 | P1 | Soạn sẵn PR "window: tắt tenant-a, khoá Spot": chuyển `tenant-a-batch.yaml` xuống `disabled/`, đặt `limits.cpu: "0"` cho `batch-spot`. **Không merge trước window** | PR draft; bạn merge ở bước E1 |
 | P1c | Soạn sẵn PR "window: bật tenant-b": chuyển `tenant-b-batch.yaml` từ `disabled/` lên `gitops/requests/`. Tách riêng khỏi P1 để giữa hai PR có bước kiểm | PR draft; bạn merge ở bước E3 |
 | P1b | Soạn sẵn PR "window: bật tenant-a": chuyển `tenant-a-batch.yaml` từ `disabled/` lên `gitops/requests/`. Argo chỉ đọc file nằm **ngay** trong `gitops/requests/`, không đọc thư mục con | PR draft; bạn merge ở bước C1 |
+| P1d | Soạn sẵn PR "window: tenant-a attempt 2": `runAttempt: 2` (300 step, `normal`) cho B06, B07, B09 | PR draft; bạn merge ở bước D1 |
+| P1e | Soạn sẵn PR "window: tenant-a attempt 3 fail-always": `runAttempt: 3`, `failProfile: fail-always` cho B08 | PR draft; bạn merge ở bước D3, **sau** `window.sh purge` |
 | P2 | Lab kind `P6_L2_KIND_KEDA.md` đạt, có dự đoán của bạn | Có evidence `P6-T2.2_L2_KIND_KEDA_<date>.md` |
-| P3 | Batch suite (`gitops/tests/batch-suite.sh`) đã merge và đã chạy trên kind: các ca cần EKS ghi `SKIPPED_NEEDS_EKS` | Có `acceptance.json` của lần chạy kind |
+| P3 | Batch suite (`gitops/tests/batch-suite.sh`) đã merge và đã chạy trên kind: các ca cần EKS ghi `SKIPPED_NEEDS_EKS` | Evidence `P6-T4.1_BATCH_SUITE_<date>.md` có kết quả kind |
 | P4 | Codex review suite và hai module Terraform | Kết quả ghi nguyên văn vào evidence |
 | P5 | Bạn điền **bảng dự đoán** ở mục 5b trước window | Có dự đoán của bạn |
 
@@ -118,10 +120,17 @@ Trước một bước dài (một run khoảng 8 phút, `terraform destroy` kho
 B01 (queue rỗng thì 0 Job, 0 node) **không** chạy ở đây. Lúc này chưa có ScaledJob, nên "0 Job" vẫn đúng kể cả khi scaler
 hỏng hoặc thiếu hẳn. B01 chạy ở C6, sau khi scaler đã tạo được một Job thật.
 
+Suite ghi mọi ca vào một file ngoài repo. Đặt biến một lần cho cả window:
+
+```bash
+export MODE=eks CTX="$(kubectl config current-context)" OUT="$HOME/zdr-p6/batch-acceptance-$RUN_ID.json"; S="bash gitops/tests/batch-suite.sh"
+```
+
 **C. Một run hoàn chỉnh (tenant-a, Spot).**
 
 1. Bạn merge PR P1b (bật tenant-a). Ghi giờ merge: đây là mốc bắt đầu của bảng thời gian smoke.
-2. **B02, B03**: 1 Job cho run key này; sau 3 lần poll vẫn 1 Job.
+2. Ngay sau khi merge: `$S run tenant-a smoke-1 spot`. Lệnh này chạy B02, B03, B14, B04 và B05 theo thứ tự, tự chờ (tối đa khoảng 45 phút).
+   **B02, B03**: 1 Job cho run key này; sau 3 lần poll vẫn 1 Job.
 3. Theo dõi: Pod `Pending` → NodeClaim `Launched` → `Registered` → `Initialized` → Pod `Running`.
    Ghi các mốc thời gian vào bảng smoke: sync, message gửi, Job tạo, NodeClaim tạo, instance running, node Ready, image pulled, `TRAINING_STARTED`.
 4. **B04**, khi Pod còn đang chạy: suite đọc Pod → `spec.nodeName` → hai nhãn của Node (`karpenter.sh/capacity-type`,
@@ -132,19 +141,24 @@ hỏng hoặc thiếu hẳn. B01 chạy ở C6, sau khi scaler đã tạo đư�
    sẽ quay lại. Phải thấy capacity type `spot`.
 5. **B05**: sau khi Job xong, đo **scale-down time** từ lúc Job hoàn tất tới lúc Node biến mất khỏi Kubernetes,
    rồi tới lúc instance `terminated` trên AWS (đếm theo tag, không ghi instance ID). `consolidateAfter: 60s` nên kỳ vọng vài phút.
-6. **B01**: ScaledJob `Ready` và vừa tạo được Job ở bước 2, tức scaler đọc được queue. Queue `visible=0 inflight=0` qua ít nhất
+6. **B01** (`$S b01 tenant-a smoke-1`): ScaledJob `Ready` và vừa tạo được Job ở bước 2, tức scaler đọc được queue. Queue `visible=0 inflight=0` qua ít nhất
    3 lần poll. Phải thấy 0 Job mới, 0 NodeClaim, 0 instance có tag Karpenter. Thiếu ScaledJob là `FAIL`, không phải "0".
 
 **D. Sự cố và ca âm.**
 
-1. **B06**: gửi run mới với 300 step. Sau checkpoint đầu, xoá Pod. Phải thấy message lật lại sau ≤ 120 giây, Job mới, `resumed from step N` với N > 0.
-2. **B07**: lặp lại nhưng xoá **NodeClaim** (`kubectl delete nodeclaim <tên>`; chỉ ghi "đã xoá NodeClaim"). Karpenter drain node, Pod nhận SIGTERM và ghi checkpoint,
+1. Bạn merge PR P1d (attempt 2), rồi `$S resume tenant-a smoke-1`. Lệnh này chạy B06, B07 rồi B09.
+   **B06**: sau checkpoint đầu, suite xoá Pod. Phải thấy message lật lại sau ≤ 120 giây, Job mới, `resumed from step N` với N > 0.
+2. **B07** (cùng lệnh): lặp lại nhưng xoá **NodeClaim** (`kubectl delete nodeclaim <tên>`; chỉ ghi "đã xoá NodeClaim"). Karpenter drain node, Pod nhận SIGTERM và ghi checkpoint,
    rồi Karpenter tạo NodeClaim mới cho Pod tiếp theo. Ghi nhãn "simulated disruption" (D11). Đây không phải Spot interruption thật.
-3. **B08**: gửi một request `fail-always`. Phải thấy marker `RECEIVED-1`, `RECEIVED-2`, `RECEIVED-3` của attempt này,
+   **B09** (cùng lệnh): khi attempt 2 đang train, suite gửi thêm một message của request `b09-extra`. Phải thấy vẫn 1 Pod, 1 NodeClaim.
+   Message thừa này lạ với mọi worker: bị nhả 3 lần rồi vào DLQ. Vì vậy bước 3 purge trước.
+3. Khi attempt 2 xong: `bash infra/p6-window/window.sh purge`, rồi bạn merge PR P1e (attempt 3 `fail-always`), rồi `$S dlq tenant-a smoke-1`.
+   **B08**: request `fail-always`. Phải thấy marker `RECEIVED-1`, `RECEIVED-2`, `RECEIVED-3` của attempt này,
    message của attempt nằm trong DLQ, không có `SUCCEEDED`, và node bị thu hồi sau đó. Không đếm số Job `Failed`:
    `failedJobsHistoryLimit: 1` chỉ giữ một Job. Nếu Job hỏng **trước** khi nhận message (không có `RECEIVED-1`),
    DLQ không chặn được: đó là điều kiện dừng H5.
-4. **B09–B14** theo `batch-suite.sh`:
+4. Khi không còn Pod batch nào đang chạy: `B12_REQUEST=smoke-1 $S negatives` (B10–B13; B14 đã chạy ở C2 khi node batch còn sống).
+   Kết thúc: `$S report` phải in `RESULT: PASS`.
    - B09: message thứ hai khi đang chạy, không có node thứ hai.
    - B10: Pod không có toleration không lên node batch.
    - B11: hai lần từ chối riêng cho `pods` và `count/jobs.batch` ở mức D9, mỗi thông báo phải nêu đúng tên quota đó,
@@ -168,20 +182,21 @@ hỏng hoặc thiếu hẳn. B01 chạy ở C6, sau khi scaler đã tạo đư�
    echo "jobs_a: $(cnt kubectl -n tenant-a get jobs -l scaledjob.keda.sh/name -o name)"
    echo "spot_limit: $(kubectl get nodepool batch-spot -o jsonpath='{.spec.limits.cpu}' || echo READ_FAILED)"
    echo "nodeclaims: $(cnt kubectl get nodeclaims -o name)"
-   bash gitops/tests/batch-suite.sh stats
+   bash gitops/tests/batch-suite.sh stats   # cần MODE, CTX như trên
    ```
    **Phải thấy:** `scaledjob_a: 0`, `jobs_a: 0`, `spot_limit: 0`, `nodeclaims: 0` và `visible=0 inflight=0`.
    `READ_FAILED` không phải `0`: đọc lại. Lý do: nếu ScaledJob của tenant-a còn sống, worker của nó có thể
    nhận message của tenant-b rồi trả lại, và lần nhận đó vẫn bị đếm vào `maxReceiveCount` (D3). Nếu limit Spot chưa về 0,
    Karpenter có thể dựng node Spot cho run lẽ ra phải chạy On-Demand.
 3. Bạn merge PR P1c (bật tenant-b). Karpenter chỉ còn `batch-ondemand`.
-4. Run của tenant-b chạy xong. Suite đọc nhãn Node của Pod thật và thấy capacity type `on-demand`. Run này mang nhãn
+4. Run của tenant-b chạy xong: `OUT="$HOME/zdr-p6/batch-acceptance-$RUN_ID-tenant-b.json" $S run tenant-b smoke-1 on-demand`
+   (file riêng, để run này không ghi đè B02–B05 của tenant-a). Suite đọc nhãn Node của Pod thật và thấy capacity type `on-demand`. Run này mang nhãn
    `on-demand`, không bao giờ được tính là Spot (biên âm 7).
 5. Micro-lab ở mục 5b.
 
 **F. Dọn** (từ giờ freeze, hoặc sớm hơn nếu đã xong). Theo đúng SPEC §9.5:
 
-1. Tắt mọi `BatchTrainingJob` qua PR, chạy `cleanup`, đợi ScaledJob và Job về 0.
+1. Tắt mọi `BatchTrainingJob` qua PR, chạy `bash infra/p6-window/window.sh cleanup <tenant> smoke-1` cho từng tenant đã bật, đợi ScaledJob và Job về 0.
 2. Dừng sync của `zdr-root` **trước**. Root có `selfHeal`: xoá app con khi root còn chạy thì root tạo lại app đó
    (cái bẫy đã thấy ở P5 mục 5a). Rồi xoá app NodePool có cascade, như P4 J bước 1. Controller Karpenter vẫn chạy suốt bước này,
    vì chính nó xoá NodeClaim và instance:
