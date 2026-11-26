@@ -24,3 +24,5 @@ backend.hcl
 *.tfvars.json
 # DRF-11 smoke test output (copy into evidence, then delete)
 infra/terraform/smoke.out
+# P6 batch suite results (gitops/tests/batch-suite.sh): copy counts into evidence, never commit raw
+batch-acceptance*.json
