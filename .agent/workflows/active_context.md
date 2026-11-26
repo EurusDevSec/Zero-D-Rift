@@ -1,14 +1,14 @@
 ---
 project: Zero D-Rift
 status: P6_SPEC_APPROVED
-active_phase: P6 (P5 technically done 25/11; inventory and Bills 26/11)
-active_task: P6-T1 contract (DRF-73); P5-T4.3 close-out (DRF-72) on 26/11
+active_phase: P6 (P5 done 26/11)
+active_task: P6-T4 suite and L3 window (DRF-79, DRF-80)
 active_feature: BatchTrainingJob on CPU (SPEC-P6, ADR-0009)
 active_spec: .agent/specs/SPEC-P6_BATCH_TRAINING_JOB.md
 current_learning: .agent/learning/CURRENT_STATUS.md
 mode: Coach
 authority: NO_INSTALL_NO_AWS_APPLY_UNTIL_TASK_GATES
-last_reviewed: 2026-11-25
+last_reviewed: 2026-11-26
 ---
 
 # Active Context
@@ -70,9 +70,9 @@ Follow [context governance](../references/context-governance.md).
 
 ## Next safe action
 
-P5: technical gate met 25/11 (audit `docs/evidence/p5/P5_ACCEPTANCE_AUDIT_20261125.md`,
-Codex APPROVE, teach-back 8/8). Open for DRF-72: delayed inventory and Bills
-gross on 26/11, then Linear DRF-69/71/72 Done.
+P5 done 26/11 (audit `docs/evidence/p5/P5_ACCEPTANCE_AUDIT_20261125.md`):
+Codex APPROVE, teach-back 8/8, delayed inventory CLEAN, Bills gross November
+1.62 USD account-wide (P5 about 0.89 USD, cap 4). Linear DRF-69/71/72 Done.
 
 P6 started 25/11 (owner: "mai là xong phase 6"). Owner rebaseline recorded as
 SPEC-P6 D13 and ROADMAP "Rebaseline 25/11": P6 25–26/11 (overflow 27/11), P7
