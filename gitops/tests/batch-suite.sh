@@ -4,7 +4,7 @@
 # cases to $OUT (JSON: id, expected, observed, result, utc, evidence); `report`
 # exits 0 only when every case is present and matched.
 #
-#   MODE=eks|kind CTX=<context> [OUT=batch-acceptance.json] batch-suite.sh <phase>
+#   MODE=eks|kind CTX=<context> RUN_ID=<window run id> [OUT=batch-acceptance.json] batch-suite.sh <phase>
 #     stats                          visible=N inflight=N dlq=N (guarded)
 #     run TENANT REQUEST CAPACITY    B02 B03 B04 B14 B05 on the current attempt (CAPACITY spot|on-demand)
 #     b01 TENANT REQUEST             empty queue after a run: no new Job, no node
@@ -29,7 +29,14 @@ SELF="bash $(cd "$(dirname "$0")" && pwd)/$(basename "$0")"
 cd "$(dirname "$0")/../.."
 
 MODE="${MODE:?MODE=eks|kind}"; CTX="${CTX:?CTX=<kubectl context>}"
+# Every record carries mode and run id; `report` refuses rows of another run.
+if [[ "$MODE" == eks ]]; then
+  [[ "${RUN_ID:-}" =~ ^P6-L3-[0-9]{8}-[0-9]{2}$ ]] || { echo "FAIL  export RUN_ID=P6-L3-YYYYMMDD-NN"; exit 2; }
+else RUN_ID="${RUN_ID:-kind-local}"; fi
+export RUN_ID
 OUT="${OUT:-batch-acceptance.json}"
+# Native jq on Windows cannot open /c/... paths (MSYS_NO_PATHCONV is set above).
+command -v cygpath >/dev/null 2>&1 && OUT="$(cygpath -m "$OUT")"
 K="kubectl --context $CTX"
 LBL=app.kubernetes.io/name=zdr-batch-suite
 RGD=gitops/platform/rgd/batch-training-job.yaml
@@ -45,7 +52,8 @@ scrub() {
   sed -E -e "s/${CTX//\//\\/}/<ctx>/g" -e 's/arn:aws[a-z-]*:[^ "]*/<arn>/g' \
          -e ':a' -e 's/(^|[^0-9])[0-9]{12}([^0-9]|$)/\1<acct>\2/' -e 'ta' \
          -e 's#https://sqs\.[^ "]*#<queue-url>#g' -e 's/i-[0-9a-f]{8,17}/<instance>/g' \
-         -e 's/ip-[0-9-]+\.[a-z0-9.-]*internal/<node>/g' <<<"$1" | tr '\n' ' ' | sed 's/ $//'
+         -e 's/ip-[0-9-]+\.[a-z0-9.-]*internal/<node>/g' \
+         -e 's/(^|[^0-9.])[0-9]{1,3}(\.[0-9]{1,3}){3}(:[0-9]+)?([^0-9.]|$)/\1<ip>\4/g' <<<"$1" | tr '\n' ' ' | sed 's/ $//'
 }
 record() { # ID EXPECTED OBSERVED EVIDENCE
   local ob ev res
@@ -56,10 +64,12 @@ record() { # ID EXPECTED OBSERVED EVIDENCE
   printf '%-18s %-4s expected=%-40s observed=%-40s %s\n' "$res" "$1" "$2" "$ob" "${ev:0:120}"
   [[ -s "$OUT" ]] || echo '[]' > "$OUT"
   jq --arg id "$1" --arg e "$2" --arg o "$ob" --arg r "$res" --arg ev "${ev:0:400}" --arg at "$(date -u +%FT%TZ)" \
-     --arg m "$MODE" '[.[] | select(.id != $id)] + [{id:$id, mode:$m, expected:$e, observed:$o, result:$r, utc:$at, evidence:$ev}]' \
-     "$OUT" > "$OUT.tmp" && mv "$OUT.tmp" "$OUT"
+     --arg m "$MODE" --arg run "$RUN_ID" '[.[] | select(.id != $id)] + [{id:$id, mode:$m, run:$run, expected:$e, observed:$o, result:$r, utc:$at, evidence:$ev}]' \
+     "$OUT" > "$OUT.tmp" && mv "$OUT.tmp" "$OUT" || { echo "FAIL  cannot write $OUT"; exit 1; }
 }
 skip_eks() { record "$1" "$2" SKIPPED_NEEDS_EKS "${3:-kind has no $1 path}"; }
+num_of() { # FIELD STATS -> the number after FIELD= in a qstats line, or READ_FAILED
+  local v; v="$(grep -oE "(^| )$1=[0-9]+" <<<"$2" | head -1 | cut -d= -f2)"; echo "${v:-READ_FAILED}"; }
 
 # --- guarded reads ---------------------------------------------------------------
 cnt() { local o; o="$("$@" 2>/dev/null)" || { echo READ_FAILED; return; }; grep -c . <<<"$o" || true; }
@@ -84,6 +94,45 @@ print("visible=%s inflight=%s dlq=%d" % (m["ApproximateNumberOfMessages"], m["Ap
   m="$(timeout 30 aws sqs get-queue-attributes --queue-url "$u" --attribute-names ApproximateNumberOfMessages ApproximateNumberOfMessagesNotVisible --output json </dev/null 2>/dev/null)" || { echo READ_FAILED; return; }
   d="$(timeout 30 aws sqs get-queue-attributes --queue-url "$du" --attribute-names ApproximateNumberOfMessages ApproximateNumberOfMessagesNotVisible --output json </dev/null 2>/dev/null)" || { echo READ_FAILED; return; }
   jq -rn --argjson m "$m" --argjson d "$d" '"visible=\($m.Attributes.ApproximateNumberOfMessages) inflight=\($m.Attributes.ApproximateNumberOfMessagesNotVisible) dlq=\(($d.Attributes.ApproximateNumberOfMessages|tonumber) + ($d.Attributes.ApproximateNumberOfMessagesNotVisible|tonumber))"'
+}
+
+# dlq_own TENANT REQUEST ATTEMPT -> own=N total=M from message bodies in the DLQ | READ_FAILED
+# Three receives (VisibilityTimeout 30 s) collect distinct message ids; the DLQ has
+# no redrive, so a receive there changes nothing but the visibility.
+DLQ_PY='
+import json, sys
+seen, own = {}, 0
+for page in sys.stdin.read().split("\x1e"):
+    if not page.strip():
+        continue
+    for m in json.loads(page).get("Messages", []):
+        seen[m["MessageId"]] = m["Body"]
+for body in seen.values():
+    try:
+        d = json.loads(body)
+    except ValueError:
+        continue
+    if [d.get("tenant"), d.get("requestId"), str(d.get("runAttempt"))] == sys.argv[1:4]:
+        own += 1
+print("own=%d total=%d" % (own, len(seen)))'
+dlq_own() {
+  local pages="" o i
+  if [[ "$MODE" == kind ]]; then
+    pages="$(toolbox '
+import boto3, json, os
+c = boto3.client("sqs", endpoint_url=os.environ["SQS_ENDPOINT_URL"]); u = os.environ["SQS_ENDPOINT_URL"] + "/queue/zero-drift-batch-dlq"
+for _ in range(3):
+    print(json.dumps(c.receive_message(QueueUrl=u, MaxNumberOfMessages=10, VisibilityTimeout=30, WaitTimeSeconds=1)), end="\x1e")')" \
+      || { echo READ_FAILED; return; }
+  else
+    local u du; u="$(qurl)" && [[ -n "$u" ]] || { echo READ_FAILED; return; }
+    du="$(timeout 30 aws sqs get-queue-url --queue-name "$(basename "$u")-dlq" --query QueueUrl --output text </dev/null 2>/dev/null)" || { echo READ_FAILED; return; }
+    for i in 1 2 3; do
+      o="$(timeout 30 aws sqs receive-message --queue-url "$du" --max-number-of-messages 10 --visibility-timeout 30 --wait-time-seconds 1 --output json </dev/null 2>/dev/null)" || { echo READ_FAILED; return; }
+      [[ -n "$o" ]] || o='{}'; pages+="$o"$'\x1e'
+    done
+  fi
+  python -I -c "$DLQ_PY" "$1" "$2" "$3" <<<"$pages" 2>/dev/null || echo READ_FAILED
 }
 
 bucket() { echo "zero-drift-batch-$1-$2"; }
@@ -123,6 +172,15 @@ kinstances() { # Karpenter-tagged instances in every state but terminated
   timeout 60 aws ec2 describe-instances --filters Name=tag-key,Values=karpenter.sh/nodepool \
     Name=instance-state-name,Values=pending,running,stopping,stopped,shutting-down \
     --query 'length(Reservations[].Instances[])' --output text </dev/null 2>/dev/null || echo READ_FAILED
+}
+
+# node_gone NAME -> 0 only when the API says NotFound, or a successful list lacks it.
+node_gone() {
+  local o
+  if o="$($K get node "$1" -o name 2>&1)"; then return 1; fi
+  [[ "$o" == *NotFound* ]] && return 0
+  o="$($K get nodes -o name 2>/dev/null)" || return 1
+  ! grep -qx "node/$1" <<<"$o"
 }
 
 wait_until() { # SECONDS COMMAND... -> 0 when COMMAND succeeds
@@ -184,7 +242,8 @@ phase_run() { # TENANT REQUEST CAPACITY
 
   # B03: still one Job (and one live Pod) after three polls.
   sleep $((3 * POLL + 5))
-  record B03 "jobs=1 pods=1" "jobs=$(jobs_of "$t" "$r") pods=$(live_pods "$t" "$r")" "after 3 polls, message in flight: $(qstats)"
+  st="$(qstats)"
+  record B03 "jobs=1 pods=1 inflight=1" "jobs=$(jobs_of "$t" "$r") pods=$(live_pods "$t" "$r") inflight=$(num_of inflight "$st")" "after 3 polls: $st"
 
   # Capacity of the node the training Pod runs on (read from Node labels; no name kept).
   wait_until 1200 bash -c "[[ -n \$($K -n $t get pods -l app.kubernetes.io/name=batch-train,batch.zero-drift.io/request=$r --field-selector=status.phase=Running -o name 2>/dev/null) ]]" \
@@ -192,6 +251,9 @@ phase_run() { # TENANT REQUEST CAPACITY
   pod="$(running_pod "$t" "$r")"
   node="$($K -n "$t" get "$pod" -o jsonpath='{.spec.nodeName}' 2>/dev/null)" || node=""
   labels="$($K get node "$node" -o jsonpath='{.metadata.labels.karpenter\.sh/capacity-type} {.metadata.labels.node\.kubernetes\.io/instance-type} {.metadata.labels.zero-drift\.io/pool}' 2>/dev/null)" || labels="READ_FAILED"
+  # B05 needs the instance behind this node; read it now, the node may be gone
+  # one consolidateAfter (60 s) after the Job ends (Codex R1 H).
+  local pid; pid="$($K get node "$node" -o jsonpath='{.spec.providerID}' 2>/dev/null)" || pid=""
   echo "INFO  training Pod node: capacity/type/pool = $labels"
 
   # B14 while the batch node is up: IMDS token from a Pod on it (hop limit 1).
@@ -228,10 +290,10 @@ phase_run() { # TENANT REQUEST CAPACITY
 
   # B05: the node leaves Kubernetes, then its instance is terminated on AWS.
   if [[ "$MODE" == kind ]]; then skip_eks B05 "node-gone instance-terminated" "kind nodes are not reclaimed"; return; fi
-  local pid t0=$SECONDS kg="" ig="" iid
-  pid="$($K get node "$node" -o jsonpath='{.spec.providerID}' 2>/dev/null)" || pid=""
+  local t0=$SECONDS kg="" ig="" iid
   iid="${pid##*/}"
-  wait_until 900 bash -c "! $K get node $node >/dev/null 2>&1 && $K get nodes >/dev/null 2>&1" && kg="node-gone"
+  [[ -n "$node" && "$iid" =~ ^i-[0-9a-f]{8,17}$ ]] || { record B05 "node-gone instance-terminated" "providerID-unread" "node or providerID not read while the Pod ran"; return; }
+  wait_until 900 node_gone "$node" && kg="node-gone"
   local tk=$((SECONDS - t0))
   wait_until 900 bash -c "[[ \$(timeout 30 aws ec2 describe-instances --instance-ids $iid --query 'Reservations[0].Instances[0].State.Name' --output text </dev/null 2>/dev/null) == terminated ]]" && ig="instance-terminated"
   record B05 "node-gone instance-terminated" "${kg:-node-present} ${ig:-instance-not-terminated}" \
@@ -239,12 +301,16 @@ phase_run() { # TENANT REQUEST CAPACITY
 }
 
 phase_b01() { # TENANT REQUEST
-  local t=$1 r=$2 sj ready last s t0 i bad=0 nj nc ni
+  local t=$1 r=$2 sj ready a jj made s t0 i bad=0 nj nc ni
   local exp="jobs_new=0 nodeclaims=0 instances=0"; [[ "$MODE" == kind ]] && exp="jobs_new=0 nodeclaims=n/a instances=n/a"
   sj="$($K -n "$t" get scaledjob "batch-$r" -o json 2>/dev/null)" || { record B01 "$exp" "scaledjob-missing" "a missing ScaledJob is FAIL"; return; }
   ready="$(jq -r '[.status.conditions[]? | select(.type=="Ready")][0].status // "none"' <<<"$sj")"
-  last="$(jq -r '.status.lastActiveTime // ""' <<<"$sj")"
-  [[ "$ready" == True && -n "$last" ]] || { record B01 "$exp" "scaler-not-proven ready=$ready" "ScaledJob must be Ready and have started a Job"; return; }
+  # The scaler proved it reads the queue: a KEDA Job of this attempt reached Complete.
+  a="$(attempt "$t" "$r")" || a=""
+  jj="$($K -n "$t" get jobs -l "scaledjob.keda.sh/name=batch-$r" -o json 2>/dev/null)" || { record B01 "$exp" READ_FAILED "Jobs not readable"; return; }
+  made="$(jq --arg a "$a" '[.items[] | select(.spec.template.metadata.labels["batch.zero-drift.io/attempt"] == $a)
+          | select(any(.status.conditions[]?; .type == "Complete" and .status == "True"))] | length' <<<"$jj")"
+  [[ "$ready" == True && -n "$a" && "$made" -ge 1 ]] || { record B01 "$exp" "scaler-not-proven ready=$ready jobs_complete=${made:-?}" "needs a Complete KEDA Job of attempt ${a:-?}"; return; }
   t0="$(date -u +%s)"
   for i in 1 2 3 4; do
     s="$(qstats)"; [[ "$s" == "visible=0 inflight=0"* ]] || bad=1
@@ -253,13 +319,15 @@ phase_b01() { # TENANT REQUEST
   sleep 5
   nj="$(jobs_since "$t" "$r" "$t0")"; nc="$(nodeclaims)"; ni="$(kinstances)"
   (( bad )) && { record B01 "$exp" "queue-not-empty" "$s"; return; }
-  record B01 "$exp" "jobs_new=$nj nodeclaims=$nc instances=$ni" "ScaledJob Ready, started a Job earlier; queue empty over 4 polls"
+  record B01 "$exp" "jobs_new=$nj nodeclaims=$nc instances=$ni" "ScaledJob Ready, Complete Job of attempt $a; queue empty over 4 polls"
 }
 
-resumed_step() { # TENANT REQUEST EPOCH -> N from "resumed from step N" of a Pod started after EPOCH
+resumed_step() { # TENANT REQUEST EPOCH ATTEMPT OLD_JOB -> N from "resumed from step N"
+  # of a Pod of ATTEMPT, created after EPOCH, in a Job other than OLD_JOB (backoffLimit 0).
   local p j
-  j="$($K -n "$1" get pods -l "app.kubernetes.io/name=batch-train,batch.zero-drift.io/request=$2" -o json 2>/dev/null)" || return 1
-  for p in $(jq -r --argjson t "$3" '.items[] | select((.metadata.creationTimestamp | fromdateiso8601) > $t) | .metadata.name' <<<"$j"); do
+  j="$($K -n "$1" get pods -l "app.kubernetes.io/name=batch-train,batch.zero-drift.io/request=$2,batch.zero-drift.io/attempt=$4" -o json 2>/dev/null)" || return 1
+  for p in $(jq -r --argjson t "$3" --arg old "$5" '.items[] | select((.metadata.creationTimestamp | fromdateiso8601) > $t)
+             | select((.metadata.labels["job-name"] // "") != $old and (.metadata.labels["job-name"] // "") != "") | .metadata.name' <<<"$j"); do
     $K -n "$1" logs "$p" 2>/dev/null | grep -o 'resumed from step [0-9]*' | grep -o '[0-9]*$' | head -1 && return 0
   done
   return 1
@@ -269,67 +337,85 @@ running_wait() { # TENANT REQUEST SECONDS -> 0 when a training Pod is Running
   wait_until "$3" bash -c "[[ -n \$($K -n $1 get pods -l app.kubernetes.io/name=batch-train,batch.zero-drift.io/request=$2 --field-selector=status.phase=Running -o name 2>/dev/null) ]]"
 }
 resume_verdict() { [[ -n "$1" && "$1" -gt 0 ]] && echo "resumed>0" || echo "resumed=${1:-none}"; }
+job_of() { $K -n "$1" get "$2" -o jsonpath='{.metadata.labels.job-name}' 2>/dev/null; }
+blocked() { local c; for c in "$@"; do record "$c" "${EXP[$c]}" "blocked:$BLOCK" "an earlier step of this phase failed"; done; }
+declare -A EXP=([B06]="resumed>0" [B07]="resumed>0" [B09]="sent=1 active=1 pods=1 nodeclaims=1 msgs>=2")
 
 phase_resume() { # TENANT REQUEST (a new attempt of a normal request, 300 steps)
-  local t=$1 r=$2 a pod node nc t0 n e u
-  a="$(attempt "$t" "$r")"; [[ -n "$a" ]] || { echo "FAIL  request $t/$r not readable"; exit 1; }
+  local t=$1 r=$2 a pod node nc t0 n e u oj st
+  a="$(attempt "$t" "$r")" || a=""; [[ -n "$a" ]] || { echo "FAIL  request $t/$r not readable"; exit 1; }
   echo "INFO  run key $t/$r/$a"
   running_wait "$t" "$r" 1200 || { echo "FAIL  training Pod not Running within 20 min (H3)"; exit 1; }
 
   # B06: delete the Pod after its first checkpoint; a new Job resumes from N > 0.
-  wait_until 600 bash -c "[[ \$(MODE=$MODE CTX=$CTX OUT=/dev/null $SELF _keys $t $r $a | grep -c '^ckpt/') -ge 1 ]]" || true
-  pod="$(running_pod "$t" "$r")"; t0="$(date -u +%s)"
-  $K -n "$t" delete "$pod" --wait=false >/dev/null 2>&1 || true
+  BLOCK=""
+  wait_until 600 bash -c "[[ \$(MODE=$MODE CTX=$CTX OUT=/dev/null $SELF _keys $t $r $a | grep -c '^ckpt/') -ge 1 ]]" || BLOCK=no-checkpoint
+  [[ -n "$BLOCK" ]] || { pod="$(running_pod "$t" "$r")"; [[ -n "$pod" ]] || BLOCK=no-running-pod; }
+  [[ -n "$BLOCK" ]] || { oj="$(job_of "$t" "$pod")"; [[ -n "$oj" ]] || BLOCK=job-unread; }
+  t0="$(date -u +%s)"
+  [[ -n "$BLOCK" ]] || $K -n "$t" delete "$pod" --wait=false >/dev/null 2>&1 || BLOCK=pod-delete-failed
+  if [[ -n "$BLOCK" ]]; then blocked B06 B07 B09; return; fi
   echo "INFO  training Pod deleted after a checkpoint"
-  n=""; wait_until $((VIS + 600)) bash -c "MODE=$MODE CTX=$CTX OUT=/dev/null $SELF _resumed $t $r $t0" && n="$(resumed_step "$t" "$r" "$t0")"
-  record B06 "resumed>0" "$(resume_verdict "$n")" "Pod deleted after a checkpoint; resumed from step ${n:-?}"
+  n=""; wait_until $((VIS + 600)) bash -c "MODE=$MODE CTX=$CTX OUT=/dev/null $SELF _resumed $t $r $t0 $a $oj" && n="$(resumed_step "$t" "$r" "$t0" "$a" "$oj")"
+  record B06 "resumed>0" "$(resume_verdict "$n")" "Pod deleted after a checkpoint; new Job of attempt $a resumed from step ${n:-?}"
 
   # B07: delete the NodeClaim under the resumed Pod (simulated disruption, D11).
   if [[ "$MODE" == kind ]]; then skip_eks B07 "resumed>0" "kind has no NodeClaims"
   else
-    running_wait "$t" "$r" 600 || true
+    running_wait "$t" "$r" 600 || BLOCK=no-running-pod
     sleep 40   # past at least one more checkpoint (every 25 steps)
-    pod="$(running_pod "$t" "$r")"
-    node="$($K -n "$t" get "$pod" -o jsonpath='{.spec.nodeName}' 2>/dev/null)" || node=""
-    nc="$($K get nodeclaims -o json 2>/dev/null)" || nc=""
-    nc="$(jq -r --arg n "$node" '[.items[]? | select(.status.nodeName == $n) | .metadata.name][0] // ""' <<<"${nc:-null}")"
-    if [[ -z "$nc" ]]; then record B07 "resumed>0" "no-nodeclaim" "no NodeClaim found for the training Pod's node"
-    else
-      t0="$(date -u +%s)"
-      $K delete nodeclaim "$nc" --wait=false >/dev/null 2>&1 || true
-      echo "INFO  NodeClaim deleted (simulated disruption)"
-      n=""; wait_until $((VIS + 1200)) bash -c "MODE=$MODE CTX=$CTX OUT=/dev/null $SELF _resumed $t $r $t0" && n="$(resumed_step "$t" "$r" "$t0")"
-      record B07 "resumed>0" "$(resume_verdict "$n")" "simulated disruption (D11): NodeClaim deleted; resumed from step ${n:-?}"
-    fi
+    [[ -n "$BLOCK" ]] || { pod="$(running_pod "$t" "$r")"; [[ -n "$pod" ]] || BLOCK=no-running-pod; }
+    [[ -n "$BLOCK" ]] || { oj="$(job_of "$t" "$pod")"; [[ -n "$oj" ]] || BLOCK=job-unread; }
+    [[ -n "$BLOCK" ]] || { node="$($K -n "$t" get "$pod" -o jsonpath='{.spec.nodeName}' 2>/dev/null)" || node=""; [[ -n "$node" ]] || BLOCK=node-unread; }
+    [[ -n "$BLOCK" ]] || { nc="$($K get nodeclaims -o json 2>/dev/null)" || BLOCK=nodeclaims-unread; }
+    [[ -n "$BLOCK" ]] || { nc="$(jq -r --arg n "$node" '[.items[]? | select(.status.nodeName == $n) | .metadata.name][0] // ""' <<<"$nc")"; [[ -n "$nc" ]] || BLOCK=no-nodeclaim; }
+    t0="$(date -u +%s)"
+    [[ -n "$BLOCK" ]] || $K delete nodeclaim "$nc" --wait=false >/dev/null 2>&1 || BLOCK=nodeclaim-delete-failed
+    if [[ -n "$BLOCK" ]]; then blocked B07 B09; return; fi
+    echo "INFO  NodeClaim deleted (simulated disruption)"
+    n=""; wait_until $((VIS + 1200)) bash -c "MODE=$MODE CTX=$CTX OUT=/dev/null $SELF _resumed $t $r $t0 $a $oj" && n="$(resumed_step "$t" "$r" "$t0" "$a" "$oj")"
+    record B07 "resumed>0" "$(resume_verdict "$n")" "simulated disruption (D11): NodeClaim deleted; new Job of attempt $a resumed from step ${n:-?}"
   fi
 
   # B09: a second message while this attempt trains: still one Pod, one node.
   # The extra message (request b09-extra) is foreign to every worker: it is
   # released three times and ends in the DLQ. Purge before B08 (window.sh purge).
-  if [[ "$MODE" == kind ]]; then skip_eks B09 "pods=1 nodeclaims=1" "kind has no NodeClaims"; return; fi
-  running_wait "$t" "$r" 900 || true
+  if [[ "$MODE" == kind ]]; then skip_eks B09 "${EXP[B09]}" "kind has no NodeClaims"; return; fi
+  running_wait "$t" "$r" 900 || { BLOCK=no-running-pod; blocked B09; return; }
+  # A fresh attempt number, so a rerun is never ALREADY_SUBMITTED (no message sent).
+  local xa=$(( $(date +%s) % 9000 + 1000 )) sent act tot
   u="$(qurl)"
-  e="$(run_probe zdr-platform batch-submit '["submit"]' '{}' "$(jq -nc --argjson base "$(aws_env)" --arg t "$t" --arg b "$(bucket "$t" "$r")" --arg q "$u" \
-       '$base + [{name:"TENANT",value:$t},{name:"REQUEST_ID",value:"b09-extra"},{name:"RUN_ATTEMPT",value:"1"},{name:"STEPS",value:"10"},{name:"BUCKET",value:$b},{name:"QUEUE_URL",value:$q}]')")"
+  e="$(run_probe zdr-platform batch-submit '["submit"]' '{}' "$(jq -nc --argjson base "$(aws_env)" --arg t "$t" --arg b "$(bucket "$t" "$r")" --arg q "$u" --arg xa "$xa" \
+       '$base + [{name:"TENANT",value:$t},{name:"REQUEST_ID",value:"b09-extra"},{name:"RUN_ATTEMPT",value:$xa},{name:"STEPS",value:"10"},{name:"BUCKET",value:$b},{name:"QUEUE_URL",value:$q}]')")"
   unset u
+  grep -q '"event": "SUBMITTED"' <<<"$e" && sent=1 || sent=0
   echo "INFO  extra submit: $(grep -o '"event": "[A-Z_]*"' <<<"$e" | tr '\n' ' ')"
   sleep $((3 * POLL + 5))
-  record B09 "pods=1 nodeclaims=1" "pods=$(live_pods "$t" "$r") nodeclaims=$(nodeclaims)" "extra message sent while training; $(qstats)"
+  # Still active: a Pod of this attempt is Running when B09 is scored.
+  act="$(cnt $K -n "$t" get pods -l "app.kubernetes.io/name=batch-train,batch.zero-drift.io/request=$r,batch.zero-drift.io/attempt=$a" --field-selector=status.phase=Running -o name)"
+  st="$(qstats)"
+  tot="msgs=READ_FAILED"
+  if [[ "$st" == visible=* ]]; then
+    tot=$(( $(num_of visible "$st") + $(num_of inflight "$st") ))
+    if (( tot >= 2 )); then tot="msgs>=2"; else tot="msgs=$tot"; fi
+  fi
+  record B09 "${EXP[B09]}" "sent=$sent active=$act pods=$(live_pods "$t" "$r") nodeclaims=$(nodeclaims) $tot" \
+    "extra message (own run key) sent while attempt $a trained; $st"
 }
 
 phase_dlq() { # TENANT REQUEST (fail-always attempt; queue and DLQ purged before)
-  local t=$1 r=$2 a ks rc s dl
-  a="$(attempt "$t" "$r")"; [[ -n "$a" ]] || { record B08 "received=3 dlq=1 succeeded=0" READ_FAILED "request not readable"; return; }
+  local t=$1 r=$2 a ks rc s dl x8="received=3 dlq_own=1 succeeded=0"
+  a="$(attempt "$t" "$r")" || a=""; [[ -n "$a" ]] || { record B08 "$x8" READ_FAILED "request not readable"; return; }
   [[ "$($K -n "$t" get batchtrainingjob "$r" -o jsonpath='{.spec.failProfile}' 2>/dev/null)" == fail-always ]] \
     || { echo "FAIL  $t/$r is not failProfile fail-always"; exit 1; }
   wait_until 1800 bash -c "MODE=$MODE CTX=$CTX OUT=/dev/null $SELF _keys $t $r $a | grep -q '^RECEIVED-3'" || true
   sleep $((VIS + 3 * POLL))
   ks="$(keys "$t" "$r" "$a")"; s="$(qstats)"
-  if [[ "$ks" == READ_FAILED || "$s" == READ_FAILED ]]; then record B08 "received=3 dlq=1 succeeded=0" READ_FAILED "$s"; return; fi
+  dl="$(dlq_own "$t" "$r" "$a")"
+  if [[ "$ks" == READ_FAILED || "$s" == READ_FAILED || "$dl" == READ_FAILED ]]; then record B08 "$x8" READ_FAILED "keys/stats/dlq read failed"; return; fi
   rc="$(grep -c '^RECEIVED-' <<<"$ks" || true)"
-  dl="$(sed -E 's/.*dlq=([0-9]+).*/\1/' <<<"$s")"
-  record B08 "received=3 dlq=1 succeeded=0" "received=$rc dlq=$dl succeeded=$(grep -c '^SUCCEEDED' <<<"$ks" || true)" \
-    "attempt $a; $s; Failed Jobs not counted (history limit 1)"
+  record B08 "$x8" "received=$rc dlq_own=$(num_of own "$dl") succeeded=$(grep -c '^SUCCEEDED' <<<"$ks" || true)" \
+    "attempt $a; $s; DLQ $dl (bodies matched on tenant/request/attempt); Failed Jobs not counted (history limit 1)"
 }
 
 quota_deny() { # MANIFEST -> the quota resource named in the denial, or allow/error
@@ -338,7 +424,8 @@ quota_deny() { # MANIFEST -> the quota resource named in the denial, or allow/er
   if out="$($K create --dry-run=server -f - <<<"$1" 2>&1)"; then echo allow; return; fi
   case "$out" in
     *"exceeded quota"*) grep -oE 'requested: [a-z./]+=' <<<"$out" | head -1 | sed -E 's/requested: (.*)=/\1/' ;;
-    *) echo "error:$(scrub "$out" | cut -c1-80 | tr ' ' '_')" ;;
+    *Forbidden*) echo "error:forbidden" ;;
+    *) echo "error:create-failed" ;;
   esac
 }
 quota_room() { # TENANT RESOURCE -> hard - used | READ_FAILED
@@ -422,14 +509,16 @@ except ClientError as e:
 }
 
 phase_report() {
-  local ids exp missing bad
+  local ids exp missing bad stale
   [[ -s "$OUT" ]] || { echo "RESULT: FAIL (no results in $OUT)"; exit 1; }
+  stale="$(jq --arg m "$MODE" --arg run "$RUN_ID" '[.[] | select(.mode != $m or .run != $run)] | length' "$OUT")"
+  [[ "$stale" == 0 ]] || { echo "RESULT: FAIL ($stale rows of another mode or run in $OUT; use a new OUT per run)"; exit 1; }
   ids="$(jq -r '.[].id' "$OUT" | sort -u | tr '\n' ' ')"
   jq -r '.[] | "\(.result)\t\(.id)\t\(.observed)"' "$OUT" | sort -t$'\t' -k2
   missing=""; for exp in B01 B02 B03 B04 B05 B06 B07 B08 B09 B10 B11 B12 B13 B14; do [[ " $ids " == *" $exp "* ]] || missing+="$exp "; done
   if [[ "$MODE" == kind ]]; then bad="$(jq '[.[] | select(.result != "PASS" and .result != "SKIPPED_NEEDS_EKS")] | length' "$OUT")"
   else bad="$(jq '[.[] | select(.result != "PASS")] | length' "$OUT")"; fi
-  [[ -z "$missing" && "$bad" == 0 ]] && { echo "RESULT: PASS ($MODE; $(jq length "$OUT") cases; $OUT)"; exit 0; }
+  [[ -z "$missing" && "$bad" == 0 ]] && { echo "RESULT: PASS ($MODE $RUN_ID; $(jq length "$OUT") cases)"; exit 0; }
   echo "RESULT: FAIL (missing: ${missing:-none}; not matched: $bad)"; exit 1
 }
 

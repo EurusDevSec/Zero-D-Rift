@@ -31,10 +31,13 @@ bad="$(for f in $files; do python -I -c 'import sys,yaml; list(yaml.safe_load_al
 secrets="$(grep -l -E '^kind: *Secret *$' $files || true)"
 [[ -z "$secrets" ]] && pass "no Secret objects" || fail "Secret in: $secrets"
 ids="$(grep -n -E '(^|[^0-9])[0-9]{12}([^0-9]|$)|arn:aws:[a-z0-9-]*:[a-z0-9-]*:[0-9]{12}|(AKIA|ASIA)[A-Z0-9]{16}' $files || true)"
-[[ -z "$ids" ]] && pass "no account ID, account ARN or access key" || fail "sensitive: $ids"
+# Only file:line is printed: the matched text is the secret (Codex P6 R1).
+[[ -z "$ids" ]] && pass "no account ID, account ARN or access key" || fail "sensitive at: $(cut -d: -f1-2 <<<"$ids" | tr '
+' ' ')"
 # P6 (DRF-76): a queue URL holds the account ID; it lives only in the window-only batch-config.
 qurl="$(grep -n -i -E 'https?://(sqs\.[a-z0-9-]+\.amazonaws\.com|([a-z0-9-]+\.)?queue\.amazonaws\.com)|arn:aws:sqs:' $files || true)"
-[[ -z "$qurl" ]] && pass "no SQS queue URL or queue ARN" || fail "queue URL or ARN: $qurl"
+[[ -z "$qurl" ]] && pass "no SQS queue URL or queue ARN" || fail "queue URL or ARN at: $(cut -d: -f1-2 <<<"$qurl" | tr '
+' ' ')"
 
 # 3. Every container image and provider package is pinned by digest; no latest.
 latest="$(grep -n -E '(:|")latest("|$| )' $files || true)"
@@ -639,7 +642,9 @@ if g is not None:
         and sps.get("serviceAccountName") == "batch-submit" and sps.get("automountServiceAccountToken") is False
         and isinstance(sjs.get("backoffLimit"), int) and isinstance(sjs.get("activeDeadlineSeconds"), int)
         and "ttlSecondsAfterFinished" not in sjs
-        and any('c.type == "Complete"' in w for w in sb.get("readyWhen", []))
+        # The whole condition, not a substring: an always-true expression could
+        # contain the text "c.type == \"Complete\"" (Codex P6 R1).
+        and sb.get("readyWhen") == ['${submit.status.?conditions.orValue([]).exists(c, c.type == "Complete" && c.status == "True")}']
         and "scaledJob." in yaml.safe_dump(st.get("metadata", {})),
         "batch-training-job: submit Job in zdr-platform named by runAttempt, batch-submit SA, "
         "readyWhen Complete, created after the ScaledJob")
@@ -674,9 +679,10 @@ for n, sp in sorted(pools.items()):
         and len(zs) == 1 and zs[0].get("operator") == "In" and sorted(zs[0].get("values", [])) == ["us-east-1a", "us-east-1b"]
         and not any("gpu" in k.lower() or "accelerator" in k.lower() for k in keys),
         f"{n}: one capacity type, only the D1 instance types and zones, no GPU requirement")
-    res(sp.get("limits") == {"cpu": "2"} and ts.get("expireAfter") == "2h"
+    # "0" switches the pool off (runbook E1 On-Demand step, H2 emergency stop); never above 2.
+    res(sp.get("limits") in ({"cpu": "2"}, {"cpu": "0"}) and ts.get("expireAfter") == "2h"
         and sp.get("disruption") == {"consolidationPolicy": "WhenEmpty", "consolidateAfter": "60s"},
-        f"{n}: limits.cpu 2 (one node), expireAfter 2h, removed 60 s after empty")
+        f"{n}: limits.cpu 2 (one node) or 0 (off), expireAfter 2h, removed 60 s after empty")
     res(ts.get("taints") == [{"key": "zero-drift.io/batch", "value": "true", "effect": "NoSchedule"}]
         and sp.get("template", {}).get("metadata", {}).get("labels") == {"zero-drift.io/pool": "batch"}
         and ts.get("nodeClassRef") == {"group": "karpenter.k8s.aws", "kind": "EC2NodeClass", "name": "batch"},

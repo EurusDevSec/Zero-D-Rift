@@ -13,6 +13,8 @@
 #   window.sh cleanup TENANT REQUEST    # only for a disabled request: delete its leftover messages, then its Jobs
 #
 # A failed read prints READ_FAILED and fails; it is never taken as "absent" or 0.
+# stderr of aws and kubectl can hold ARNs, queue URLs or account IDs, so calls that
+# touch window values discard it and report a fixed code instead.
 set -euo pipefail
 export MSYS_NO_PATHCONV=1
 # Windows jq writes CRLF; a CR inside multi-line output would stick to ids,
@@ -37,7 +39,7 @@ need_run_vars() {
 CFG=""
 cfg() {
   if [[ -z "$CFG" ]]; then
-    CFG="$(terraform -chdir="$TF" output -json batch_platform_config)" || die "terraform output batch_platform_config: READ_FAILED"
+    CFG="$(terraform -chdir="$TF" output -json batch_platform_config 2>/dev/null)" || die "terraform output batch_platform_config: READ_FAILED"
     [[ "$CFG" != null && -n "$CFG" ]] || die "batch_platform_config is null: was the plan applied with enable_batch_platform=true?"
   fi
 }
@@ -79,7 +81,7 @@ cmd_status() {
 
 annotate_sa() { # namespace sa arn expected-role
   [[ "$3" == *":role/$4" ]] || die "the ARN for $1/$2 is not role $4"
-  kubectl -n "$1" annotate sa "$2" "eks.amazonaws.com/role-arn=$3" --overwrite >/dev/null
+  kubectl -n "$1" annotate sa "$2" "eks.amazonaws.com/role-arn=$3" --overwrite >/dev/null 2>&1 || die "annotate sa $1/$2: WRITE_FAILED"
   echo "OK    sa $1/$2 -> role $4"
 }
 
@@ -106,7 +108,7 @@ cmd_annotate() {
 queue_url() { cfg; cfg_get '.queue_url'; }
 dlq_url() { # from the DLQ name in the non-sensitive output
   local n; n="$(names | jq -er '.queues.dlq')" || die "batch_platform.queues.dlq: READ_FAILED"
-  aws sqs get-queue-url --queue-name "$n" --query QueueUrl --output text </dev/null
+  timeout 30 aws sqs get-queue-url --queue-name "$n" --query QueueUrl --output text </dev/null 2>/dev/null
 }
 
 cmd_batch_config() {
@@ -116,12 +118,12 @@ cmd_batch_config() {
   name="$(names | jq -er '.queues.main')" || die "batch_platform.queues.main: READ_FAILED"
   reg="$(region)"
   # The gate: no queue, no ConfigMap (the RGD waits at platformConfig without it).
-  timeout 30 aws sqs get-queue-attributes --queue-url "$url" --attribute-names QueueArn </dev/null >/dev/null \
-    || die "queue $name is not readable: batch-config not written"
+  timeout 30 aws sqs get-queue-attributes --queue-url "$url" --attribute-names QueueArn </dev/null >/dev/null 2>&1 \
+    || die "queue $name is not readable (READ_FAILED): batch-config not written"
   kubectl -n "$PLATFORM_NS" create configmap batch-config \
     --from-literal=queueUrl="$url" --from-literal=queueName="$name" --from-literal=region="$reg" \
     --from-literal=runId="$RUN_ID" --from-literal=expiresAt="$EXPIRES_AT" \
-    --dry-run=client -o yaml | kubectl apply -f - >/dev/null
+    --dry-run=client -o yaml 2>/dev/null | kubectl apply -f - >/dev/null 2>&1 || die "configmap batch-config: WRITE_FAILED"
   unset url
   echo "OK    configmap $PLATFORM_NS/batch-config written (queue $name)"
   cmd_status
@@ -176,15 +178,20 @@ cmd_cleanup() {
                    {name:"AWS_REGION",value:$reg},{name:"AWS_DEFAULT_REGION",value:$reg}],
               securityContext:{allowPrivilegeEscalation:false,readOnlyRootFilesystem:true,capabilities:{drop:["ALL"]}},
               resources:{requests:{cpu:"50m",memory:"96Mi"},limits:{memory:"192Mi"}}}]}}}}' \
-    | kubectl apply -f - >/dev/null
+    | kubectl apply -f - >/dev/null 2>&1 || die "cleanup Job: WRITE_FAILED"
   if ! kubectl -n "$t" wait --for=condition=complete "job/$n" --timeout=300s >/dev/null; then
     kubectl -n "$t" logs "job/$n" | grep -E '"event"' || true
     die "cleanup Job did not complete"
   fi
   kubectl -n "$t" logs "job/$n" | grep -E '"event": "CLEANUP"' || true
-  kubectl -n "$t" delete jobs -l "scaledjob.keda.sh/name=batch-$r" --wait=true --timeout=120s >/dev/null
-  n="$(kubectl -n "$t" get jobs -l "scaledjob.keda.sh/name=batch-$r" -o name 2>/dev/null)" || die "count Jobs: READ_FAILED"
-  echo "OK    leftover messages of $t/$r cleaned; jobs=$(grep -c . <<<"$n" || true)"
+  kubectl -n "$t" delete jobs -l "scaledjob.keda.sh/name=batch-$r" --wait=true --timeout=120s >/dev/null 2>&1 || die "delete Jobs of $t/$r: WRITE_FAILED"
+  # Success only after a successful final read with no Job and no Pod left.
+  local j p
+  j="$(kubectl -n "$t" get jobs -l "scaledjob.keda.sh/name=batch-$r" -o name 2>/dev/null)" || die "count Jobs: READ_FAILED"
+  p="$(kubectl -n "$t" get pods -l "app.kubernetes.io/name=batch-train,batch.zero-drift.io/request=$r" -o name 2>/dev/null)" || die "count Pods: READ_FAILED"
+  j="$(grep -c . <<<"$j" || true)"; p="$(grep -c . <<<"$p" || true)"
+  [[ "$j" == 0 && "$p" == 0 ]] || die "after cleanup $t/$r still has jobs=$j pods=$p"
+  echo "OK    leftover messages of $t/$r cleaned; jobs=0 pods=0"
 }
 
 case "${1:-}" in

@@ -46,4 +46,56 @@ Verdict: APPROVE or REQUEST CHANGES; findings as HIGH/MEDIUM/LOW with a concrete
 
 ## Result
 
-_(owner pastes Codex's verdict here; Claude applies the findings and records them in SPEC-P6 §9.3)_
+### Round 1 (26/11/2026): REQUEST CHANGES
+
+The owner ran Codex once and pasted the result into the chat on 26/11/2026. Claude records it verbatim and
+changes only one thing: absolute file links on the owner's machine become repository paths.
+
+> **REQUEST CHANGES — Codex review P6 trước L3**
+>
+> Revision đã review: **#93** `bfec6116e6a813272409c4e1ea25f6cd396092d1`, **#94** trên `main` tại `c7d779e8501ed79c25ad45012e70cbeb954b074b`, **#96** `0c3298c0517b0c2bdf6a851a4c960fd75368b640`.
+>
+> ### HIGH
+>
+> | PR | File:dòng | Finding và sửa tối thiểu |
+> |---|---|---|
+> | #93 | `infra/terraform/modules/karpenter/main.tf:195` | **IAM hiện tại chặn teardown.** Karpenter v1.15.3 gọi `ListInstanceProfiles` và đọc profile legacy trước khi xóa launch template, kể cả khi dùng profile tạo sẵn. AWS yêu cầu `Resource: "*"` cho đúng action list này. Thêm ngoại lệ chỉ đọc cho action đó và quyền `GetInstanceProfile` giới hạn vào tên legacy của cluster. Cập nhật `plan_assert` và matrix tương ứng, giữ nguyên cấm IAM write. [AWS IAM](https://docs.aws.amazon.com/service-authorization/latest/reference/list_iam.html) · [Karpenter v1.15.3](https://github.com/aws/karpenter-provider-aws/blob/v1.15.3/pkg/controllers/nodeclass/controller.go#L163-L218) |
+> | #94 | `gitops/check.sh:677` | **Rule 22 chặn cả bước chuyển On-Demand lẫn thao tác dừng khẩn cấp.** Guard chỉ chấp nhận CPU `"2"`, trong khi E1 và H2 yêu cầu đặt `"0"`. Cho phép đúng `"0"` hoặc `"2"` và giữ trần 2. Kiểm offline xác nhận cấu hình tắt Spot hiện bị từ chối. |
+> | #94/#96 | `docs/runbooks/P6_L3_WINDOW.md:102` · F2 `:205` | **Preflight và teardown dùng sai tên app.** Manifest tạo `zdr-batch`, còn runbook chờ và xóa `zdr-karpenter-nodepools`. B3 cũng chờ `EC2NodeClass Ready` trước khi gắn IRSA cho Karpenter. Gắn IRSA sau khi ServiceAccount tồn tại và trước khi chờ AWS readiness. Khi dọn, dừng reconcile của root và `zdr-batch`, xóa hai NodePool, xác nhận 0 NodeClaim và EC2 rồi mới xóa `EC2NodeClass`, app batch và controller. |
+> | #96 | `gitops/tests/batch-suite.sh:280` · B07 `:299` · B09 `:309` | **B06/B07/B09 có thể PASS dù thao tác thử thất bại.** B06/B07 bỏ qua lỗi delete rồi chấp nhận một Pod khác có log resume. B09 chỉ chấm số Pod/NodeClaim dù extra submit thất bại. Stub xác nhận cả ba nhánh vẫn ghi PASS. Yêu cầu checkpoint và delete thành công, xác nhận Job thay thế thuộc đúng attempt, và chỉ chấm B09 sau khi xác nhận message thứ hai đã gửi trong lúc run còn hoạt động. |
+> | #96 | `gitops/tests/batch-suite.sh:222` · B05 `:232` | **B05 có thể trượt ngay khi teardown chạy đúng.** Suite đợi visibility timeout 120 giây rồi mới đọc `providerID`; Node có thể đã được thu hồi với `consolidateAfter: 60s`. Giữ `providerID` trong bộ nhớ lúc đọc nhãn Node và chỉ coi Node đã mất khi API xác nhận `NotFound` hoặc một lần list thành công không còn Node đó. |
+>
+> ### MEDIUM
+>
+> | PR | File:dòng | Finding và sửa tối thiểu |
+> |---|---|---|
+> | #93 | `infra/terraform/scripts/inventory.sh:74` | Inventory lọc launch template bằng tag khác với bản Karpenter đã pin. Template còn sót có thể bị đếm `0`. Dùng tag cluster và NodeClass mà Karpenter thực sự gắn. [Karpenter v1.15.3](https://github.com/aws/karpenter-provider-aws/blob/v1.15.3/pkg/providers/launchtemplate/launchtemplate.go#L465-L481) |
+> | #93 | `infra/terraform/scripts/plan_assert.sh:388` · `infra/terraform/scripts/batch_iam_check.sh:101` | Hai cổng IAM có thể PASS oan. So policy theo tên và nội dung bỏ sót việc gắn policy vào sai role. Matrix thiếu hoặc lỗi JSON làm vòng lặp bỏ qua mọi mô phỏng nhưng vẫn in PASS. Kiểm policy gắn đúng role và xác thực matrix đọc được, hợp lệ, có ít nhất một ca trước khi mô phỏng. |
+> | #94 | `gitops/check.sh:642` | Rule 20 chỉ tìm chuỗi `c.type == "Complete"`. Kiểm offline xác nhận một biểu thức luôn đúng vẫn qua guard. So khớp điều kiện `Complete=True` đầy đủ. RGD hiện tại dùng điều kiện đúng. |
+> | #96 | `gitops/tests/batch-suite.sh:247` · B03 `:187` · B08 `:329` · report `:429` | B01 dùng `lastActiveTime` thay cho bằng chứng scaler đã tạo Job. B03 chỉ ghi trạng thái in-flight vào evidence, nên queue đọc lỗi vẫn có thể PASS. B08 chấm tổng DLQ thay vì message của attempt. `report` cũng chấp nhận các dòng PASS từ lần chạy cũ. Dùng bằng chứng Job của run hiện tại cho B01, đưa in-flight vào điều kiện chấm B03, đối chiếu run key trong DLQ và buộc report thuộc đúng mode/window. [KEDA v2.21.1](https://raw.githubusercontent.com/kedacore/keda/v2.21.1/pkg/scaling/executor/scale_jobs.go) |
+> | #96 | `infra/p6-window/window.sh:185` | Cleanup từ chối đúng khi request còn tồn tại hoặc lần đọc request/ScaledJob lỗi. Tuy nhiên stub xác nhận lần đọc cuối thấy `jobs=1` vẫn in `OK` và trả `0`. Chỉ báo thành công sau lần đọc cuối thành công và danh sách Job/Pod liên quan rỗng. |
+> | #93/#94/#96 | `gitops/tests/batch-suite.sh:341` · `infra/p6-window/window.sh:119` · `gitops/check.sh:36` · `infra/terraform/scripts/batch_iam_check.sh:90` | **Có đường lọt thông tin qua lỗi.** Lỗi `kubectl` có thể đưa IP vào JSON vì `scrub` chưa che IP dạng số. Lỗi AWS CLI có thể in định danh và URL ra stderr, còn guard GitOps in nguyên dòng chứa URL/ARN bị từ chối. Dùng mã lỗi cố định cho evidence và thông báo thất bại. Guard chỉ in tên file và số dòng. |
+>
+> Các policy batch hiện tại đúng phạm vi SQS/S3 đã duyệt. `PassRole` giới hạn đúng node role và EC2. `batch-config` là cấu hình runtime. `purge` đợi 60 giây sau khi cả hai queue được purge thành công. Trần NodePool là cấu hình Karpenter kiểm theo trạng thái cập nhật bất đồng bộ, nên vẫn cần giữ điều kiện dừng khi xuất hiện node thứ hai và kiểm inventory sau teardown. [Karpenter NodePools](https://karpenter.sh/v1.15/concepts/nodepools/)
+>
+> **Kiểm tra:** `git diff --check` trên cả ba diff, `bash -n` cho hai script #96, `gitops/check.sh` và `check-context` đều qua. Đã dùng stub offline và fixture trong bộ nhớ cho các ca nêu trên. Review dựa trên Git diff và mã nguồn upstream đã pin vì Zero-D-Rift chưa có index GitNexus. Không sửa file, không chạy AWS, kind hay Terraform apply.
+
+### Round 1 fixes
+
+Claude applied every finding on 26/11; none was disputed. #93 fixes are on its own branch, #94 and #96 fixes on #96.
+
+| # | Finding | Change | Checked |
+|---|---|---|---|
+| H1 | #93 Karpenter IAM blocks teardown | `iam:ListInstanceProfiles` on `*` (alone in its statement, read-only); `iam:GetInstanceProfile` on the node profile and the legacy name `zero-drift_*` (v1.15.3 `LegacyInstanceProfileName` = `<cluster>_<hash>`). No IAM write. Approved JSON, tftest, `plan_assert` no-iam-star (one named exception) and matrix (+4 rows: legacy read allowed, legacy delete/remove-role denied, other profile denied) follow | `infra/terraform/scripts/check.sh`, guard tests, offline matrix |
+| H2 | #94 rule 22 refuses `cpu: "0"` | rule 22 accepts `limits.cpu` `"2"` or `"0"`, never above 2 | `check_guards.sh`: two allowed cases (E1, H2) PASS, limit `"4"` FAIL |
+| H3 | runbook app name and IRSA order | B2 waits for `zdr-keda`, `zdr-karpenter`, then runs `annotate`; B3 waits for `zdr-batch` and `EC2NodeClass Ready`, then `batch-config` (with `export RUN_ID`). F2 stops `zdr-root` and `zdr-batch`, deletes only the two NodePools, counts 0 NodeClaim + 0 instance, then F3 deletes `EC2NodeClass`, app `zdr-batch`, controllers | read-through |
+| H4 | B06/B07/B09 pass after a failed step | checkpoint wait, Pod/Job/node/NodeClaim reads and the delete must succeed, else the case and the ones after it record `blocked:<step>` (FAIL). The resumed Pod must carry this attempt's label and belong to a Job other than the deleted one (`backoffLimit: 0`). B09 needs `SUBMITTED` from the extra submit (fresh attempt number, never `ALREADY_SUBMITTED`), a Running Pod of this attempt at scoring, and visible+in-flight ≥ 2 | fake `kubectl`: failed delete → B06, B07, B09 `blocked:pod-delete-failed`, `report` FAIL |
+| H5 | B05 reads `providerID` too late | `providerID` read with the Node labels while the Pod runs; node gone only on `NotFound` or a successful list without it | fake `kubectl`: present → not gone, NotFound → gone, connection error → not gone |
+| M1 | #93 inventory launch template tag | filter `tag-key` `eks:eks-cluster-name` or `karpenter.k8s.aws/ec2nodeclass` (v1.15.3 `labels.go`); the account-wide `launch_templates` line stays | read-through |
+| M2 | #93 IAM gates pass on wrong role or empty matrix | modules pass `role = aws_iam_role.X.name` (known in the plan); `plan_assert` "P6 policy attachment" needs policy NAME on role `zero-drift-NAME` (+2 guard cases). `batch_iam_check.sh` fails on an unreadable, invalid or empty matrix and when rows simulated ≠ rows in the matrix | guard tests |
+| M3 | #94 rule 20 substring | `readyWhen` must equal the full `Complete && status == "True"` expression | guard case "submit readyWhen always true" FAIL |
+| M4 | #96 B01/B03/B08/report | B01: a Complete KEDA Job of this attempt; B03: `inflight=1` in the verdict; B08: `dlq_own=1` from DLQ bodies matched on tenant/request/attempt; every row carries mode + `RUN_ID` (required on eks), `report` refuses rows of another run | DLQ parser stub (own=1 of 2); `report` refuses a row of run `old` and a row without run |
+| M5 | #96 cleanup reports OK with jobs=1 | success only after a successful final read with 0 Jobs and 0 Pods | stub: none → OK rc 0; job left → FAIL rc 1; Pod left → FAIL rc 1 |
+| M6 | leaks through errors | suite `scrub` masks numeric IPs; B11 errors are fixed codes; `window.sh` and `batch_iam_check.sh` discard aws/kubectl stderr and print fixed codes; `check.sh` prints only file:line for a refused ID or queue URL | scrub stub; guard case "refused secret reported by file:line only" |
+
+Found while fixing (not in the review): on Windows, `OUT=$HOME/...` is a `/c/...` path that native `jq` cannot open, so `record` failed and the suite stopped without a message. The suite now converts `OUT` with `cygpath -m` and fails loudly if it cannot write.

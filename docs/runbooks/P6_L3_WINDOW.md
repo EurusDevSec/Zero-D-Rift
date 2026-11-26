@@ -81,15 +81,15 @@ Làm như `P4_RAG_SANDBOX.md` mục C (gồm `P2_L3_WINDOW.md` C), rồi kiểm 
 ## 5. Luồng window
 
 ```
-B Dựng (1 g)        apply → smoke P2 → Argo CD → platform (P4, P5) → KEDA → Karpenter → NodePool
-                    → hai request batch đều tắt → annotate + batch-config → purge, đợi 60 s
+B Dựng (1 g)        apply → smoke P2 → Argo CD → platform (P4, P5) → KEDA → Karpenter → annotate (IRSA)
+                    → zdr-batch: EC2NodeClass Ready, NodePool → hai request batch đều tắt → batch-config → purge, đợi 60 s
 C Một run (1 g)     merge PR P1b (bật tenant-a) → B02, B03 → node Spot lên → B04 → B05 node bị thu hồi
                     → B01 (queue rỗng, scaler đã chứng minh chạy: 0 Job mới, 0 node)
 D Sự cố (1 g)       B06 xoá Pod → B07 xoá NodeClaim → B08 DLQ → B09–B14 ca âm
 E Tenant-b (0,5 g)  merge P1 (tắt tenant-a, Spot 0) → kiểm scaler cũ hết, queue rỗng, limit Spot = 0
                     → merge P1c (bật tenant-b) → run trên On-Demand → micro-lab
-F Dọn (0,5 g)       tắt request + cleanup → dừng root → xoá NodePool → 0 NodeClaim + 0 instance trên AWS
-                    (cả hai lệnh đọc được) → EC2NodeClass → Karpenter, KEDA → P5 E → P4 J → destroy → inventory
+F Dọn (0,5 g)       tắt request + cleanup → dừng root và zdr-batch → xoá 2 NodePool → 0 NodeClaim + 0 instance trên AWS
+                    (cả hai lệnh đọc được) → EC2NodeClass → app zdr-batch → Karpenter, KEDA → P5 E → P4 J → destroy → inventory
 ```
 
 **Làm mới MFA:** như `P5_L3_WINDOW.md` mục 5. Chỉ làm mới khi Claude báo **không còn lệnh nào đang chạy**.
@@ -99,17 +99,24 @@ Trước một bước dài (một run khoảng 8 phút, `terraform destroy` kho
 
 1. Làm `P4_RAG_SANDBOX.md` từ mục D tới khi các app platform `Synced Healthy`. Hai request RAG giữ **tắt**: P6 không cần sandbox,
    và quota tenant còn chỗ cho cả hai nếu bạn chọn regression P5 ở mục 2b.
-2. `zdr-keda`, `zdr-karpenter`, `zdr-karpenter-nodepools` `Synced Healthy`. Pod Karpenter nằm trên node system
+2. `zdr-keda` và `zdr-karpenter` `Synced Healthy`, tức ServiceAccount `keda/keda-operator` và `karpenter/karpenter` đã có. Pod Karpenter nằm trên node system
    (`kubectl -n karpenter get pods -o wide` cho thấy tên node thuộc node group, không phải node do Karpenter tạo; chỉ ghi "system", không ghi tên node).
-3. `kubectl get nodepools` có `batch-spot` (weight 100) và `batch-ondemand` (weight 10); `kubectl get ec2nodeclass batch` `Ready=True`.
-   Chạy `bash infra/p6-window/window.sh annotate` rồi `bash infra/p6-window/window.sh batch-config`, như `window.sh platform-config` ở P4.
-   Lệnh đầu gắn annotation IRSA cho ServiceAccount `batch-train` của hai tenant và cho ServiceAccount submit. Lệnh sau tạo ConfigMap
-   `batch-config` trong `zdr-platform` từ output Terraform. Cả hai chứa account ID nên không nằm trong Git; không in giá trị ra chat.
+   Chạy **ngay** `bash infra/p6-window/window.sh annotate`: gắn IRSA cho `keda-operator`, `karpenter`, `batch-submit`, `batch-train` của hai tenant
+   rồi restart KEDA và Karpenter. Thiếu bước này thì Karpenter không gọi được EC2, nên `EC2NodeClass` không bao giờ `Ready` (Codex P6 R1).
+3. Sau annotate: app `zdr-batch` `Synced Healthy`; `kubectl get nodepools` có `batch-spot` (weight 100) và `batch-ondemand` (weight 10);
+   `kubectl get ec2nodeclass batch` `Ready=True`. Rồi đặt run ID của đơn window (dùng tiếp cho suite ở C) và chạy batch-config,
+   như `window.sh platform-config` ở P4:
+   ```bash
+   export RUN_ID=P6-L3-YYYYMMDD-NN EXPIRES_AT=YYYY-MM-DDTHH:MM:SSZ
+   bash infra/p6-window/window.sh batch-config
+   ```
+   Lệnh này tạo ConfigMap `batch-config` trong `zdr-platform` từ output Terraform. Annotation và ConfigMap chứa account ID nên không nằm trong Git;
+   không in giá trị ra chat.
    Kiểm (chỉ in tên key):
    ```bash
    kubectl -n zdr-platform get cm batch-config -o go-template='{{range $k, $v := .data}}{{$k}} {{end}}' && echo
    ```
-   **Phải thấy:** `queueUrl region`. Thiếu ConfigMap này thì graph đứng ở `waiting for external reference "platformConfig"`
+   **Phải thấy:** `expiresAt queueName queueUrl region runId`. Thiếu ConfigMap này thì graph đứng ở `waiting for external reference "platformConfig"`
    và không tạo ScaledJob hay Job submit nào: đó là cổng, không phải lỗi.
 4. Hai request batch vẫn nằm trong `gitops/requests/disabled/`: `kubectl get batchtrainingjob -A` ra `No resources found`,
    chưa có ScaledJob nào, nên chưa có Job submit nào gửi message.
@@ -197,13 +204,14 @@ export MODE=eks CTX="$(kubectl config current-context)" OUT="$HOME/zdr-p6/batch-
 **F. Dọn** (từ giờ freeze, hoặc sớm hơn nếu đã xong). Theo đúng SPEC §9.5:
 
 1. Tắt mọi `BatchTrainingJob` qua PR, chạy `bash infra/p6-window/window.sh cleanup <tenant> smoke-1` cho từng tenant đã bật, đợi ScaledJob và Job về 0.
-2. Dừng sync của `zdr-root` **trước**. Root có `selfHeal`: xoá app con khi root còn chạy thì root tạo lại app đó
-   (cái bẫy đã thấy ở P5 mục 5a). Rồi xoá app NodePool có cascade, như P4 J bước 1. Controller Karpenter vẫn chạy suốt bước này,
-   vì chính nó xoá NodeClaim và instance:
+2. Dừng sync của `zdr-root` **trước**, rồi của `zdr-batch`. Cả hai có `selfHeal`: xoá app con khi root còn chạy thì root tạo lại app đó
+   (cái bẫy đã thấy ở P5 mục 5a), và xoá NodePool khi `zdr-batch` còn chạy thì app tạo lại NodePool. App `zdr-batch` giữ cả `EC2NodeClass`,
+   nên **không** xoá app ở bước này (cascade sẽ xoá `EC2NodeClass` cùng lúc với NodePool). Chỉ xoá hai NodePool. Controller Karpenter
+   vẫn chạy suốt bước này, vì chính nó xoá NodeClaim và instance:
    ```bash
    kubectl -n argocd patch app zdr-root --type json -p '[{"op":"remove","path":"/spec/syncPolicy/automated"}]'
-   kubectl -n argocd patch app zdr-karpenter-nodepools --type merge -p '{"metadata":{"finalizers":["resources-finalizer.argocd.argoproj.io"]}}'
-   kubectl -n argocd delete app zdr-karpenter-nodepools --timeout=300s
+   kubectl -n argocd patch app zdr-batch --type json -p '[{"op":"remove","path":"/spec/syncPolicy/automated"}]'
+   kubectl delete nodepool batch-spot batch-ondemand --timeout=600s
    ```
    Đếm bằng lệnh có guard. Lệnh đọc lỗi thì in `READ_FAILED`, không bao giờ in `0`. Bộ lọc gồm mọi trạng thái trừ `terminated`:
    instance `stopped` vẫn tính tiền volume.
@@ -212,7 +220,13 @@ export MODE=eks CTX="$(kubectl config current-context)" OUT="$HOME/zdr-p6/batch-
    ni=$(aws ec2 describe-instances --filters Name=tag-key,Values=karpenter.sh/nodepool Name=instance-state-name,Values=pending,running,stopping,stopped,shutting-down --query 'length(Reservations[].Instances[])' --output text) && echo "karpenter_instances: $ni" || echo "karpenter_instances: READ_FAILED"
    ```
    Chỉ sang bước 3 khi **cả hai dòng** đều đọc được và đều ra `0`. Có `READ_FAILED` (ví dụ hết MFA) thì làm mới MFA rồi đếm lại.
-3. Xoá `EC2NodeClass`, rồi app `zdr-karpenter` và `zdr-keda` (root đã dừng ở bước 2, nên app không bị tạo lại).
+3. Xoá `EC2NodeClass`, rồi app `zdr-batch` có cascade (còn `ClusterTriggerAuthentication`), rồi app `zdr-karpenter` và `zdr-keda`
+   (root đã dừng ở bước 2, nên app không bị tạo lại):
+   ```bash
+   kubectl delete ec2nodeclass batch --timeout=300s
+   kubectl -n argocd patch app zdr-batch --type merge -p '{"metadata":{"finalizers":["resources-finalizer.argocd.argoproj.io"]}}'
+   kubectl -n argocd delete app zdr-batch --timeout=300s
+   ```
 4. Làm `P5_L3_WINDOW.md` E2 (gỡ Kyverno, đếm webhook bằng lệnh có guard), rồi `P4_RAG_SANDBOX.md` J bước 3–4: gỡ các app còn lại, gỡ Argo CD, `terraform destroy`.
 5. `inventory.sh` phải ra `RESULT: CLEAN`, gồm các dòng P6 bằng 0. Inventory trễ vào ngày hôm sau (P6-T4.3).
 

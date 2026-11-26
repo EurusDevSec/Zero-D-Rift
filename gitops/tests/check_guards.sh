@@ -250,6 +250,27 @@ case_ "Karpenter image by tag only" "pinned by digest at the chart's keys" "$KA"
 case_ "KEDA webhooks image by tag only" "pinned by digest at the chart's keys" platform/apps/50-keda.yaml 'docs[0]["spec"]["source"]["helm"]["valuesObject"]["image"]["webhooks"]["tag"] = "2.21.1"'
 case_ "quota above D9" "quota values are SPEC-P6 D9 exactly" platform/tenants/quota.yaml 'docs[0]["spec"]["hard"]["pods"] = "12"'
 case_ "batch-train SA missing in tenant-b" "tenant default and batch-train" platform/tenants/serviceaccounts.yaml 'docs[:] = [d for d in docs if not (d["metadata"]["name"] == "batch-train" and d["metadata"]["namespace"] == "tenant-b")]'
+case_ "NodePool limit above one node" "limits.cpu 2" "$NPF" 'docs[0]["spec"]["limits"] = {"cpu": "4"}'
+case_ "submit readyWhen always true" "readyWhen Complete" "$BRGD" 'node("submit")["readyWhen"] = ["${submit.status.?conditions.orValue([]).exists(c, c.type == \"Complete\") || true}"]'
+
+# Allowed changes the runbook makes (Codex P6 R1): limits.cpu "0" switches a pool
+# off (E1 On-Demand step on Spot, H2 emergency stop on both). check.sh must PASS.
+allow_() {
+    local name="$1" file="$2" code="$3" out
+    n=$((n + 1)); fresh; mutate "$tmp/g/$file" "$code"
+    if out="$(bash "$tmp/g/check.sh" 2>&1)"; then echo "PASS  $name (allowed)"
+    else echo "FAIL  $name: check.sh refused an allowed change"; grep '^FAIL' <<< "$out" | sed 's/^/        /'; failed=1; fi
+}
+allow_ "Spot pool off (E1)" "$NPF" 'docs[0]["spec"]["limits"] = {"cpu": "0"}'
+allow_ "both pools off (H2)" "$NPF" 'docs[0]["spec"]["limits"] = {"cpu": "0"}; docs[1]["spec"]["limits"] = {"cpu": "0"}'
+
+# A refused secret is reported by file:line only, never by its text.
+n=$((n + 1)); fresh
+printf '%s\n' 'apiVersion: v1' 'kind: ConfigMap' 'metadata: {name: q, namespace: karpenter}' \
+    'data: {url: "https://sqs.us-east-1.amazonaws.com/123456789012/zero-drift-batch"}' > "$tmp/g/platform/batch/q.yaml"
+out="$(bash "$tmp/g/check.sh" 2>&1 || true)"
+if grep -q -E 'amazonaws\.com|123456789012' <<< "$out"; then echo "FAIL  refused secret printed in the output"; failed=1
+else echo "PASS  refused secret reported by file:line only"; fi
 
 echo
 if (( failed )); then echo "RESULT: FAIL"; exit 1; fi
