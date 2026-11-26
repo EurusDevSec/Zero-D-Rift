@@ -36,6 +36,9 @@ BFIX="$src/tests/fixtures/batch-request-tenant-a.yaml"
 BREQ=requests/tenant-a-batch.yaml
 fresh() {
     rm -rf "$tmp/g" && cp -r "$src" "$tmp/g"
+    # The window PRs enable one live request (tenant-a or tenant-b); drop it from
+    # the copy so the fixture stays the only enabled BatchTrainingJob (rule 19).
+    rm -f "$tmp/g"/requests/*-batch.yaml
     cp "$FIX" "$tmp/g/$REQ"
     cp "$BFIX" "$tmp/g/$BREQ"
 }
