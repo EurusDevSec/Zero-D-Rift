@@ -10,5 +10,5 @@ metadata:
   namespace: tenant-a
 spec:
   steps: 300
-  runAttempt: 3
-  failProfile: fail-always
+  runAttempt: 1
+  failProfile: normal

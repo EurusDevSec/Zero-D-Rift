@@ -15,7 +15,7 @@ spec:
   weight: 100
   # One 2 vCPU node at most (negative boundary 2).
   limits:
-    cpu: "0"   # window E1 (P1): Spot off so tenant-b runs On-Demand; P1f sets "2" again
+    cpu: "2"
   disruption:
     consolidationPolicy: WhenEmpty
     consolidateAfter: 60s
