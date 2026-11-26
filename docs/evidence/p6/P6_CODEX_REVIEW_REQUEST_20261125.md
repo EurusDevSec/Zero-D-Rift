@@ -11,7 +11,7 @@
 |---|---|---|
 | T3 Terraform IAM + Karpenter | PR #93 — `infra/terraform/modules/batch-platform/`, `modules/karpenter/`, `scripts/plan_assert.sh` (P6 checks), `scripts/batch_iam_check.sh`, `tests/batch_iam_matrix.json` | IAM breadth (`iam:PassRole`, EC2 create, SQS/S3 per tenant); node SG reach; cost (instances outside Terraform) |
 | T2.2 RGD + static rules | PR #94 (merged 26/11, review on `main` `c7d779e`) — `gitops/platform/rgd/batch-training-job.yaml`, `gitops/platform/batch/`, `gitops/platform/apps/5{0,5,7}-*.yaml`, `gitops/check.sh` rules 19-23 | D5 (one Job), kro/KEDA label interaction (found on kind), NodePool limits/expiry, quota D9 |
-| T4.1 suite + window helper | PR P6-T4.1 — `gitops/tests/batch-suite.sh`, `infra/p6-window/window.sh` | Every B-case verdict: can any case PASS without the behaviour? Can a failed read become 0? Does any output leak an ID? |
+| T4.1 suite + window helper | PR #96 — `gitops/tests/batch-suite.sh`, `infra/p6-window/window.sh` | Every B-case verdict: can any case PASS without the behaviour? Can a failed read become 0? Does any output leak an ID? |
 
 **Out of scope:** T2.1 worker (PR #92, merged; 65 unit tests, smoke on S3Mock),
 docs and the kind lab files. Codex may still flag them if it sees a blocker.
@@ -25,7 +25,7 @@ kind or terraform apply. Read AGENTS.md and .agent/specs/SPEC-P6_BATCH_TRAINING_
 
 Scope: PR #93 (Terraform batch-platform + karpenter, plan_assert P6, batch_iam_check),
 PR #94 (merged; read it on main c7d779e: RGD batch-training-job, KEDA/Karpenter apps, NodePools, gitops/check.sh 19-23),
-and the P6-T4.1 branch (gitops/tests/batch-suite.sh, infra/p6-window/window.sh).
+and PR #96 (gitops/tests/batch-suite.sh, infra/p6-window/window.sh).
 
 Answer for each, with file:line:
 1. False PASS: can any of B01-B14 or any check.sh / plan_assert rule pass while the
