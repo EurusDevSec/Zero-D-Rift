@@ -2,7 +2,7 @@
 project: Zero D-Rift
 status: P6_SPEC_APPROVED
 active_phase: P6 (P5 done 26/11)
-active_task: P6-T4 suite and L3 window (DRF-79, DRF-80)
+active_task: P6-T4.2 L3 window (DRF-80)
 active_feature: BatchTrainingJob on CPU (SPEC-P6, ADR-0009)
 active_spec: .agent/specs/SPEC-P6_BATCH_TRAINING_JOB.md
 current_learning: .agent/learning/CURRENT_STATUS.md
@@ -86,8 +86,14 @@ DRF-19/20 cancelled. Runbooks `docs/runbooks/P6_L2_KIND_KEDA.md` and
 P6-T1 done 25/11 (`docs/evidence/p6/P6-T1_PINS_20261125.md`): digests, prices,
 KEDA needs only `GetQueueAttributes`, Karpenter policy without IAM writes; D12
 S3 substitute is Adobe S3Mock (MinIO archived); ver3 §15.3 C1 change note.
-Next: merge the P6-T1 PR; then P6-T2.1 (worker and image) and P6-T3
-(Terraform) in parallel, then T2.2 (RGD, KEDA, kind lab).
+P6-T2.1, T2.2 (PR #94), T3 (PR #93) and T4.1 (PR #96) merged 26/11 after
+Codex rounds 1-4 (APPROVE at `58c9982`, `P6_CODEX_REVIEW_REQUEST_20261125.md`);
+suite rerun on kind from main `c7b3210`: RESULT PASS, 8 PASS + 6
+SKIPPED_NEEDS_EKS (PR #97). Linear DRF-77, DRF-79 Done.
+Next: L3 window P6-T4.2 (DRF-80) after the owner approves it
+(`docs/runbooks/P6_L3_WINDOW.md`): merge PR P0 (RAG requests off) before
+the window; draft PRs P1b, P1d, P1e, P1, P1c, P1f are merged in the window
+in that order. Then T4.3 acceptance audit (DRF-81).
 
 ## Context expansion
 

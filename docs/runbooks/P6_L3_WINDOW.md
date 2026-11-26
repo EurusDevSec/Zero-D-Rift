@@ -5,7 +5,7 @@
 > Trạng thái: **sẵn sàng chạy khi được duyệt** (25/11): `infra/p6-window/window.sh` và `gitops/tests/batch-suite.sh` đã viết (DRF-79). Chỉ chạy khi PR P6-T2.2, P6-T3, P6-T4.1 đã merge ·
 > Chi phí: ước tính ≈ 2,6 USD, trần P6 là 4 USD (D14) ·
 > Liên quan: SPEC-P6 §4, §5 P6-T4.2, §9.5, §10, D7, D8, D14; runbook `P5_L3_WINDOW.md` (B, E, 5a), `P4_RAG_SANDBOX.md` (C, D, J) ·
-> Mục lục: 1 Đơn · 2 Bạn chọn · 3 Việc trước window · 4 Cổng T−30 · 5 Luồng window · 5b Micro-lab · 6 Điều kiện dừng · 7 Chi phí
+> Mục lục: 1 Đơn · 2 Bạn chọn · 3 Việc trước window · 4 Cổng T−30 · 5 Luồng window · 5b Micro-lab · 5c Kiểm bổ sung §4 · 6 Điều kiện dừng · 7 Chi phí
 
 Mọi kết quả batch trong window này mang nhãn `CPU_SUBSTITUTE_FOR_GPU` (ADR-0009). Đây là smoke run (`official=false`),
 không phải trial của H2, H3 hay H5.
@@ -51,11 +51,14 @@ tức khoảng 0,1 USD. Nên chọn có nếu bạn muốn bằng chứng rằng
 
 | # | Việc | Xong khi |
 |---|---|---|
+| P0 | PR "window: tắt hai request RAG": xoá `tenant-a-docs-qa.yaml`, `tenant-b-docs-qa.yaml` khỏi `gitops/requests/` như P5 (`6c442c7`); `disabled/` chỉ giữ request âm (check.sh luật 8). Trên main hai request này vẫn bật từ P5; P6 không cần sandbox (B1). Chọn regression P5 ở mục 2b thì không merge | **Merge trước window**, trước cổng T−30 |
 | P1 | Soạn sẵn PR "window: tắt tenant-a, khoá Spot": chuyển `tenant-a-batch.yaml` xuống `disabled/`, đặt `limits.cpu: "0"` cho `batch-spot`. **Không merge trước window** | PR draft; bạn merge ở bước E1 |
 | P1c | Soạn sẵn PR "window: bật tenant-b": chuyển `tenant-b-batch.yaml` từ `disabled/` lên `gitops/requests/`. Tách riêng khỏi P1 để giữa hai PR có bước kiểm | PR draft; bạn merge ở bước E3 |
 | P1b | Soạn sẵn PR "window: bật tenant-a": chuyển `tenant-a-batch.yaml` từ `disabled/` lên `gitops/requests/`. Argo chỉ đọc file nằm **ngay** trong `gitops/requests/`, không đọc thư mục con | PR draft; bạn merge ở bước C1 |
 | P1d | Soạn sẵn PR "window: tenant-a attempt 2": `runAttempt: 2` (300 step, `normal`) cho B06, B07, B09 | PR draft; bạn merge ở bước D1 |
 | P1e | Soạn sẵn PR "window: tenant-a attempt 3 fail-always": `runAttempt: 3`, `failProfile: fail-always` cho B08 | PR draft; bạn merge ở bước D3, **sau** `window.sh purge` |
+| P1f | Soạn sẵn PR "window: tắt tenant-b, mở lại Spot": chuyển `tenant-b-batch.yaml` về `disabled/`, trả `batch-spot` về `limits.cpu: "2"`. Không có request batch nào bật nên không node nào được tạo | PR draft; bạn merge ở bước F1 |
+| P1g | Sau window: PR "bật lại hai request RAG" (`git revert` P0, như P5 `8692146`), chỉ khi đã `terraform destroy` và inventory CLEAN, để main về đúng trạng thái P5 | Soạn sau F5 |
 | P2 | Lab kind `P6_L2_KIND_KEDA.md` đạt, có dự đoán của bạn | Có evidence `P6-T2.2_L2_KIND_KEDA_<date>.md` |
 | P3 | Batch suite (`gitops/tests/batch-suite.sh`) đã merge và đã chạy trên kind: các ca cần EKS ghi `SKIPPED_NEEDS_EKS` | Evidence `P6-T4.1_BATCH_SUITE_<date>.md` có kết quả kind |
 | P4 | Codex review suite và hai module Terraform | Kết quả ghi nguyên văn vào evidence |
@@ -97,7 +100,7 @@ Trước một bước dài (một run khoảng 8 phút, `terraform destroy` kho
 
 **B. Dựng.**
 
-1. Làm `P4_RAG_SANDBOX.md` từ mục D tới khi các app platform `Synced Healthy`. Hai request RAG giữ **tắt**: P6 không cần sandbox,
+1. Làm `P4_RAG_SANDBOX.md` từ mục D tới khi các app platform `Synced Healthy`. Hai request RAG giữ **tắt** (PR P0 đã merge): P6 không cần sandbox,
    và quota tenant còn chỗ cho cả hai nếu bạn chọn regression P5 ở mục 2b.
 2. **Không đợi** `zdr-keda` và `zdr-karpenter` Healthy trước khi gắn IRSA. Karpenter v1.15.3 thoát ngay khi lần gọi EC2 lúc khởi động
    thất bại, nên khi chưa có IRSA, Pod của nó restart liên tục và app không bao giờ Healthy (Codex P6 R2). Chỉ đợi Deployment và ServiceAccount
@@ -210,7 +213,7 @@ export MODE=eks CTX="$(kubectl config current-context)" OUT="$HOME/zdr-p6/batch-
 
 **F. Dọn** (từ giờ freeze, hoặc sớm hơn nếu đã xong). Theo đúng SPEC §9.5:
 
-1. Tắt mọi `BatchTrainingJob` qua PR, chạy `bash infra/p6-window/window.sh cleanup <tenant> smoke-1` cho từng tenant đã bật, đợi ScaledJob và Job về 0.
+1. Tắt mọi `BatchTrainingJob` qua PR (bạn merge P1f; tenant-a đã tắt ở E1), chạy `bash infra/p6-window/window.sh cleanup <tenant> smoke-1` cho từng tenant đã bật, đợi ScaledJob và Job về 0.
 2. Dừng sync của `zdr-root` **trước**, rồi của `zdr-batch`. Cả hai có `selfHeal`: xoá app con khi root còn chạy thì root tạo lại app đó
    (cái bẫy đã thấy ở P5 mục 5a), và xoá NodePool khi `zdr-batch` còn chạy thì app tạo lại NodePool. App `zdr-batch` giữ cả `EC2NodeClass`,
    nên **không** xoá app ở bước này (cascade sẽ xoá `EC2NodeClass` cùng lúc với NodePool). Chỉ xoá hai NodePool. Controller Karpenter
@@ -249,6 +252,66 @@ không dán tên node hay instance ID vào chat.
 | M3 | `kubectl describe nodeclaim <tên> \| grep -A3 Taints` | Vì sao Pod thường không lên được node này? | | taint `zero-drift.io/batch=true:NoSchedule` |
 | M4 | `kubectl -n tenant-b get pods -o wide -l app.kubernetes.io/name=batch-train` | Pod training nằm trên node nào? | | đúng node ở M2 |
 | M5 | `kubectl get nodeclaims -w` sau khi Job xong (đợi tối đa 5 phút) | Ai xoá node, và sau bao lâu? | | Karpenter xoá vì node rỗng (`WhenEmpty`), sau `consolidateAfter: 60s` và thời gian drain |
+
+### 5c. Kiểm bổ sung cho SPEC §4 (Claude chạy, chỉ đọc)
+
+Suite không chấm sáu dòng dưới đây của SPEC §4, nhưng audit T4.3 cần bằng chứng L3 cho từng dòng (SPEC §8).
+Mọi lệnh chỉ in khoá, số đếm hoặc trạng thái, không in ID, ARN hay tên node. Lệnh đọc lỗi thì in `READ_FAILED`, không bao giờ in `0`.
+Đặt một lần:
+
+```bash
+b=zero-drift-batch-tenant-a-smoke-1; p=runs/smoke-1
+```
+
+**K1** · ở C3, khi node batch đã `Ready` · §4 "every Karpenter node carries the project tags and the batch taint":
+
+```bash
+kubectl get nodes -l karpenter.sh/nodepool -o jsonpath='{range .items[*]}{.spec.taints[*].key}:{.spec.taints[*].effect}{"\n"}{end}' || echo READ_FAILED
+aws ec2 describe-instances --filters Name=tag-key,Values=karpenter.sh/nodepool Name=instance-state-name,Values=running --query 'Reservations[].Instances[].Tags[?Key==`Project`||Key==`Owner`||Key==`Environment`||Key==`ManagedBy`].Key' --output text || echo READ_FAILED
+```
+
+**Phải thấy:** `zero-drift.io/batch:NoSchedule`; đủ 4 khoá `Project Owner Environment ManagedBy` (từ `EC2NodeClass` `batch`).
+
+**K2** · ở C4, sau B04 · §4 "TRAINING_STARTED with device=cpu, the run attempt and its node name":
+
+```bash
+aws s3 cp "s3://$b/$p/1/TRAINING_STARTED" - 2>/dev/null | jq -c '{device, attempt: (.run_key | split("/")[-1]), node_set: ((.node // "") != "")}' || echo READ_FAILED
+```
+
+**Phải thấy:** `{"device":"cpu","attempt":"1","node_set":true}`. B04 chỉ kiểm marker có mặt, không đọc nội dung.
+
+**K3** · ở D1, khi attempt 2 đã xong · §4 "exactly one final artifact exists" sau resume:
+
+```bash
+o=$(aws s3api list-objects-v2 --bucket "$b" --prefix "$p/2/artifact/" --query KeyCount --output text) && echo "artifacts_attempt2=$o" || echo READ_FAILED
+```
+
+**Phải thấy:** `artifacts_attempt2=1`.
+
+**K4** · ở D3, 15 phút sau B08 · §4 "no batch node keeps running":
+
+```bash
+nc=$(kubectl get nodeclaims -o name) && echo "nodeclaims: $(printf '%s' "$nc" | grep -c .)" || echo "nodeclaims: READ_FAILED"
+```
+
+**Phải thấy:** `nodeclaims: 0`.
+
+**K5** · ở C1, ngay sau khi merge P1b, lặp mỗi 10 giây tới `ACTIVE` · §4 "Ready only after the bucket is Ready and the message is sent":
+
+```bash
+kubectl -n tenant-a get batchtrainingjob smoke-1 -o jsonpath='{.status.state} submit={.status.submitState}{"\n"}' || echo READ_FAILED
+```
+
+**Phải thấy:** chưa `ACTIVE` khi chưa có `submit=Submitted`; ghi giờ đổi trạng thái vào bảng smoke.
+
+**K6** · ở F1, sau `window.sh cleanup` từng tenant · §4 "its bucket and leftover messages are gone" (tenant-b: đổi `b`):
+
+```bash
+if aws s3api head-bucket --bucket "$b" >/dev/null 2>&1; then echo bucket=present; elif aws s3api head-bucket --bucket "$b" 2>&1 | grep -q '(404)'; then echo bucket=gone; else echo bucket=READ_FAILED; fi
+bash gitops/tests/batch-suite.sh stats
+```
+
+**Phải thấy:** `bucket=gone`; `visible=0 inflight=0`. Dòng §4 "volume is gone" không có lệnh riêng: `inventory.sh` ở F5 đếm volume.
 
 ## 6. Điều kiện dừng
 
