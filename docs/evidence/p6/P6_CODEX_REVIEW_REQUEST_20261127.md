@@ -46,4 +46,48 @@ Verdict: APPROVE, or CHANGES with a numbered list (severity HIGH/MEDIUM/LOW, fil
 
 ## Result
 
-_Pending. Owner pastes Codex's verdict here verbatim._
+### Round 1 (27/11) — verbatim, as the owner pasted it
+
+> REQUEST CHANGES — review sau window P6.
+> Đã review #105 tại merge `407b751`, #108 tại `788ddbb`, #107 tại `05aa47f`. Có 2 finding cần sửa, đều trong phạm vi yêu cầu.
+>
+> 1. HIGH — H8 chưa bảo đảm retry giữ nguyên nội dung plan đã duyệt. Quy tắc hiện chỉ so địa chỉ, resource type và hành động create. Fixture đổi `principal_arn` và loại access entry từ `EC2_LINUX` sang `STANDARD` vẫn thỏa H8.
+> Sửa tối thiểu: yêu cầu mỗi resource create trong retry giữ nguyên các giá trị đã biết của plan đầy đủ, gồm principal, loại access entry, IAM policy và cấu hình chi phí. Giá trị computed mới được giải quyết phải được đối chiếu theo reference tương ứng. Tiếp tục chặn mọi update, delete và replacement.
+> Kiểm lại: retry nguyên resource thiếu phải qua. Cùng địa chỉ nhưng đổi principal, policy hoặc instance type phải bị chặn trước apply. [P6_L3_WINDOW.md:350](https://github.com/EurusDevSec/Zero-D-Rift/blob/05aa47f/docs/runbooks/P6_L3_WINDOW.md#L350)
+> 2. MEDIUM — Evidence gán sai mốc bắt đầu cho thời gian B05 tenant-a. Evidence ghi Job xong khoảng `14:38:26`, nhưng B05 kết thúc `14:41:28`. Số 50/53 giây trong suite tính từ lúc bắt đầu B05, sau B04 và thời gian chờ queue, nên câu “50/53 giây sau Job” vượt dữ liệu.
+> Sửa tối thiểu: tại dòng 124 và 173, ghi “50/53 giây từ lúc bắt đầu kiểm B05”, giữ mốc Job hoàn tất riêng và ghi chưa đo trực tiếp khoảng Job-complete → terminated. Đồng thời sửa B09 dòng 128 thành message của request `b09-extra`, vì message đó có run key khác run đang train.
+> Kiểm lại: đối chiếu câu đã sửa với JSON B04/B05 và `timeline-c.log`, không cần mở window mới. [Evidence:124](https://github.com/EurusDevSec/Zero-D-Rift/blob/05aa47f/docs/evidence/p6/P6-T4.2_L3_WINDOW_20261126.md#L124) · [Evidence:173](https://github.com/EurusDevSec/Zero-D-Rift/blob/05aa47f/docs/evidence/p6/P6-T4.2_L3_WINDOW_20261126.md#L173) · [Evidence:128](https://github.com/EurusDevSec/Zero-D-Rift/blob/05aa47f/docs/evidence/p6/P6-T4.2_L3_WINDOW_20261126.md#L128)
+>
+> Các phần còn lại đạt trong phạm vi review
+>
+> * #105: `jq -r` lấy đúng policy object. Dòng `ListInstanceProfiles` trên `*` khớp action đã duyệt. PR không thay quyền IAM. Matrix là kiểm mẫu, còn `plan_assert` tiếp tục kiểm policy bằng approved JSON.
+> * #108: dependency đi từ access entry qua output tới resource EKS. Không thấy vòng phụ thuộc. Tên, IAM document và cấu trúc action/address dùng tính shape hash giữ nguyên.
+> * K3: chỉ giá trị `1` đạt yêu cầu. Runbook đã ghi rõ prefix rỗng không được tính đạt.
+> * Hai JSON cục bộ xác nhận 14 PASS tenant-a, 5 PASS tenant-b. Quét các tài liệu #107 trong phạm vi không thấy định danh nhạy cảm.
+>
+> Đã chạy kiểm diff, syntax, `terraform validate`, format, IAM offline 87 ca/0 sai và fixture cục bộ. Bills dựa trên số owner ghi trong evidence. Không chạy AWS, kind hay Terraform apply. `terraform graph` chưa hoàn tất vì bước xác thực backend, nên kết luận dependency dựa trên source của module đã pin.
+
+### Fixes after round 1 (Claude, 27/11, PR #107)
+
+| # | Fix | Check |
+|---|---|---|
+| 1 HIGH | New `infra/terraform/scripts/retry_plan_check.sh`, wired into H8. It refuses a retry plan whose configuration or input variables differ from the full plan; any update, delete, replace or forget; a create not in the full plan, or not a create there; and any value the full plan already knew that differs (principal reference, access entry type, IAM policy, instance type, node count). Values unknown in the full plan must come from the same expressions (configuration equal) over resources that the retry does not change. It prints addresses and paths only. The runbook keeps the approved `tfplan` and saves the retry as `retry.tfplan` (gitignored) | `tests/retry_plan_check_test.sh`, 16 cases, in `scripts/check.sh` 3e: the missing access entry alone passes, and so does an identical recreated policy; `EC2_LINUX`→`STANDARD`, another principal reference, a changed cluster name, a known value turned unknown, another policy document, `m6i.xlarge`, node count 3, update, delete, replace, a foreign address, an empty retry and a non-plan input are each refused for their own reason; the output holds no value. **Not run on a real plan** (the window plans are gone) |
+| 2 MEDIUM | Evidence §4 and §6: B05 is timed from the start of the B05 check (after B04), not from Job end; Job end is a separate row; Job end → `terminated` is marked not measured, with the `timeline-c.log` poll bound (about 3 minutes). B09 is a message of request `b09-extra`, another run key. New error row 10. `gitops/tests/batch-suite.sh` labels fixed ("from B05 start (after B04), not from Job end"; "request b09-extra, another run key") | checked against the suite JSON (B04 14:40:35Z, B05 14:41:28Z; tenant-b 15:47:56Z, 15:48:02Z), `timeline-c.log` (Pod `Succeeded` 14:38:26Z, `InstanceTerminating` 14:41:17Z, no NodeClaim 14:41:40Z) and the B05/B09 code (`t0=$SECONDS` at the start of B05; `REQUEST_ID=b09-extra`) |
+
+### Prompt for round 2
+
+```
+Round 2, read-only, of the post-window P6 review (Zero-D-Rift). Your round-1 findings and
+Claude's fixes are in docs/evidence/p6/P6_CODEX_REVIEW_REQUEST_20261127.md §Result. Review
+PR #107 at its new head only for those fixes:
+1. infra/terraform/scripts/retry_plan_check.sh and tests/retry_plan_check_test.sh: can a retry
+   plan pass that changes a value, a reference, an input variable or an action of the approved
+   full plan? Can an unreadable or empty input pass? Does any output print a value?
+2. docs/runbooks/P6_L3_WINDOW.md H8: is the order (keep tfplan, plan retry.tfplan,
+   plan_fingerprint, retry_plan_check) enough before apply?
+3. Evidence §4, §6, §9 row 10 and gitops/tests/batch-suite.sh B05/B09 labels: do they now
+   match the suite JSON, timeline-c.log and the code?
+Verdict: APPROVE, or CHANGES with a numbered list (severity, file:line, fix).
+```
+
+Round 2: pending.

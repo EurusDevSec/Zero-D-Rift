@@ -308,7 +308,7 @@ phase_run() { # TENANT REQUEST CAPACITY
   local tk=$((SECONDS - t0))
   wait_until 900 bash -c "[[ \$(timeout 30 aws ec2 describe-instances --instance-ids $iid --query 'Reservations[0].Instances[0].State.Name' --output text </dev/null 2>/dev/null) == terminated ]]" && ig="instance-terminated"
   record B05 "node-gone instance-terminated" "${kg:-node-present} ${ig:-instance-not-terminated}" \
-    "scale-down after Job end: node gone ${tk}s, terminated $((SECONDS - t0))s (smoke)"
+    "from B05 start (after B04), not from Job end: node gone ${tk}s, terminated $((SECONDS - t0))s (smoke)"
 }
 
 phase_b01() { # TENANT REQUEST
@@ -429,7 +429,7 @@ phase_resume() { # TENANT REQUEST (a new attempt of a normal request, 300 steps)
     if (( tot >= 2 )); then tot="msgs>=2"; else tot="msgs=$tot"; fi
   fi
   record B09 "${EXP[B09]}" "sent=$sent active=$act $jobs pods=$(live_pods "$t" "$r") nodeclaims=$(nodeclaims) $tot" \
-    "extra message (own run key) sent while attempt $a trained; $st"
+    "extra message (request b09-extra, another run key) sent while attempt $a trained; $st"
 }
 
 phase_dlq() { # TENANT REQUEST (fail-always attempt; queue and DLQ purged before)
