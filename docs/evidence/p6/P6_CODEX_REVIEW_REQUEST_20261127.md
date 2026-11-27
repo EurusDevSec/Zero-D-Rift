@@ -119,4 +119,14 @@ principal, nested unknown resolved) still pass? Does any output print a value?
 Verdict: APPROVE, or CHANGES with a numbered list (severity, file:line, fix).
 ```
 
-Round 3: pending.
+### Round 3 (27/11) — verbatim, as the owner pasted it
+
+> **APPROVE** — #107 tại `a6cc55a31492d0fc27b8aa26bf3d25050244ff68`.
+>
+> **Finding MEDIUM vòng 2 — Closed.** `diff()` đã kiểm cả key, chiều dài mảng và giá trị ngoài các đường dẫn `after_unknown`. Các ca thêm, xóa hoặc đổi phần tử bị chặn. Principal và giá trị unknown lồng nhau được resolve vẫn qua. Không thấy PASS oan mới hay giá trị bị in ra trong các ca đã kiểm. [retry_plan_check.sh:41](https://github.com/EurusDevSec/Zero-D-Rift/blob/a6cc55a/infra/terraform/scripts/retry_plan_check.sh#L41)
+>
+> Đã chạy **23 test đi kèm và 6 fixture độc lập**, đều đúng kết quả mong đợi. `bash -n` và `git diff --check` qua.
+>
+> CI hiện **gitops, kyverno xanh**, **terraform đang chạy**. Review dựa trên fixture cục bộ, chưa thử với plan thật. Không sửa file, không chạy AWS, kind hay Terraform apply.
+
+**Status:** the post-window review is closed with APPROVE at `a6cc55a` (#105 and #108 passed in round 1; #107 after rounds 2–3). Open limit: the S2 retry gate is proven on synthetic plans only, not on a real partial-apply plan.
