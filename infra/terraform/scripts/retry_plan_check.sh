@@ -7,7 +7,10 @@
 #   2. every managed change is "create" (no update, delete, replace or forget);
 #   3. every created address is a "create" of the same type and provider in the
 #      full plan;
-#   4. every value the full plan already knew is equal in the retry plan.
+#   4. the created value equals the full plan's, compared as a whole structure:
+#      same object keys, same array lengths, same leaves. It may differ or add
+#      only under a path that the full plan's after_unknown marks true (Codex
+#      27/11 round 2: an added list element or tag must not pass).
 # Values the full plan did not know yet (an ARN of a role made in the same
 # apply) come from the same expressions (rule 1) over resources that were made
 # by the approved plan and are not changed (rule 2).
@@ -32,11 +35,25 @@ out="$(jq -r --slurpfile f "$tmp/full.json" --slurpfile r "$tmp/retry.json" -n '
   $f[0] as $F | $r[0] as $R |
   def managed($p): [$p.resource_changes[]? | select(.mode == "managed")];
   def creates($p): managed($p) | map(select(.change.actions == ["create"]));
-  # Leaf paths (and empty arrays/objects) of a value, minus those under an unknown.
-  def known_paths($after; $unk):
-    [$after | paths(((type != "object" and type != "array") or length == 0))]
-    | map(select(. as $p | [range(1; ($p | length) + 1)]
-        | any(. as $n | ($unk | try getpath($p[0:$n]) catch null) == true) | not));
+  # Paths where retry value $c differs from full value $o. $u is the full
+  # plan after_unknown at the same place: true there means "not known yet",
+  # so anything is allowed under it. Elsewhere keys, lengths and leaves must match.
+  def diff($o; $c; $u):
+    if $u == true then empty
+    elif ($o | type) == "object" and ($c | type) == "object" then
+      (($o | keys) + ($c | keys) | unique[]) as $k |
+      ($u | if type == "object" then .[$k] else null end) as $uk |
+      if $uk == true then empty
+      elif ($o | has($k)) and ($c | has($k)) then diff($o[$k]; $c[$k]; $uk) | [$k] + .
+      else [$k] end
+    elif ($o | type) == "array" and ($c | type) == "array" then
+      if ($o | length) != ($c | length) then []
+      else range(0; $o | length) as $i |
+        ($u | if type == "array" then .[$i] else null end) as $ui |
+        diff($o[$i]; $c[$i]; $ui) | [$i] + .
+      end
+    elif $o == $c then empty
+    else [] end;
   (managed($F) | map({key: .address, value: .}) | from_entries) as $FI |
   [
     (if ($F.resource_changes // null) == null or ($R.resource_changes // null) == null
@@ -55,10 +72,9 @@ out="$(jq -r --slurpfile f "$tmp/full.json" --slurpfile r "$tmp/retry.json" -n '
       elif $o.change.actions != ["create"] then "FAIL  \($c.address): full plan action is \($o.change.actions | join("+")), not create"
       elif $o.type != $c.type or $o.provider_name != $c.provider_name then "FAIL  \($c.address): type or provider differs"
       else
-        ([known_paths($o.change.after; $o.change.after_unknown)[] as $p
-          | select(($c.change.after | try getpath($p) catch "MISSING") != ($o.change.after | getpath($p)))
-          | $p | map(tostring) | join(".")]) as $bad |
-        if ($bad | length) == 0 then "PASS  \($c.address): create, every known value equals the full plan"
+        ([diff($o.change.after; $c.change.after; $o.change.after_unknown)
+          | if length == 0 then "(whole value)" else map(tostring) | join(".") end] | unique) as $bad |
+        if ($bad | length) == 0 then "PASS  \($c.address): create, value equals the full plan (outside its unknowns)"
         else "FAIL  \($c.address): differs from the full plan at \($bad | join(", "))" end
       end)
   ] | .[]

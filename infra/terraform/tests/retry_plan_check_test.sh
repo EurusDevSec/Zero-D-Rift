@@ -25,7 +25,7 @@ jq -n --arg p "$P" '{
               after_unknown: {id: true, role: true}}},
     {address: "module.cluster.module.eks.aws_eks_node_group.system", mode: "managed", type: "aws_eks_node_group", provider_name: $p,
      change: {actions: ["create"], after: {instance_types: ["m6i.large"], scaling_config: [{desired_size: 2, max_size: 2}]},
-              after_unknown: {id: true}}},
+              after_unknown: {id: true, scaling_config: [{min_size: true}]}}},
     {address: "module.karpenter[0].aws_eks_access_entry.node", mode: "managed", type: "aws_eks_access_entry", provider_name: $p,
      change: {actions: ["create"], after: {cluster_name: "zero-drift", type: "EC2_LINUX", tags: {Project: "Zero-D-Rift"}},
               after_unknown: {principal_arn: true, id: true, kubernetes_groups: true}}},
@@ -61,7 +61,16 @@ expect "cluster name changed"                        fail "($ae | .change.after.
 expect "known value became unknown"                  fail "($ae | .change) |= (del(.after.cluster_name) | .after_unknown.cluster_name = true)"
 expect "policy recreated with another document"      fail '(.resource_changes[] | select(.type == "aws_iam_role_policy") | .change) |= (.actions = ["create"] | .after.policy = "{\"Statement\":[{\"Action\":\"iam:*\"}]}")'
 expect "node group recreated with a bigger type"     fail '(.resource_changes[] | select(.type == "aws_eks_node_group") | .change) |= (.actions = ["create"] | .after.instance_types = ["m6i.xlarge"])'
-expect "input variable changed (node count)"         fail '.variables.system_node_desired_size.value = 3'
+ng='.resource_changes[] | select(.type == "aws_eks_node_group") | .change'
+# Codex 27/11 round 2: growing or shrinking a known array or object must be refused.
+expect "node group gains an instance type element"   fail "($ng) |= (.actions = [\"create\"] | .after.instance_types += [\"m6i.xlarge\"])"
+expect "node group loses its instance type element"  fail "($ng) |= (.actions = [\"create\"] | .after.instance_types = [])"
+expect "node group gains a scaling_config block"     fail "($ng) |= (.actions = [\"create\"] | .after.scaling_config += [{desired_size: 2, max_size: 2}])"
+expect "access entry gains a tag key"                fail "($ae | .change.after.tags) += {Extra: \"yes\"}"
+expect "access entry loses a tag key"                fail "($ae | .change.after.tags) |= del(.Project)"
+expect "access entry gains a new top-level key"      fail "($ae | .change.after) += {user_name: \"someone\"}"
+expect "node group resolves a nested unknown"        pass "($ng) |= (.actions = [\"create\"] | .after.scaling_config[0].min_size = 1)"
+expect "input variable changed (node count)"        fail '.variables.system_node_desired_size.value = 3'
 expect "update of an existing role"                  fail '(.resource_changes[] | select(.type == "aws_iam_role") | .change.actions) = ["update"]'
 expect "delete of an existing role"                  fail '(.resource_changes[] | select(.type == "aws_iam_role") | .change.actions) = ["delete"]'
 expect "replacement of the node group"               fail '(.resource_changes[] | select(.type == "aws_eks_node_group") | .change.actions) = ["delete", "create"]'
@@ -70,10 +79,11 @@ expect "retry creates nothing"                       fail "($ae | .change.action
 expect "retry is not a plan (empty object)"         fail '{}'
 
 # The output never prints a value, only addresses and paths.
-jq "($ae | .change.after.principal_arn) = \"arn:aws:iam::000000000000:role/zero-drift-karpenter-node\" | ($ae | .change.after.type) = \"STANDARD\"" "$tmp/good.json" > "$tmp/case.json"
+jq "($ae | .change.after.principal_arn) = \"arn:aws:iam::000000000000:role/zero-drift-karpenter-node\" | ($ae | .change.after.type) = \"STANDARD\"
+    | ($ae | .change.after.tags) += {Extra: \"tagvalue-x\"} | ($ng) |= (.actions = [\"create\"] | .after.instance_types += [\"m6i.xlarge\"])" "$tmp/good.json" > "$tmp/case.json"
 bash scripts/retry_plan_check.sh --json "$tmp/full.json" "$tmp/case.json" > "$tmp/out" 2>&1 || true
 n=$((n + 1))
-if grep -q -E '000000000000|STANDARD|EC2_LINUX' "$tmp/out"; then echo "WRONG output prints a value"; failed=1; else echo "ok    output prints no value"; fi
+if grep -q -E '000000000000|STANDARD|EC2_LINUX|m6i|tagvalue-x' "$tmp/out"; then echo "WRONG output prints a value"; failed=1; else echo "ok    output prints no value"; fi
 
 echo
 if (( failed )); then echo "RESULT: FAIL ($n cases)"; exit 1; fi

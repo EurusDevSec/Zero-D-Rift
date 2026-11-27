@@ -90,4 +90,33 @@ PR #107 at its new head only for those fixes:
 Verdict: APPROVE, or CHANGES with a numbered list (severity, file:line, fix).
 ```
 
-Round 2: pending.
+### Round 2 (27/11) — verbatim, as the owner pasted it
+
+> REQUEST CHANGES — #107 tại `9819ae2d1a83b78c7cbb50a52ed79e276edf2062`. Còn 1 finding MEDIUM trong script mới.
+>
+> * MEDIUM — Retry vẫn PASS khi mở rộng mảng hoặc object đã biết. `known_paths()` chỉ so các phần tử cũ. Fixture thêm `"m6i.xlarge"` vào `instance_types: ["m6i.large"]` vẫn trả `RESULT: PASS`. Thêm tag cũng được cho qua. [retry_plan_check.sh:36](https://github.com/EurusDevSec/Zero-D-Rift/blob/9819ae2/infra/terraform/scripts/retry_plan_check.sh#L36)
+> Sửa gốc: so sánh đệ quy cả cấu trúc. Với subtree hoàn toàn đã biết, yêu cầu bằng nhau toàn bộ, gồm key và chiều dài mảng. Chỉ cho phép khác biệt hoặc bổ sung dưới đường dẫn được `after_unknown` của plan đầy đủ đánh dấu.
+> Kiểm lại trong một lượt: giữ các ca hợp lệ hiện có, gồm principal vừa được resolve. Thêm ca âm cho phần tử mảng mới, key object mới và phần tử bị xóa. Các ca này phải FAIL, output chỉ nêu đường dẫn.
+>
+> B05/B09 — Closed. Evidence §4, §6, dòng lỗi 10 và nhãn suite đã khớp cách đo, timeline và request `b09-extra`. H8 đã giữ riêng hai file plan và đặt các lệnh kiểm trước apply, nhưng còn phụ thuộc vào finding trên.
+> Đã chạy 16 test đi kèm — PASS, fixture bổ sung, `bash -n` và `git diff --check`. Fixture bổ sung tái hiện PASS oan nêu trên. Không sửa workspace, không chạy AWS, kind hay Terraform apply.
+
+### Fixes after round 2 (Claude, 27/11, PR #107)
+
+| # | Fix | Check |
+|---|---|---|
+| 1 MEDIUM | `known_paths()` replaced by a recursive `diff($o; $c; $u)` in `retry_plan_check.sh`. Outside a path the full plan's `after_unknown` marks `true`, objects must have the same keys, arrays the same length, leaves the same value. A missing, added or changed key or element is reported by path only. Runbook H8 says so | `tests/retry_plan_check_test.sh`, now 23 cases: the 16 earlier ones unchanged (missing access entry with a resolved principal still passes); new FAIL cases for an added instance type element (the Codex fixture), a removed element, an added `scaling_config` block, an added tag key, a removed tag key and a new top-level key; a new PASS case resolves a nested value the full plan marks unknown (`scaling_config[0].min_size`). The no-value check now also covers `m6i` and a tag value. **Still not run on a real plan** |
+
+### Prompt for round 3
+
+```
+Round 3, read-only, of the post-window P6 review (Zero-D-Rift). Your round-2 finding and
+Claude's fix are in docs/evidence/p6/P6_CODEX_REVIEW_REQUEST_20261127.md §Result. Review
+PR #107 at its new head only for infra/terraform/scripts/retry_plan_check.sh (diff()) and
+tests/retry_plan_check_test.sh: can a retry still pass that adds, removes or changes a key
+or element outside the full plan's after_unknown? Does a legitimate retry (resolved
+principal, nested unknown resolved) still pass? Does any output print a value?
+Verdict: APPROVE, or CHANGES with a numbered list (severity, file:line, fix).
+```
+
+Round 3: pending.
