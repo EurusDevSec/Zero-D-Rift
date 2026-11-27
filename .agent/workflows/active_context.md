@@ -94,9 +94,13 @@ L3 window `P6-L3-20261126-01` ran 26/11 (`docs/evidence/p6/P6-T4.2_L3_WINDOW_202
 suite 14/14 PASS on EKS, tenant-a on Spot, tenant-b on On-Demand, 96 destroyed,
 inventory CLEAN; P6 gross about 0.77 USD (Bills 27/11). PR #105 (IAM check fix)
 merged in the window. Spot service-linked role kept on purpose (A11).
-Next: merge P1g (#106), the Karpenter access-entry ordering fix and this
-evidence PR; Codex review of #105 and the fix; then T4.3 acceptance audit
-(DRF-81): delayed inventory, owner teach-back on SPEC-P6 §7.
+27/11: delayed inventory CLEAN; PRs #106 (P1g), #107 (evidence, runbook, S2
+retry gate) and #108 (access-entry ordering) merged, `main` `e59648e`; Codex
+post-window review three rounds, APPROVE at `a6cc55a`; DRF-80 Done.
+T4.3 audit `docs/evidence/p6/P6_ACCEPTANCE_AUDIT_20261127.md`: technically
+accepted (8/9 scenarios, 1 partial: `jobs=1` after request cleanup), P6 **not
+complete** until the owner's teach-back on SPEC-P6 §7 and the learning gate.
+Next: owner teach-back (8 questions), owner decides audit §3.1, then DRF-81 Done.
 
 ## Context expansion
 
