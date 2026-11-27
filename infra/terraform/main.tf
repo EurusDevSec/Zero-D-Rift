@@ -96,4 +96,7 @@ module "karpenter" {
   region            = var.region
   oidc_provider_arn = module.cluster.oidc_provider_arn
   oidc_issuer_url   = module.cluster.oidc_issuer_url
+  # From the cluster output, not var.cluster_name: the access entry must wait
+  # for the cluster (P6 window 26/11: created first, "No cluster found").
+  access_entry_cluster_name = module.cluster.cluster_name
 }

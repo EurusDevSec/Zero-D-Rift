@@ -3,6 +3,16 @@ variable "cluster_name" {
   type        = string
 }
 
+variable "access_entry_cluster_name" {
+  description = "The same name, taken from the cluster module output, so the node access entry is created only after the cluster exists."
+  type        = string
+
+  validation {
+    condition     = var.access_entry_cluster_name != ""
+    error_message = "access_entry_cluster_name must be the cluster module output, not empty."
+  }
+}
+
 variable "region" {
   description = "Region of the cluster."
   type        = string

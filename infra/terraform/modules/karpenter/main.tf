@@ -244,7 +244,7 @@ resource "aws_iam_instance_profile" "node" {
 }
 
 resource "aws_eks_access_entry" "node" {
-  cluster_name  = var.cluster_name
+  cluster_name  = var.access_entry_cluster_name
   principal_arn = aws_iam_role.node.arn
   type          = "EC2_LINUX"
 }
