@@ -71,10 +71,11 @@ Làm như `P4_RAG_SANDBOX.md` mục C (gồm `P2_L3_WINDOW.md` C), rồi kiểm 
 | Kiểm | Phải thấy |
 |---|---|
 | Danh tính | `assumed-role/zero-drift-bootstrap/<SESSION>`; MFA còn ≥ 40 phút lúc apply |
+| Profile | mọi lệnh `terraform` (plan, apply, destroy) và lệnh `aws` của script chạy với `AWS_PROFILE=zdr-tf`. `zdr-tf` lấy phiên MFA của `zdr-bootstrap` qua `credential_process`. Với `AWS_PROFILE=zdr-bootstrap`, Terraform dừng ngay vì không tự hỏi được mã MFA (`AssumeRoleTokenProvider session option not set`). Không đặt profile thì CLI dùng IAM user mặc định: plan đó không hợp lệ, chạy lại (window 26/11) |
 | `inventory.sh` | `RESULT: CLEAN`; dòng mới của P6 (instance có tag Karpenter, launch template, Spot request, queue) đều `0` |
 | Quota Standard On-Demand | ≥ 6 vCPU (4 system + 2 batch On-Demand). Đọc được 8 ngày 25/11 |
 | Quota Standard Spot | ≥ 2 vCPU. Chưa đọc từ 28/09 (lúc đó là 5) |
-| Spot service-linked role | `aws iam get-role --role-name AWSServiceRoleForEC2Spot` có hoặc không. Không có thì dừng và hỏi bạn: tạo role này là thay đổi account (A11) |
+| Spot service-linked role | `aws iam get-role --role-name AWSServiceRoleForEC2Spot` có hoặc không. Không có thì dừng và hỏi bạn: tạo role này là thay đổi account (A11). Đã tạo 26/11 theo quyết định của bạn và giữ lại có chủ đích, nên từ window sau phải thấy role này có |
 | Giá | đọc lại On-Demand `m6i.large`, `m5.large`, `c6i.large` và giá Spot 7 ngày qua; lệch > 20% so với §10 thì tính lại ước tính |
 | `run.tfvars` | `run_id`, `expires_at` theo đơn; `enable_rag_platform = true`; `enable_batch_platform = true`; `system_node_desired_size = 2`; **không** đè `vpc_cidr` |
 | `bash gitops/check.sh` | PASS, gồm luật P6: tối đa một `BatchTrainingJob` bật; NodePool có `limits` và `expireAfter` |
@@ -102,6 +103,13 @@ Trước một bước dài (một run khoảng 8 phút, `terraform destroy` kho
 
 1. Làm `P4_RAG_SANDBOX.md` từ mục D tới khi các app platform `Synced Healthy`. Hai request RAG giữ **tắt** (PR P0 đã merge): P6 không cần sandbox,
    và quota tenant còn chỗ cho cả hai nếu bạn chọn regression P5 ở mục 2b.
+   Rồi chạy **riêng** bước `annotate` của P4, dù không chạy `db-init` hay request RAG nào:
+   ```bash
+   bash infra/p4-window/window.sh annotate
+   ```
+   **Phải thấy:** 3 dòng `OK`; `status` báo `provider pod has AWS_ROLE_ARN yes`. Bước này gắn IRSA cho provider S3 của Crossplane.
+   Thiếu nó thì `Bucket` của BatchTrainingJob không bao giờ `Ready`, graph đứng ở `IN_PROGRESS` và không gửi message nào.
+   Trong `P4_RAG_SANDBOX.md`, `annotate` nằm sau bước bật request nên dễ bị bỏ qua: window 26/11 mất khoảng 12 phút vì thiếu bước này.
 2. **Không đợi** `zdr-keda` và `zdr-karpenter` Healthy trước khi gắn IRSA. Karpenter v1.15.3 thoát ngay khi lần gọi EC2 lúc khởi động
    thất bại, nên khi chưa có IRSA, Pod của nó restart liên tục và app không bao giờ Healthy (Codex P6 R2). Chỉ đợi Deployment và ServiceAccount
    **tồn tại**:
@@ -146,7 +154,14 @@ export MODE=eks CTX="$(kubectl config current-context)" OUT="$HOME/zdr-p6/batch-
 **C. Một run hoàn chỉnh (tenant-a, Spot).**
 
 1. Bạn merge PR P1b (bật tenant-a). Ghi giờ merge: đây là mốc bắt đầu của bảng thời gian smoke.
-2. Ngay sau khi merge: `$S run tenant-a smoke-1 spot`. Lệnh này chạy B02, B03, B14, B04 và B05 theo thứ tự, tự chờ (tối đa khoảng 45 phút).
+2. Đợi Argo kéo commit merge về, rồi mới chạy suite. Lệnh này phải in revision đúng bằng commit merge, và `attempt` đúng bằng
+   `runAttempt` của PR vừa merge:
+   ```bash
+   kubectl -n argocd get app zdr-requests -o jsonpath='{.status.sync.revision}{"\n"}'; kubectl -n tenant-a get batchtrainingjob smoke-1 -o jsonpath='attempt={.spec.runAttempt}{"\n"}'
+   ```
+   Chưa khớp thì đợi 30 giây rồi chạy lại (có thể ép `kubectl -n argocd annotate app zdr-requests argocd.argoproj.io/refresh=hard --overwrite`).
+   Chạy suite sớm hơn thì B02 ra `READ_FAILED` (window 26/11). Làm y như vậy sau mỗi PR request ở D1, D3 và E3 (E3: namespace `tenant-b`).
+   Khi đã khớp: `$S run tenant-a smoke-1 spot`. Lệnh này chạy B02, B03, B14, B04 và B05 theo thứ tự, tự chờ (tối đa khoảng 45 phút).
    **B02, B03**: 1 Job cho run key này; sau 3 lần poll vẫn 1 Job.
 3. Theo dõi: Pod `Pending` → NodeClaim `Launched` → `Registered` → `Initialized` → Pod `Running`.
    Ghi các mốc thời gian vào bảng smoke: sync, message gửi, Job tạo, NodeClaim tạo, instance running, node Ready, image pulled, `TRAINING_STARTED`.
@@ -238,6 +253,11 @@ export MODE=eks CTX="$(kubectl config current-context)" OUT="$HOME/zdr-p6/batch-
    kubectl -n argocd delete app zdr-batch --timeout=300s
    ```
 4. Làm `P5_L3_WINDOW.md` E2 (gỡ Kyverno, đếm webhook bằng lệnh có guard), rồi `P4_RAG_SANDBOX.md` J bước 3–4: gỡ các app còn lại, gỡ Argo CD, `terraform destroy`.
+   G2 đã xảy ra ở cả hai window (25/11 và 26/11): gỡ app Kyverno xong vẫn còn 8 webhook mồ côi. Xoá theo nhãn như G2 hướng dẫn,
+   đếm lại ra `0` rồi mới đi tiếp, và vẫn ghi thành lỗi trong evidence:
+   ```bash
+   kubectl delete validatingwebhookconfigurations,mutatingwebhookconfigurations -l webhook.kyverno.io/managed-by=kyverno
+   ```
 5. `inventory.sh` phải ra `RESULT: CLEAN`, gồm các dòng P6 bằng 0. Inventory trễ vào ngày hôm sau (P6-T4.3).
 
 ### 5b. Micro-lab: bạn tự gõ, theo một NodeClaim từ lúc sinh tới lúc mất
@@ -283,10 +303,11 @@ aws s3 cp "s3://$b/$p/1/TRAINING_STARTED" - 2>/dev/null | jq -c '{device, attemp
 **K3** · ở D1, khi attempt 2 đã xong · §4 "exactly one final artifact exists" sau resume:
 
 ```bash
-o=$(aws s3api list-objects-v2 --bucket "$b" --prefix "$p/2/artifact/" --query KeyCount --output text) && echo "artifacts_attempt2=$o" || echo READ_FAILED
+o=$(aws s3api list-objects-v2 --bucket "$b" --prefix "$p/2/artifact/" --query 'length(Contents[])' --output text) && echo "artifacts_attempt2=$o" || echo READ_FAILED
 ```
 
-**Phải thấy:** `artifacts_attempt2=1`.
+**Phải thấy:** `artifacts_attempt2=1`. Không dùng `--query KeyCount`: lệnh đó in `None` (window 26/11), có lẽ vì CLI gộp các trang kết quả và bỏ trường này.
+Prefix rỗng thì `length(Contents[])` cũng in `None`: đó là `0`, không phải `1`.
 
 **K4** · ở D3, 15 phút sau B08 · §4 "no batch node keeps running":
 
@@ -326,6 +347,7 @@ bash gitops/tests/batch-suite.sh stats
 | H5 | Job mới cứ được tạo liên tục cho cùng một request: message không bao giờ bị xoá, hoặc Job hỏng **trước** khi nhận message (kéo image lỗi, crash lúc khởi động; không có `RECEIVED-1`). Ngưỡng: Job thứ 4 cho cùng run key | Purge queue, tắt request. Nếu đã có `RECEIVED-3` thì DLQ đáng lẽ đã chặn: ghi thành lỗi. Nếu chưa có `RECEIVED-1` thì DLQ không thể chặn: ghi lớp hỏng (image, Pod Security, Kyverno) |
 | H6 | Instance có tag Karpenter (mọi trạng thái trừ `terminated`) còn trên AWS ở bước F2 sau 15 phút, hoặc lệnh đếm cứ ra `READ_FAILED` | **Không chạy `terraform destroy`.** Ghi lại. Terminate tay theo tag khi bạn đồng ý, rồi đếm lại cho tới khi đọc được `0` |
 | H7 | Gross ước tính của window chạm trần 4 USD | Dọn ngay |
+| H8 | Apply dừng giữa chừng (S2), plan thử lại chỉ còn vài resource | `plan_assert.sh` chỉ kiểm được **plan đầy đủ**: trên plan thử lại nó FAIL ở "IAM scope" vì các role đã tạo không còn trong plan, và shape hash không thể khớp. Hai dòng đó không phải bằng chứng plan sai, nhưng cũng không còn là cổng. Thay vào đó: mọi resource trong plan thử lại phải có trong plan đầy đủ đã duyệt (cùng địa chỉ, cùng type), `0 to change, 0 to destroy`. Ghi lệch cổng vào evidence, hỏi bạn trước khi apply. S2 chỉ cho thử lại một lần |
 
 ## 7. Chi phí
 
