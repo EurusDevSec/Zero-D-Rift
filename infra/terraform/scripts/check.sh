@@ -41,6 +41,10 @@ bash tests/plan_assert_guards.sh > /dev/null 2>&1 && pass "plan_assert guard tes
 #     Karpenter policies (DRF-77); the AWS simulation is scripts/batch_iam_check.sh.
 bash tests/batch_iam_offline.sh > /dev/null 2>&1 && pass "P6 IAM matrix (offline)" || fail "P6 IAM matrix (run: bash tests/batch_iam_offline.sh)"
 
+# 3e. S2 retry gate: a retry plan must be a value-equal subset of the full plan
+#     (runbook P6 H8, Codex 27/11 finding 1).
+bash tests/retry_plan_check_test.sh > /dev/null 2>&1 && pass "S2 retry gate tests (synthetic plans)" || fail "S2 retry gate tests (run: bash tests/retry_plan_check_test.sh)"
+
 # 4. Provider lockfile exists and pins exactly the approved builds.
 expected="aws=6.67.0 cloudinit=2.4.1 null=3.3.2 time=0.14.2 tls=4.4.1"
 if [[ -f .terraform.lock.hcl ]]; then
