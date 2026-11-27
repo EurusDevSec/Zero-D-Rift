@@ -1,0 +1,13 @@
+# P4 (DRF-51) valid request for tenant-b. The namespace is the tenant (D11);
+# the name gives schema rag_tenant_b__docs_qa, secret zero-drift/rag/tenant-b/docs-qa
+# and bucket zero-drift-rag-tenant-b-docs-qa. Both tenants use the same name on
+# purpose: nothing may collide across tenants.
+# Retry after a failed bootstrap Job (D9): fix the cause, then raise
+# bootstrapAttempt here by one. Never edit or delete the Job in the cluster.
+apiVersion: kro.run/v1alpha1
+kind: RAGSandbox
+metadata:
+  name: docs-qa
+  namespace: tenant-b
+spec:
+  bootstrapAttempt: 0
