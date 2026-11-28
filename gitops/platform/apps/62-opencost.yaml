@@ -1,0 +1,87 @@
+# Wave 62 (P7, DRF-85, SPEC-P7 D2, D3): OpenCost chart 2.5.35 (app 1.121.5).
+# Chart tgz sha256 35c5ec22...6a2836db matches the repository index on 28/11.
+# OpenCost is the allocation view only: no AWS identity, no Spot data feed,
+# no billing (cloud cost) integration, no Amazon Managed Prometheus, no
+# sigv4 proxy. It reads Prometheus at prometheus-server.prometheus-system
+# (wave 60). Its numbers are never presented as the AWS bill (negative
+# boundary 1); AWS Billing stays the reconciliation source (D4, D5).
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: zdr-opencost
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "62"
+spec:
+  project: default
+  source:
+    repoURL: https://opencost.github.io/opencost-helm-chart
+    chart: opencost
+    targetRevision: 2.5.35
+    helm:
+      releaseName: opencost
+      valuesObject:
+        serviceAccount:
+          create: true
+          annotations: {}
+        # The exporter writes its pricing and provider files to /var/configs;
+        # the root filesystem is read-only, so without this scratch volume every
+        # price is 0 (kind smoke 28/11). emptyDir, never a persistent volume.
+        extraVolumes:
+          - name: var-configs
+            emptyDir: {sizeLimit: 64Mi}
+        opencost:
+          exporter:
+            defaultClusterId: zero-drift
+            image:
+              registry: ghcr.io
+              repository: opencost/opencost
+              tag: "1.121.5@sha256:29e7becb7b04b935d85031c7fb43bb3731b53899b3f05353c83c5850619ade3e"
+            extraVolumeMounts:
+              - name: var-configs
+                mountPath: /var/configs
+            resources:
+              requests: {cpu: 10m, memory: 64Mi}
+              limits: {memory: 512Mi}
+          ui:
+            enabled: true
+            image:
+              registry: ghcr.io
+              repository: opencost/opencost-ui
+              tag: "1.121.5@sha256:ead6e6dc09c84b34aeb850dfeef84dca9410c9d85fe980d2359a66a14ccde809"
+            resources:
+              requests: {cpu: 10m, memory: 32Mi}
+              limits: {memory: 128Mi}
+          # MCP server off: no AI-agent endpoint into cost data (surface).
+          mcp:
+            enabled: false
+          customPricing:
+            enabled: false
+          cloudCost:
+            enabled: false
+          carbonCost:
+            enabled: false
+          prometheus:
+            internal:
+              enabled: true
+              serviceName: prometheus-server
+              namespaceName: prometheus-system
+              port: 80
+            amp:
+              enabled: false
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: opencost
+  syncPolicy:
+    automated:
+      prune: false
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
+    retry:
+      limit: 10
+      backoff:
+        duration: 15s
+        factor: 2
+        maxDuration: 3m

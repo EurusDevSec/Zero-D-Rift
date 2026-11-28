@@ -83,7 +83,8 @@ for f, d in apps:
         charts[s["chart"]] = s["targetRevision"]
     else:
         res(s["targetRevision"] == "main", f"{d['metadata']['name']}: Git source on main")
-res(charts == {"crossplane": "2.4.3", "kro": "0.9.4", "kyverno": "3.10.0", "keda": "2.21.1", "karpenter": "1.15.3"},
+res(charts == {"crossplane": "2.4.3", "kro": "0.9.4", "kyverno": "3.10.0", "keda": "2.21.1", "karpenter": "1.15.3",
+                 "prometheus": "30.0.1", "opencost": "2.5.35"},
     f"Helm charts pinned exactly: {charts}")
 # Chart images: the values must carry a digest (Crossplane: repository@sha256 +
 # ignoreTag; kro and Kyverno: tag v...@sha256), otherwise the chart default tag
@@ -109,13 +110,20 @@ IMAGE_KEYS = {  # chart -> {path of the image block: fields the template reads (
     # Karpenter appends @<controller.image.digest> to repository:tag.
     "keda": {(): ["keda.tag", "metricsApiServer.tag", "webhooks.tag"]},
     "karpenter": {("controller",): ["digest"]},
+    # P7: Prometheus server and config reloader render repository@digest;
+    # kube-state-metrics renders registry/repository:tag@<sha> (full
+    # "sha256:..." in "sha"); node exporter appends @<digest>; OpenCost
+    # exporter and UI take tag "x.y.z@sha256:...".
+    "prometheus": {("configmapReload", "prometheus"): ["digest"], ("server",): ["digest"],
+                   ("kube-state-metrics",): ["sha"], ("prometheus-node-exporter",): ["digest"]},
+    "opencost": {("opencost", "exporter"): ["tag"], ("opencost", "ui"): ["tag"]},
 }
 def field(block, dotted):
     for k in dotted.split("."):
         block = block.get(k, "") if isinstance(block, dict) else ""
     return str(block)
 def pinned(dotted, v):
-    if dotted.endswith("digest"):
+    if dotted.endswith("digest") or dotted == "sha":
         return re.fullmatch(r"sha256:[0-9a-f]{64}", v)
     return re.search(r"@sha256:[0-9a-f]{64}$", v)
 for f, d in apps:
@@ -719,6 +727,52 @@ res(kp is not None and kp.get("replicas") == 1 and kp.get("settings", {}).get("c
     and not {"affinity", "nodeSelector", "tolerations"} & set(kp)
     and not kp.get("serviceAccount", {}).get("annotations"),
     "zdr-karpenter: 1 replica, cluster zero-drift, interruption queue; chart affinity kept; no role ARN in Git")
+
+# 24. P7 metrics stack (SPEC-P7 D1-D3, negative boundaries 1 and 4): no AWS
+#     identity, no persistent volume, no Alertmanager or Pushgateway, OpenCost
+#     reads the in-cluster Prometheus only, with no billing or Spot feed and
+#     no MCP endpoint. A later wave than every P6 app.
+def chart_values(chart):
+    return next((d["spec"]["source"].get("helm", {}).get("valuesObject", {}) for f, d in apps
+                 if d["spec"]["source"].get("chart") == chart), None)
+def wave(chart):
+    return next((int(d["metadata"].get("annotations", {}).get("argocd.argoproj.io/sync-wave", "0"))
+                 for f, d in apps if d["spec"]["source"].get("chart") == chart), None)
+def no_sa_annotations(node):
+    if isinstance(node, dict):
+        return all(not (k == "serviceAccount" or k.endswith("serviceAccount")) or not
+                   (isinstance(v, dict) and v.get("annotations")) for k, v in node.items())             and all(no_sa_annotations(v) for v in node.values())
+    if isinstance(node, list):
+        return all(no_sa_annotations(x) for x in node)
+    return True
+pv = chart_values("prometheus")
+pd = next((d for f, d in apps if d["spec"]["source"].get("chart") == "prometheus"), {})
+res(pv is not None and pv.get("alertmanager", {}).get("enabled") is False
+    and pv.get("prometheus-pushgateway", {}).get("enabled") is False
+    and pv.get("server", {}).get("persistentVolume", {}).get("enabled") is False
+    and pv.get("server", {}).get("retention") == "12h"
+    and "opencost.opencost.svc:9003" in str(pv.get("extraScrapeConfigs", ""))
+    and pd.get("spec", {}).get("destination", {}).get("namespace") == "prometheus-system"
+    and no_sa_annotations(pv) and "eks.amazonaws.com" not in str(pv),
+    "zdr-prometheus: no Alertmanager/Pushgateway, no PV, retention 12h, scrapes OpenCost; no AWS identity")
+ov = chart_values("opencost")
+oc = (ov or {}).get("opencost", {})
+pi = oc.get("prometheus", {})
+res(ov is not None and not ov.get("serviceAccount", {}).get("annotations")
+    and pi.get("internal") == {"enabled": True, "serviceName": "prometheus-server",
+                               "namespaceName": "prometheus-system", "port": 80}
+    and pi.get("amp", {}).get("enabled") is False and not pi.get("external", {}).get("enabled")
+    and oc.get("customPricing", {}).get("enabled") is False and oc.get("cloudCost", {}).get("enabled") is False
+    and oc.get("mcp", {}).get("enabled") is False and "sigV4Proxy" not in str(oc) and "aws" not in str(ov).lower()
+    and no_sa_annotations(ov)
+    and [v.get("name") for v in ov.get("extraVolumes", [])] == ["var-configs"]
+    and set(ov["extraVolumes"][0]) == {"name", "emptyDir"}
+    and oc.get("exporter", {}).get("extraVolumeMounts") == [{"name": "var-configs", "mountPath": "/var/configs"}],
+    "zdr-opencost: in-cluster Prometheus only; no AMP, sigv4, billing, custom pricing, MCP or AWS identity; "
+    "/var/configs is an emptyDir")
+waves = [wave(c) for c in ("keda", "karpenter", "prometheus", "opencost")]
+res(None not in waves and max(waves[:2]) < waves[2] < waves[3],
+    f"P7 waves after P6 and OpenCost after Prometheus: {waves}")
 sys.exit(0 if ok else 1)
 EOF
 

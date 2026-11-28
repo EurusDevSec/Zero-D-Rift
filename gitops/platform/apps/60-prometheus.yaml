@@ -1,0 +1,93 @@
+# Wave 60 (P7, DRF-85, SPEC-P7 D1): community prometheus chart 30.0.1
+# (app v3.16.0). Chart tgz sha256 4f18a8da...5cc55ecb6 matches the repository
+# index on 28/11. Candidate 31.0.0 was dropped: its downloaded tgz did not
+# match the index digest (evidence P7-T2.1).
+# Components: server, kube-state-metrics, node exporter. Alertmanager and
+# Pushgateway are off (negative boundary 4). No persistent volume (A5): the
+# window's series are exported by experiments/lib/export_metrics.sh before
+# teardown. No AWS identity (D3). Every image runs by digest (read 28/11).
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: zdr-prometheus
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "60"
+spec:
+  project: default
+  source:
+    repoURL: https://prometheus-community.github.io/helm-charts
+    chart: prometheus
+    targetRevision: 30.0.1
+    helm:
+      releaseName: prometheus
+      valuesObject:
+        alertmanager:
+          enabled: false
+        prometheus-pushgateway:
+          enabled: false
+        configmapReload:
+          prometheus:
+            image:
+              repository: quay.io/prometheus-operator/prometheus-config-reloader
+              digest: "sha256:cc74ddedad4ab1c49446971f6d51302ad4303d8660a2018af925c7f62c114304"
+            resources:
+              requests: {cpu: 5m, memory: 16Mi}
+              limits: {memory: 64Mi}
+        server:
+          image:
+            repository: quay.io/prometheus/prometheus
+            digest: "sha256:9332054523223e2ddc18d8101799d54a4a8d823b030c53216f063a6c117773cd"
+          global:
+            scrape_interval: 30s
+            evaluation_interval: 1m
+          retention: 12h
+          persistentVolume:
+            enabled: false
+          resources:
+            requests: {cpu: 100m, memory: 256Mi}
+            limits: {memory: 1Gi}
+        kube-state-metrics:
+          image:
+            registry: registry.k8s.io
+            repository: kube-state-metrics/kube-state-metrics
+            tag: v2.20.0
+            sha: "sha256:42cfe3723a5f058171c627537fb57a3ea0f26e4380fa18555a95cb1a1b4cfc5b"
+          resources:
+            requests: {cpu: 10m, memory: 64Mi}
+            limits: {memory: 256Mi}
+        prometheus-node-exporter:
+          image:
+            registry: quay.io
+            repository: prometheus/node-exporter
+            tag: v1.13.1
+            digest: "sha256:011e2d12c5bff759b90804bda642664775d7b4b127bf5148539bb82d3f590bb7"
+          resources:
+            requests: {cpu: 10m, memory: 32Mi}
+            limits: {memory: 64Mi}
+        # OpenCost exposes its own cost metrics on :9003 (wave 62).
+        extraScrapeConfigs: |
+          - job_name: opencost
+            honor_labels: true
+            scrape_interval: 1m
+            scrape_timeout: 10s
+            metrics_path: /metrics
+            scheme: http
+            static_configs:
+              - targets: ['opencost.opencost.svc:9003']
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: prometheus-system
+  syncPolicy:
+    automated:
+      prune: false
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
+    retry:
+      limit: 10
+      backoff:
+        duration: 15s
+        factor: 2
+        maxDuration: 3m

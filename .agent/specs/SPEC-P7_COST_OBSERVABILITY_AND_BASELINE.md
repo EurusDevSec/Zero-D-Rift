@@ -1,7 +1,7 @@
 ---
 id: SPEC-P7
 title: Cost and utilization instrumentation, cost contract and reproducible manual baseline
-status: CANDIDATE_20261128 (owner approval of §9.1 pending)
+status: APPROVED_20261128 (owner approved D1–D13 on 28/11)
 phase: P7
 start: 2026-11-28
 deadline: 2026-11-29 (local part 28/11; L3 part in the joint P7+P8 window of 29/11)
@@ -9,8 +9,8 @@ schedule_baseline: ROADMAP "Rebaseline 28/11" (product and report by 09/12, defe
 estimated_effort: about 12 h local on 28/11 + about 4 h of the 29/11 window
 mode: Pair (Claude implements; the owner runs the hand calculation, the two baselines and the teach-back)
 canonical_scope: docs/de_cuong_tot_nghiep_ver3.md
-linear: DRF-21 (measurements), DRF-22 (manual baseline and locked profile)
-authority: CANDIDATE_ONLY_NO_INSTALL_NO_AWS_NO_BILLING_SETTING
+linear: DRF-82 (T1), DRF-83 → DRF-85/86 (T2), DRF-87 (T3), DRF-88 (T4), DRF-84 → DRF-89/90 (T5); DRF-21/22 cancelled as superseded
+authority: LOCAL_AND_KIND_ONLY; AWS window needs a separate owner approval
 drafted_from: Fable draft 16/11 (`claude/specs-p5-p9-draft-ecc762`, `e0aca8f`), rebased on main `e59648e` after P6 closed
 ---
 
@@ -77,12 +77,12 @@ This is the ver3 §12 exit criterion for P7: "Dashboard/raw metrics, cost contra
 | A3 | P4 and P5 accepted; RAG path, credential tiers, tenant guardrails exist | **Met** | — |
 | A4 | Two `m6i.large` system nodes have room for Prometheus (server, kube-state-metrics, node exporter) and OpenCost on top of P3–P6 | Unverified; tightest point so far | Pod count and memory at window start; fallback in §11 |
 | A5 | No storage driver add-on, so Prometheus has no persistent volume | Module unchanged | module at the window revision |
-| A6 | OpenCost works on Kubernetes 1.35 | `UNVERIFIED` (docs name 1.28) | kind smoke P7-T2.1 |
+| A6 | OpenCost works on Kubernetes 1.35 | **Met on kind 1.35.8** (P7-T2.1, 28/11): allocation rows per namespace; EKS pending | window |
 | A7 | Project tags (`Project`, `RunId`, `ExpiresAt`, `ManagedBy`) on Terraform resources and on Karpenter instances and volumes | Seen on P6 instances (count by tag in T4.2 §6) | describe one batch instance in the window |
 | A8 | EXPERIMENT_PLAN v0.1.0 unchanged: §5, §5.4, §7 | Unchanged except the ADR-0009 CPU wording | read again; D4 may need v0.2.0 |
 | A9 | The owner can read Bills and Cost Explorer in the console | Done for P5 and P6 | — |
 | A10 | A project Budget with alerts exists | Unknown | owner reads Budgets |
-| A11 | Linux instances billed per second with a one-minute minimum, On-Demand and Spot | `UNVERIFIED` | AWS EC2 pricing pages (§12 S5) |
+| A11 | Linux instances billed per second with a one-minute minimum, On-Demand and Spot | On-Demand `DOC_VERIFIED` (S5); Spot not stated on the Spot pricing page | EC2 User Guide before T3 `cost_calc` rounding |
 | A12 | P4 `db-init`, `bootstrap`, `cleanup` entry points exist for the manual RAG baseline | Met (P4) | — |
 | A13 | P6 training image is pinned by digest; default 300 steps ≈ 5 min, checkpoint every 25 steps (SPEC-P6 D10) | Met | VERSION_MATRIX "P6 pins" |
 
@@ -155,17 +155,17 @@ Scenario: Teardown keeps the evidence
 ### P7-T1 — Contract (1.5 h)
 
 - [ ] This SPEC; owner decides §9.1. Codex review is skipped for the SPEC (time; the guardrail code in T2 gets the review).
-- [ ] Pins: Prometheus chart and OpenCost chart versions; image digests resolved at T2.1; VERSION_MATRIX "P7 pins".
-- [ ] Read the OpenCost AWS pricing page for the pinned version (§12 S4) and the EC2 billing granularity (S5).
+- [x] Pins: Prometheus chart and OpenCost chart versions; image digests resolved at T2.1; VERSION_MATRIX "P7 pins" (§11).
+- [x] Read the OpenCost AWS pricing page for the pinned version (§12 S4) and the EC2 billing granularity (S5); Spot granularity still open.
 - [ ] **Owner micro-lab (15 min):** from fixed inputs the owner computes both arms of one pair and the saving ratio on paper. The worked result becomes the first `SYNTHETIC` unit test.
 
 ### P7-T2 — Metrics stack (4 h)
 
 **T2.1 Manifests and kind smoke (3 h).**
 
-- [ ] Argo CD applications per D1 and D2: requests and limits, scrape interval and retention in Git, no PV, Alertmanager and Pushgateway off.
-- [ ] `gitops/check.sh`: chart versions exact, images by digest, no component outside D1/D2, no ServiceAccount annotation for IRSA on either.
-- [ ] kind (Kubernetes 1.35, ADR-0005): both install; OpenCost reaches Prometheus; an allocation query for a test namespace returns rows. Record what kind cannot show (no AWS prices, no real nodes).
+- [x] Argo CD applications per D1 and D2: requests and limits, scrape interval and retention in Git, no PV, Alertmanager and Pushgateway off.
+- [x] `gitops/check.sh`: chart versions exact, images by digest, no component outside D1/D2, no ServiceAccount annotation for IRSA on either.
+- [x] kind (Kubernetes 1.35, ADR-0005): both install; OpenCost reaches Prometheus; an allocation query for a test namespace returns rows. Record what kind cannot show (no AWS prices, no real nodes).
 
 Evidence: `docs/evidence/p7/P7-T2.1_L2_KIND_OPENCOST_20261128.md`.
 
@@ -229,11 +229,11 @@ P7 is complete only when every scenario in §4 has L3 evidence, the cost of one 
 
 # 9. Decisions, traceability and tracking
 
-## 9.1. Decisions for the owner (D1–D13): proposals, not approved
+## 9.1. Decisions (D1–D13): approved by the owner on 28/11/2026
 
 | ID | Decision | Proposal | Why | Alternative |
 |---|---|---|---|---|
-| D1 | Prometheus distribution | Community `prometheus` chart (candidate `31.0.0`, app `v3.16.0`; fallback `30.0.1` if the kind smoke fails): server, kube-state-metrics, node exporter; Alertmanager and Pushgateway off; no PV; retention one window | Fewest Pods and CRDs; data exported before teardown | kube-prometheus-stack (operator, more Pods and CRDs) |
+| D1 | Prometheus distribution | Community `prometheus` chart `30.0.1` (app `v3.16.0`; candidate `31.0.0` rejected at T2.1: downloaded tgz ≠ index digest): server, kube-state-metrics, node exporter; Alertmanager and Pushgateway off; no PV; retention one window | Fewest Pods and CRDs; data exported before teardown | kube-prometheus-stack (operator, more Pods and CRDs) |
 | D2 | Dashboard | OpenCost UI during the window, recorded; plus a static offline report from the exported data | ver3 §13 asks for an offline dashboard for the defense; no extra component | Grafana |
 | D3 | OpenCost identity and prices | No AWS identity; public On-Demand prices; no Spot data feed; no billing integration. OpenCost is the allocation view only | No new IAM, bucket or query service; billing stays the reconciliation source | Spot data feed and billing integration |
 | D4 | Cost contract for a run | Variable compute = billed instance seconds × unit price + volume GB-seconds × volume price. On-Demand price from the Price List, recorded in the run manifest; Spot price from Spot price history for that type and zone over the run; instance seconds from EC2 launch and termination | Available minutes after a run, reproducible, independent of OpenCost's Spot handling | Wait for the bill and use it as the only source |
@@ -296,11 +296,11 @@ Proposed cap (D12): 2 USD for the P7 share. Prometheus and OpenCost add no AWS c
 
 | # | Fact | Source | Checked | Status |
 |---|---|---|---|---|
-| S1 | OpenCost chart `2.5.35` (app `1.121.5`, 25/11/2026); `2.5.34` (app `1.121.4`) | `opencost.github.io/opencost-helm-chart/index.yaml` | 2026-11-28 | `SOURCE_VERIFIED`; pin at T2.1 |
+| S1 | OpenCost chart `2.5.35` (app `1.121.5`, 25/11/2026); `2.5.34` (app `1.121.4`) | `opencost.github.io/opencost-helm-chart/index.yaml` | 2026-11-28 | **Pinned** `2.5.35`, tgz = index digest (P7-T2.1) |
 | S2 | OpenCost installation page names Kubernetes 1.28 as officially supported | OpenCost installation docs | 2026-11-16 | `DOC_VERIFIED`; 1.35 `UNVERIFIED` |
-| S3 | Prometheus chart `31.0.0` (app `v3.16.0`, 26/11/2026), `30.0.1` (25/11/2026); `kubeVersion >=1.19.0-0` | `prometheus-community.github.io/helm-charts/index.yaml` | 2026-11-28 | `SOURCE_VERIFIED`; pin at T2.1 |
-| S4 | How OpenCost prices AWS nodes without credentials, and Spot handling | OpenCost AWS configuration docs | not read yet | `UNVERIFIED` |
-| S5 | Per-second billing with one-minute minimum for Linux On-Demand and Spot | AWS EC2 pricing pages | not read yet | `UNVERIFIED` |
+| S3 | Prometheus chart `31.0.0` (app `v3.16.0`, 26/11/2026), `30.0.1` (25/11/2026); `kubeVersion >=1.19.0-0` | `prometheus-community.github.io/helm-charts/index.yaml` | 2026-11-28 | **Pinned** `30.0.1`; `31.0.0` tgz ≠ index digest, rejected (P7-T2.1 §1) |
+| S4 | On-Demand price from the public price list `pricing.us-east-1.amazonaws.com/offers/v1.0/aws/AmazonEC2/current/<region>/index.json`, no credentials. Spot without the data feed: tries `DescribeSpotPriceHistory` (needs credentials, which D3 withholds), then falls back to On-Demand, so a Spot node is likely priced as On-Demand. Spot label `eks.amazonaws.com/capacityType`; Karpenter key not seen | OpenCost AWS configuration docs; `pkg/cloud/aws/provider.go` (`develop`, partly read) | 2026-11-28 | `DOC_VERIFIED` (On-Demand); Spot fallback and Karpenter label `UNVERIFIED`, observe in the window |
+| S5 | Linux On-Demand billed per second, minimum 60 s; the Spot pricing page states no granularity | `aws.amazon.com/ec2/pricing/on-demand/`, `aws.amazon.com/ec2/spot/pricing/` | 2026-11-28 | On-Demand `DOC_VERIFIED`; Spot `UNVERIFIED` (EC2 User Guide) |
 | S6 | Cost Explorer API billed per request | COST_PLAN §7.4 | 2026-10-02 | `DOC_VERIFIED` |
 | S7 | Unit prices: EKS 0.10, `m6i.large` 0.096, `m5.large` 0.096, `db.t4g.micro` 0.016 USD/h; gp3 0.08 USD/GB-month; public IPv4 0.005 USD/h | COST_PLAN §5.2 | 2026-09-28 | recheck before the window |
 | S8 | Cost allocation tags apply only to usage after activation | AWS Billing documentation | not read yet | `UNVERIFIED`; read before the owner activates |
