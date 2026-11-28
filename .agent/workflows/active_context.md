@@ -114,8 +114,8 @@ PR #110 (branch `hoang/drf-21-p7-contract`): Prometheus 30.0.1 and OpenCost 2.5.
 (`P7-T2.1_*`), `export_metrics.sh` with redaction and kind dry run (`P7-T2.2_*`), cost contract
 `docs/finops/COST_MEASUREMENT.md` v1.0.0, `cost_calc.py`, `collect_timeline.sh`, ledger, profile
 `batch-cpu-small-v1` locked, baseline runbooks (PLAN) (`P7-T3-T4_LOCAL_20261128.md`); 27
-SYNTHETIC tests in CI. Open for the owner: T1 micro-lab (hand pair), D8a (RAG bootstrap by
-the image's own command), merge PR #110. Before 29/11: P8 SPEC, joint window request,
+SYNTHETIC tests in CI. D8a approved by the owner 28/11 (RAG baseline runs the image's
+own bootstrap by hand). Open for the owner: T1 micro-lab (hand pair), merge PR #110. Before 29/11: P8 SPEC, joint window request,
 `window.sh` run-id prefix for the joint window. No AWS today.
 
 ## Context expansion

@@ -13,7 +13,7 @@ từng bước bằng tay, cùng nguyên liệu (D8):
 
 So sánh này là về **số bước và thời gian**, không phải về quyền.
 
-## Khác biệt cần bạn quyết (D8a, đề xuất 28/11)
+## Khác biệt so với D8 (D8a, owner duyệt 28/11/2026)
 
 D8 ghi "SQL by hand with the bootstrap tier from a platform Pod". Nhưng image `rag-sandbox` **không có `psql`**, và
 gõ SQL tạo role bằng tay buộc phải gõ mật khẩu ra màn hình. Claude đề xuất cách khác: bạn chạy **chính lệnh
@@ -24,7 +24,7 @@ gõ SQL tạo role bằng tay buộc phải gõ mật khẩu ra màn hình. Clau
 - grant/revoke trên schema: 6.
 
 Điều này đúng luật §5.1 ("một script chạy một lần là một interaction, nhưng phải ghi `automated_actions_count`").
-**Chưa áp dụng cho tới khi bạn duyệt**; nếu không duyệt thì phải thêm `psql` vào một image riêng (ngoài P7).
+**Đã duyệt** (owner, 28/11: "Approve D8a"). Không dùng image riêng có `psql`.
 
 ## Luật chơi
 

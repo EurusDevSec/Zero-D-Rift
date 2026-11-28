@@ -185,7 +185,7 @@ Evidence: `docs/evidence/p7/P7-T2.1_L2_KIND_OPENCOST_20261128.md`.
 
 ### P7-T4 — Baselines and the locked profile (3 h)
 
-- [x] RAG baseline runbook: steps 1–8 of EXPERIMENT_PLAN §5.2 as exact commands, D8 equal footing. **D8a proposed 28/11** (no `psql` in the image: run the image's own `bootstrap` once by hand, 1 interaction + 8 automated actions); owner decision pending.
+- [x] RAG baseline runbook: steps 1–8 of EXPERIMENT_PLAN §5.2 as exact commands, D8 equal footing. **D8a approved by the owner 28/11** (no `psql` in the image: run the image's own `bootstrap` once by hand, 1 interaction + 8 automated actions).
 - [x] Batch baseline runbook: steps 1–8 of §5.3; one On-Demand CPU node by D7; plain Job manifest without KEDA; marker and checkpoint checks identical to P6; 1,800 s idle hold with a visible timer; removal and inventory.
 - [x] Profile `batch-cpu-small-v1` (D9, `experiments/profiles/`) and the interaction sheet; the same counting rule written for the platform path.
 
@@ -229,7 +229,7 @@ P7 is complete only when every scenario in §4 has L3 evidence, the cost of one 
 
 # 9. Decisions, traceability and tracking
 
-## 9.1. Decisions (D1–D13): approved by the owner on 28/11/2026
+## 9.1. Decisions (D1–D13, D8a): approved by the owner on 28/11/2026
 
 | ID | Decision | Proposal | Why | Alternative |
 |---|---|---|---|---|
@@ -241,6 +241,7 @@ P7 is complete only when every scenario in §4 has L3 evidence, the cost of one 
 | D6 | Utilization | CPU and memory requested versus allocatable and used, from kube-state-metrics and node exporter. No GPU metric (ADR-0009) | H5 needs time and price | — |
 | D7 | Capacity for the batch baseline | The owner creates one On-Demand CPU node by AWS CLI commands in the runbook (node role and subnets from Terraform outputs) and deletes it the same way | "Manual" means typed commands, as EXPERIMENT_PLAN §5 asks | A Terraform variable that adds one node (safer cleanup, hides many actions in one apply) |
 | D8 | Equal footing for the RAG baseline | Same shared database, pre-created tenant role, image and checks; SQL by hand with the bootstrap tier from a platform Pod; bucket under the tenant prefix | The comparison is about steps and time, not rights | Baseline creates its own role and policy |
+| D8a | How the RAG baseline creates schema, role and secret (owner approved 28/11: "Approve D8a") | The owner runs the image's own `bootstrap` command once by hand as a Job in `zdr-platform` (SA `rag-bootstrap`); counted as 1 interaction with `automated_actions_count = 8` (secret 1, role 1, grants 6), EXPERIMENT_PLAN §5.1 | The image has no `psql`; typing SQL would put a role password on screen | Separate image with `psql` and SQL typed by hand |
 | D9 | Locked profile | `batch-cpu-small-v1`: P6 image by digest, 300 steps (≈ 5 min), checkpoint every 25 steps, CPU 500m / memory 384Mi request, **one instance type `m5.large` for both arms of every H5 pair**, gp3 root as Karpenter sets it, idle window 1,800 s, workload timeout 2,700 s | Same type in both arms (EXPERIMENT_PLAN §7); `m5.large` ran on Spot in P6. A 5-minute run favours the platform strongly (P6 teach-back Q7), so the report states the profile and does not generalise | Keep the 3-type allowlist and pair by observed type |
 | D10 | Ledger | `docs/finops/COST_LEDGER.md`, gross, by phase and ver3 §11 category, with status | COST_PLAN §8.2 step 5 | Spreadsheet outside Git |
 | D11 | Harness scope in P7 | Collectors, calculator and manifest writer only. Trial runners and the analysis script are P8 | Keeps P7 to measurement | Build the runners here |
