@@ -1,0 +1,180 @@
+{
+ "exported_at_utc": "2026-11-28T09:04:49Z",
+ "note": "OpenCost numbers are an allocation view at public On-Demand prices; AWS Billing is the cost source (SPEC-P7 D4, D5).",
+ "official": false,
+ "opencost_allocations": [
+  {
+   "aggregate": "namespace",
+   "file": "opencost/allocation_namespace.json",
+   "rows": 5
+  },
+  {
+   "aggregate": "controller",
+   "file": "opencost/allocation_controller.json",
+   "rows": 10
+  },
+  {
+   "aggregate": "pod",
+   "file": "opencost/allocation_pod.json",
+   "rows": 15
+  }
+ ],
+ "prometheus_version": "3.16.0",
+ "queries": [
+  {
+   "file": "prometheus/nodes_by_pool_capacity.jsonl",
+   "name": "nodes_by_pool_capacity",
+   "promql": "count by (label_zero_drift_io_pool, label_karpenter_sh_capacity_type, label_eks_amazonaws_com_capacity_type, label_node_kubernetes_io_instance_type) (kube_node_labels{job!=\"opencost\"})",
+   "samples": 43,
+   "series": 2
+  },
+  {
+   "file": "prometheus/node_labels.jsonl",
+   "name": "node_labels",
+   "promql": "max by (node, label_zero_drift_io_pool, label_karpenter_sh_capacity_type, label_karpenter_sh_nodepool, label_eks_amazonaws_com_capacity_type, label_node_kubernetes_io_instance_type, label_topology_kubernetes_io_zone) (kube_node_labels{job!=\"opencost\"})",
+   "samples": 43,
+   "series": 2
+  },
+  {
+   "file": "prometheus/cpu_requested_by_node.jsonl",
+   "name": "cpu_requested_by_node",
+   "promql": "sum by (node) (kube_pod_container_resource_requests{resource=\"cpu\",job!=\"opencost\"})",
+   "samples": 43,
+   "series": 1
+  },
+  {
+   "file": "prometheus/cpu_allocatable_by_node.jsonl",
+   "name": "cpu_allocatable_by_node",
+   "promql": "sum by (node) (kube_node_status_allocatable{resource=\"cpu\",job!=\"opencost\"})",
+   "samples": 43,
+   "series": 1
+  },
+  {
+   "file": "prometheus/memory_requested_by_node.jsonl",
+   "name": "memory_requested_by_node",
+   "promql": "sum by (node) (kube_pod_container_resource_requests{resource=\"memory\",job!=\"opencost\"})",
+   "samples": 43,
+   "series": 1
+  },
+  {
+   "file": "prometheus/memory_allocatable_by_node.jsonl",
+   "name": "memory_allocatable_by_node",
+   "promql": "sum by (node) (kube_node_status_allocatable{resource=\"memory\",job!=\"opencost\"})",
+   "samples": 43,
+   "series": 1
+  },
+  {
+   "file": "prometheus/tenant_pod_phase.jsonl",
+   "name": "tenant_pod_phase",
+   "promql": "max by (namespace, pod, phase) (kube_pod_status_phase{namespace=~\"tenant-.*\",job!=\"opencost\"} == 1)",
+   "samples": 56,
+   "series": 3
+  },
+  {
+   "file": "prometheus/tenant_pod_node.jsonl",
+   "name": "tenant_pod_node",
+   "promql": "max by (namespace, pod, node) (kube_pod_info{namespace=~\"tenant-.*\",job!=\"opencost\"})",
+   "samples": 56,
+   "series": 2
+  },
+  {
+   "file": "prometheus/tenant_cpu_used.jsonl",
+   "name": "tenant_cpu_used",
+   "promql": "sum by (namespace, pod) (rate(container_cpu_usage_seconds_total{namespace=~\"tenant-.*\",container!=\"\"}[2m]))",
+   "samples": 29,
+   "series": 2
+  },
+  {
+   "file": "prometheus/tenant_memory_used.jsonl",
+   "name": "tenant_memory_used",
+   "promql": "sum by (namespace, pod) (container_memory_working_set_bytes{namespace=~\"tenant-.*\",container!=\"\"})",
+   "samples": 47,
+   "series": 2
+  },
+  {
+   "file": "prometheus/namespace_cpu_allocation.jsonl",
+   "name": "namespace_cpu_allocation",
+   "promql": "sum by (namespace) (container_cpu_allocation)",
+   "samples": 201,
+   "series": 5
+  },
+  {
+   "file": "prometheus/namespace_memory_allocation.jsonl",
+   "name": "namespace_memory_allocation",
+   "promql": "sum by (namespace) (container_memory_allocation_bytes)",
+   "samples": 201,
+   "series": 5
+  },
+  {
+   "file": "prometheus/opencost_node_hourly_cost.jsonl",
+   "name": "opencost_node_hourly_cost",
+   "promql": "max by (node, instance_type, region, arch) (node_total_hourly_cost)",
+   "samples": 43,
+   "series": 1
+  },
+  {
+   "file": "prometheus/opencost_node_is_spot.jsonl",
+   "name": "opencost_node_is_spot",
+   "promql": "max by (node, instance_type) (kubecost_node_is_spot)",
+   "samples": 43,
+   "series": 1
+  },
+  {
+   "file": "prometheus/scrape_up.jsonl",
+   "name": "scrape_up",
+   "promql": "up",
+   "samples": 430,
+   "series": 12
+  }
+ ],
+ "redaction": {
+  "dropped_keys": [
+   "address",
+   "boot_id",
+   "container_id",
+   "external_ip",
+   "host_ip",
+   "id",
+   "image_id",
+   "internal_ip",
+   "ip",
+   "kernel_version",
+   "machine_id",
+   "os_image",
+   "pod_ip",
+   "pod_uid",
+   "providerID",
+   "provider_id",
+   "providerid",
+   "system_uuid",
+   "uid"
+  ],
+  "patterns": [
+   "ipv4",
+   "ec2-instance",
+   "arn",
+   "account-id",
+   "aws-host",
+   "ip-hostname"
+  ],
+  "pseudonymized_keys": [
+   "exported_instance",
+   "exported_node",
+   "host",
+   "hostname",
+   "instance",
+   "kubernetes_node",
+   "node",
+   "nodename"
+  ],
+  "salt": "random per export, never stored"
+ },
+ "run_id": "P7-L2-DRYRUN-20261128-01",
+ "schema_version": "1.0",
+ "synthetic": false,
+ "window": {
+  "end_utc": "2026-11-28T09:04:27Z",
+  "start_utc": "2026-11-28T08:53:49Z",
+  "step_s": 15
+ }
+}

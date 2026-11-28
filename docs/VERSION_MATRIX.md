@@ -219,3 +219,16 @@ Checked on 2026-11-25 for SPEC-P6 P6-T1 (DRF-73). Results and decisions:
 | S3 substitute (kind only) | Adobe S3Mock `5.2.3` (MinIO no longer published) | `sha256:ab01a694…8fca92` | D12, picked 25/11 (owner delegated); path-style only |
 
 Runtime status moves to `RUNTIME_VERIFIED` only after the P6 kind lab (L2) and the EKS window (L3).
+
+## 11. P7 pins (2026-11-28)
+
+Checked on 2026-11-28 for SPEC-P7 P7-T2.1 (DRF-85). Results and the kind smoke:
+`docs/evidence/p7/P7-T2.1_L2_KIND_OPENCOST_20261128.md`. Supersedes the §2 OpenCost and
+Prometheus rows (candidate 2.5.20, `UNVERIFIED`). §7–§10 pins carry over unchanged.
+
+| Component | Pin | Digest | Status |
+| --- | --- | --- | --- |
+| Prometheus | chart `prometheus` `30.0.1` (`prometheus-community.github.io/helm-charts`), app `v3.16.0`; server, kube-state-metrics, node exporter only | chart sha256 `4f18a8da…5cc55ecb6` (equals the index). `31.0.0` rejected: downloaded tgz ≠ index digest | `RUNTIME_VERIFIED` on kind 1.35.8 (L2); EKS pending |
+| Prometheus images | server `v3.16.0`, config reloader `v0.95.2`, kube-state-metrics `v2.20.0`, node exporter `v1.13.1` | full digests in the evidence §2 | `RUNTIME_VERIFIED` on kind (imageID = pin) |
+| OpenCost | chart `opencost` `2.5.35` (`opencost.github.io/opencost-helm-chart`), app `1.121.5` | chart sha256 `35c5ec22…6a2836db` (equals the index) | `RUNTIME_VERIFIED` on kind 1.35.8 (L2; default prices, not AWS); EKS pending |
+| OpenCost images | `ghcr.io/opencost/opencost` and `opencost-ui`, both `1.121.5`, pinned through `tag` = `1.121.5@sha256:…` | full digests in the evidence §2 | `RUNTIME_VERIFIED` on kind (imageID = pin) |
