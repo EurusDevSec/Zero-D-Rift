@@ -3,7 +3,7 @@
 > **TL;DR** · Window `P6-L3-20261126-01`: batch suite **14/14 PASS** trên EKS. Tenant-a chạy Spot `m5.large`, tenant-b chạy On-Demand `c6i.large`, cả hai trên node do Karpenter tạo ·
 > Trên EKS: **8/9** kịch bản §4 đạt, **1 một phần** (cleanup request còn `jobs=1` lúc đọc). Teardown `96 destroyed`, inventory và inventory trễ đều `CLEAN` ·
 > Bills: P6 ≈ **0,77 USD** (trần 4). Codex review sau window qua 3 vòng, **APPROVE** ở `a6cc55a` ·
-> **P6 chưa hoàn thành theo §8:** còn chờ teach-back §7 (8 câu) và cổng học `PRACTICED` + `EXPLAINED` của owner ·
+> **P6 đóng ngày 28/11 theo quyết định của owner:** teach-back §7 8/8 (đạt sau gợi ý; câu 6 đạt khi hỏi lại). Cổng học đủ cho Karpenter; SQS, KEDA, checkpointing chỉ `EXPLAINED` (khoảng trống đã ghi) ·
 > Mục lục: 1 Quy tắc §8 · 2 Run và phiên bản · 3 Kịch bản §4 · 4 Giới hạn · 5 Review độc lập ·
 > 6 Inventory trễ và billing · 7 Học và teach-back · 8 Việc sau window
 
@@ -27,7 +27,7 @@
 | Teardown và inventory trễ sạch | **đạt**: `96 destroyed`; inventory `CLEAN` lúc 16:20Z; inventory trễ `CLEAN` lúc 27/11 04:27Z | window §8; mục 6 |
 | Billing đã đọc | **đạt** 27/11: P6 ≈ 0,77 USD | mục 6 |
 | Second-agent review ghi lại finding và giới hạn | **đạt**: trước window có 4 vòng, APPROVE ở `58c9982`. Sau window có 3 vòng (3 finding, đều đã sửa), APPROVE ở `a6cc55a` | mục 5 |
-| Owner đạt `PRACTICED` + `EXPLAINED` cho SQS, KEDA, Karpenter, checkpointing | **chưa đạt** | mục 7 |
+| Owner đạt `PRACTICED` + `EXPLAINED` cho SQS, KEDA, Karpenter, checkpointing | **đạt một phần, owner đóng có ghi khoảng trống**: Karpenter đủ; SQS, KEDA, checkpointing chỉ `EXPLAINED` | mục 7 |
 | Kết quả batch mang nhãn `CPU_SUBSTITUTE_FOR_GPU`, không có kết luận GPU | đạt | window §12 |
 
 **Kết luận:** P6 **đạt về kỹ thuật** nhưng **chưa hoàn thành**. Còn thiếu teach-back §7 và cổng học của owner. Hai việc này chỉ owner làm được: Claude không trả lời thay, cũng không tự nâng trạng thái học.
@@ -84,6 +84,7 @@ Claude **đề xuất**, chưa quyết: chấp nhận đây là giới hạn và
 - Destroy xoá cả cluster, và inventory trễ sạch, nên không còn tài nguyên AWS hay chi phí nào.
 - Khoảng trống còn lại là bằng chứng `jobs=0` ngay sau cleanup, trước destroy. Có thể bổ sung ở window P6 sau (nếu có), hoặc ở lab kind: đọc lại sau khi kro xoá ScaledJob.
 - Cần owner quyết: chấp nhận là giới hạn, hay giữ "một phần" và kiểm lại ở window sau.
+- **Quyết định 28/11:** owner đóng P6 ("Đóng P6, sang P7") mà không mở window P6 mới. Claude hiểu quyết định này là chấp nhận kịch bản cleanup "một phần" như một giới hạn; owner có thể phản đối trên PR.
 
 ## 4. Giới hạn
 
@@ -144,7 +145,11 @@ Claude **đề xuất**, chưa quyết: chấp nhận đây là giới hạn và
 
 ## 7. Học và teach-back §7
 
-**Chưa đạt.** `.agent/learning/CURRENT_STATUS.md` vẫn ghi P6 batch là `NOT_STARTED` (25/11). Theo SPEC §5 T4.3, trạng thái học chỉ được nâng khi owner tự làm lại được.
+**Cập nhật 28/11:** teach-back §7 đã làm, ghi nguyên văn tại `docs/evidence/p6/P6-T4.3_TEACHBACK_20261128.md`. Kết quả: khởi động đạt; câu 1–5, 7, 8 đạt sau gợi ý; câu 6 chưa đạt lần đầu, đạt khi hỏi lại. Owner quyết định đóng cổng học ("Đóng P6, sang P7"). Trạng thái ghi trong `CURRENT_STATUS.md`: Karpenter `PRACTICED` + `EXPLAINED` (micro-lab M1, M2, M4 do owner gõ); SQS, KEDA, checkpointing chỉ `EXPLAINED`, vì không có lab do owner tự làm. Khoảng trống này được ghi lại, không che.
+
+Bảng dưới đây là hiện trạng ngày 27/11, giữ lại làm lịch sử.
+
+**Chưa đạt (27/11).** `.agent/learning/CURRENT_STATUS.md` khi đó vẫn ghi P6 batch là `NOT_STARTED` (25/11). Theo SPEC §5 T4.3, trạng thái học chỉ được nâng khi owner tự làm lại được.
 
 | Chủ đề §8 | Owner đã tự làm | Còn thiếu |
 |---|---|---|
@@ -167,4 +172,4 @@ Claude **đề xuất**, chưa quyết: chấp nhận đây là giới hạn và
 | [PR #107](https://github.com/EurusDevSec/Zero-D-Rift/pull/107) | lỗi 2, 3, 4a, 4b, 5, 6, 10 | evidence T4.2; runbook §4, B1, C2, K3, F4, H8; `retry_plan_check.sh` cùng 23 test trong `check.sh` 3e; nhãn B05/B09 của suite |
 | [PR #108](https://github.com/EurusDevSec/Zero-D-Rift/pull/108) | lỗi 3 | access entry Karpenter lấy tên cluster từ output `module.cluster`, nên phải chờ cluster |
 
-**Còn lại cho P6:** teach-back §7, cổng học, owner quyết mục 3.1, rồi chuyển DRF-81 sang Done.
+**Còn lại cho P6 (28/11):** không còn. Teach-back đã làm, cổng học được owner đóng, mục 3.1 đã có quyết định. DRF-81 chuyển sang Done khi PR này được merge.

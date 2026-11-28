@@ -100,7 +100,13 @@ post-window review three rounds, APPROVE at `a6cc55a`; DRF-80 Done.
 T4.3 audit `docs/evidence/p6/P6_ACCEPTANCE_AUDIT_20261127.md`: technically
 accepted (8/9 scenarios, 1 partial: `jobs=1` after request cleanup), P6 **not
 complete** until the owner's teach-back on SPEC-P6 §7 and the learning gate.
-Next: owner teach-back (8 questions), owner decides audit §3.1, then DRF-81 Done.
+28/11: teach-back SPEC-P6 §7 done (`docs/evidence/p6/P6-T4.3_TEACHBACK_20261128.md`,
+8/8 after hints, Q6 met on re-ask); owner closed the P6 gate with recorded gaps
+(SQS, KEDA, checkpointing `EXPLAINED` only) and accepted audit §3.1 as a limit.
+DRF-81 Done on merge. School dates fixed by the advisor on 28/11: product and
+report complete by 09/12, defense 30/12. Owner keeps full scope: P7 28/11 (local;
+its L3 part joins the P8 window), P8 29/11, P9 30/11–02/12, report 03–09/12.
+Next: ROADMAP and Linear rebaseline, then SPEC-P7 and P7 local work.
 
 ## Context expansion
 
