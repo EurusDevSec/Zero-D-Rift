@@ -53,6 +53,10 @@ spec:
             repository: kube-state-metrics/kube-state-metrics
             tag: v2.20.0
             sha: "sha256:42cfe3723a5f058171c627537fb57a3ea0f26e4380fa18555a95cb1a1b4cfc5b"
+          # kube_node_labels carries only these keys, so the export can count
+          # nodes by pool and capacity type (SPEC-P7 T2.2, D6).
+          metricLabelsAllowlist:
+            - "nodes=[karpenter.sh/capacity-type,karpenter.sh/nodepool,eks.amazonaws.com/capacityType,eks.amazonaws.com/nodegroup,zero-drift.io/pool,node.kubernetes.io/instance-type,topology.kubernetes.io/zone]"
           resources:
             requests: {cpu: 10m, memory: 64Mi}
             limits: {memory: 256Mi}

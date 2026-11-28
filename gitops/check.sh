@@ -753,7 +753,7 @@ res(pv is not None and pv.get("alertmanager", {}).get("enabled") is False
     and pv.get("server", {}).get("retention") == "12h"
     and "opencost.opencost.svc:9003" in str(pv.get("extraScrapeConfigs", ""))
     and pd.get("spec", {}).get("destination", {}).get("namespace") == "prometheus-system"
-    and no_sa_annotations(pv) and "eks.amazonaws.com" not in str(pv),
+    and no_sa_annotations(pv) and "eks.amazonaws.com/role-arn" not in str(pv),
     "zdr-prometheus: no Alertmanager/Pushgateway, no PV, retention 12h, scrapes OpenCost; no AWS identity")
 ov = chart_values("opencost")
 oc = (ov or {}).get("opencost", {})

@@ -105,6 +105,35 @@ Kiểm tĩnh (không cần cluster):
 bash gitops/check.sh | tail -5
 ```
 
+## 5. Export một cửa sổ (P7-T2.2)
+
+Tạo một Job khoảng 5.5 phút trong `tenant-a` (không đặt request, khác profile; chỉ để có dữ liệu), ghi giờ bắt đầu:
+
+```bash
+START=$(date -u +%Y-%m-%dT%H:%M:%SZ); $K create ns tenant-a; $K -n tenant-a create job dryrun --image=quay.io/prometheus/prometheus@sha256:9332054523223e2ddc18d8101799d54a4a8d823b030c53216f063a6c117773cd -- /bin/sh -c 'sleep 330'
+```
+
+```bash
+$K -n tenant-a wait job/dryrun --for=condition=complete --timeout=400s; END=$(date -u +%Y-%m-%dT%H:%M:%SZ); echo "$START $END"
+```
+
+**Đoán trước:** OpenCost sẽ ghi Pod này chạy bao nhiêu phút, đúng 5.5 hay ít hơn? Vì sao?
+
+```bash
+bash experiments/lib/export_metrics.sh --context kind-zdr-p7 --start "$START" --end "$END" --out "$LAB/export-1" --run-id P7-L2-DRYRUN-REPLAY --step 15
+```
+
+```bash
+cd "$LAB/export-1" && sha256sum -c hashes.sha256 --quiet && echo hashes-ok; grep -rlE 'zdr-p7-control-plane|172\.18\.|10\.244\.|kind://' . || echo "no identifiers"; cd - >/dev/null
+```
+
+**Phải thấy:** 19 file, `hashes-ok`, `no identifiers`. Chạy lại lệnh export vào cùng thư mục → bị từ chối
+("raw evidence is immutable"). Unit test (không cần cluster):
+
+```bash
+python -I -m unittest discover -s tests/experiments -v
+```
+
 ## 4. Dọn (undo)
 
 ```bash

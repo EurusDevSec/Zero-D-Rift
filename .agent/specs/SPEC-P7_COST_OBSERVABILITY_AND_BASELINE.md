@@ -171,9 +171,9 @@ Evidence: `docs/evidence/p7/P7-T2.1_L2_KIND_OPENCOST_20261128.md`.
 
 **T2.2 Export (1 h).**
 
-- [ ] `export_metrics.sh`: named queries over a UTC window to JSONL; OpenCost allocation by namespace, controller and Pod; `hashes.sha256`; no account or instance identifier in committed output.
-- [ ] Named queries: node count by pool and capacity type over time; CPU and memory requested versus allocatable; Pod phase timeline of the training Job; CPU and memory use of the tenant namespaces.
-- [ ] Dry run on kind; shape checked against EXPERIMENT_PLAN §9.2.
+- [x] `export_metrics.sh`: named queries over a UTC window to JSONL; OpenCost allocation by namespace, controller and Pod; `hashes.sha256`; no account or instance identifier in committed output.
+- [x] Named queries: node count by pool and capacity type over time; CPU and memory requested versus allocatable; Pod phase timeline of the training Job; CPU and memory use of the tenant namespaces.
+- [x] Dry run on kind; shape checked against EXPERIMENT_PLAN §9.2 (series stream, joins events by `run_id`; evidence P7-T2.2).
 
 ### P7-T3 — Cost contract and ledger (3.5 h)
 
