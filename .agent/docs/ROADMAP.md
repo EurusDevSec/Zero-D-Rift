@@ -80,6 +80,29 @@ again: the ADR-0009 cut order (P6 → P8 → P5) is the documented fallback, and
 is already in progress, so P8 is the first candidate. Linear milestone target
 dates follow this table.
 
+## Rebaseline 28/11 (school dates fixed, owner keeps full scope)
+
+On 28/11 the advisor fixed the dates: **product and report complete by 09/12/2026**,
+**defense 30/12/2026** (owner's minutes, `docs/thesis/`, not committed). Claude
+proposed cutting P8 (the fallback above). The owner refused ("tôi không bỏ cuộc")
+and compressed the schedule instead. P6 closed on 28/11 (teach-back, owner gate
+decision; DRF-81).
+
+| Phase | Working target | Note |
+|---|---|---|
+| P7 | 28/11 | local work only: SPEC, metrics stack on kind, cost tools, baseline runbooks; its L3 part runs in the 29/11 window |
+| P8 | 29/11 | one AWS window: P7 L3 (metrics, one batch smoke, two owner baselines) plus P8 remediation and recovery, pilot, **campaign freeze 29/11** |
+| P9 | 30/11–02/12 | official campaign, same samples as ver3 (20/20/20/5); cycle time from the pilot decides the fit |
+| P10 | 03–09/12 | acceptance audit and the full report; chapters 1–3 to the advisor early; **submit 09/12** |
+| P11 | 10–29/12 | advisor revisions, slides, video, rehearsal, institute paper |
+
+Rules kept: no cut in samples, acceptance, teardown or the learning gate (teach-backs
+may run after 09/12 but before the defense; a phase without one stays "technically
+accepted"). If the 29/11 window or the campaign slips, the owner decides again
+before 02/12; P8 stays the first cut candidate, and anything cut goes to
+"Hướng phát triển" in the report (advisor's rule: never present unfinished work as
+a result). Linear milestone target dates follow this table (updated 28/11).
+
 ## Capacity and daily execution
 
 - Baseline 8 focused hours/day; up to 10 is optional recovery capacity. Do not
