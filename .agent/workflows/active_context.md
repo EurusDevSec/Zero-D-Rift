@@ -1,14 +1,14 @@
 ---
 project: Zero D-Rift
-status: P6_SPEC_APPROVED
-active_phase: P6 (P5 done 26/11)
-active_task: P6-T4.3 acceptance (DRF-81); T4.2 window done 26/11
-active_feature: BatchTrainingJob on CPU (SPEC-P6, ADR-0009)
-active_spec: .agent/specs/SPEC-P6_BATCH_TRAINING_JOB.md
+status: P7_SPEC_APPROVED
+active_phase: P7 (P6 closed 28/11)
+active_task: P7 local T2-T4 done 28/11 (PR #110); T1 owner micro-lab, T5 in the 29/11 joint window
+active_feature: cost and utilization instrumentation, manual baselines (SPEC-P7)
+active_spec: .agent/specs/SPEC-P7_COST_OBSERVABILITY_AND_BASELINE.md
 current_learning: .agent/learning/CURRENT_STATUS.md
 mode: Coach
 authority: NO_INSTALL_NO_AWS_APPLY_UNTIL_TASK_GATES
-last_reviewed: 2026-11-27
+last_reviewed: 2026-11-28
 ---
 
 # Active Context
@@ -107,6 +107,16 @@ DRF-81 Done on merge. School dates fixed by the advisor on 28/11: product and
 report complete by 09/12, defense 30/12. Owner keeps full scope: P7 28/11 (local;
 its L3 part joins the P8 window), P8 29/11, P9 30/11–02/12, report 03–09/12.
 Next: ROADMAP and Linear rebaseline, then SPEC-P7 and P7 local work.
+28/11 (later): ROADMAP rebaseline 28/11 and Linear P7 created (DRF-82 T1, DRF-83 → 85/86 T2,
+DRF-87 T3, DRF-88 T4, DRF-84 → 89/90 T5; DRF-21/22 cancelled). SPEC-P7 approved (D1–D13).
+PR #110 (branch `hoang/drf-21-p7-contract`): Prometheus 30.0.1 and OpenCost 2.5.35 apps
+(31.0.0 rejected, tgz ≠ index digest), check.sh rule 24 with guard cases, kind smoke PASS
+(`P7-T2.1_*`), `export_metrics.sh` with redaction and kind dry run (`P7-T2.2_*`), cost contract
+`docs/finops/COST_MEASUREMENT.md` v1.0.0, `cost_calc.py`, `collect_timeline.sh`, ledger, profile
+`batch-cpu-small-v1` locked, baseline runbooks (PLAN) (`P7-T3-T4_LOCAL_20261128.md`); 27
+SYNTHETIC tests in CI. Open for the owner: T1 micro-lab (hand pair), D8a (RAG bootstrap by
+the image's own command), merge PR #110. Before 29/11: P8 SPEC, joint window request,
+`window.sh` run-id prefix for the joint window. No AWS today.
 
 ## Context expansion
 

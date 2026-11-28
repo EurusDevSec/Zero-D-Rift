@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Guard tests for gitops/check.sh (DRF-51; P6 rules 19-23, DRF-76): each case copies gitops/ to a temp
+# Guard tests for gitops/check.sh (DRF-51; P6 rules 19-23, DRF-76; P7 rule 24, DRF-85): each case copies gitops/ to a temp
 # directory, breaks exactly one rule, and expects check.sh to FAIL with that
 # rule's label. A rule that can never fail would otherwise look like a PASS.
 # Usage: bash gitops/tests/check_guards.sh   (needs python with PyYAML)
@@ -255,6 +255,21 @@ case_ "quota above D9" "quota values are SPEC-P6 D9 exactly" platform/tenants/qu
 case_ "batch-train SA missing in tenant-b" "tenant default and batch-train" platform/tenants/serviceaccounts.yaml 'docs[:] = [d for d in docs if not (d["metadata"]["name"] == "batch-train" and d["metadata"]["namespace"] == "tenant-b")]'
 case_ "NodePool limit above one node" "limits.cpu 2" "$NPF" 'docs[0]["spec"]["limits"] = {"cpu": "4"}'
 case_ "submit readyWhen always true" "readyWhen Complete" "$BRGD" 'node("submit")["readyWhen"] = ["${submit.status.?conditions.orValue([]).exists(c, c.type == \"Complete\") || true}"]'
+
+# P7 (DRF-85, DRF-86): metrics stack, section 24 and the chart pins.
+PA=platform/apps/60-prometheus.yaml; OA=platform/apps/62-opencost.yaml
+PV='docs[0]["spec"]["source"]["helm"]["valuesObject"]'
+case_ "Alertmanager on" "no Alertmanager/Pushgateway" "$PA" "$PV"'["alertmanager"]["enabled"] = True'
+case_ "Prometheus PV on" "no PV" "$PA" "$PV"'["server"]["persistentVolume"]["enabled"] = True'
+case_ "Prometheus retention 15d" "retention 12h" "$PA" "$PV"'["server"]["retention"] = "15d"'
+case_ "Prometheus IRSA role" "no AWS identity" "$PA" "$PV"'["server"]["serviceAccount"] = {"annotations": {"eks.amazonaws.com/role-arn": "x"}}'
+case_ "kube-state-metrics sha without sha256:" "pinned by digest at the chart's keys" "$PA" "$PV"'["kube-state-metrics"]["image"]["sha"] = "42cfe3723a5f058171c627537fb57a3ea0f26e4380fa18555a95cb1a1b4cfc5b"'
+case_ "prometheus chart 31.0.0" "Helm charts pinned exactly" "$PA" 'docs[0]["spec"]["source"]["targetRevision"] = "31.0.0"'
+case_ "OpenCost SA role annotation" "no AMP, sigv4, billing" "$OA" "$PV"'["serviceAccount"]["annotations"] = {"eks.amazonaws.com/role-arn": "x"}'
+case_ "OpenCost MCP on" "no AMP, sigv4, billing" "$OA" "$PV"'["opencost"]["mcp"]["enabled"] = True'
+case_ "OpenCost cloud cost on" "no AMP, sigv4, billing" "$OA" "$PV"'["opencost"]["cloudCost"]["enabled"] = True'
+case_ "OpenCost /var/configs on a PVC" "/var/configs is an emptyDir" "$OA" "$PV"'["extraVolumes"][0] = {"name": "var-configs", "persistentVolumeClaim": {"claimName": "x"}}'
+case_ "OpenCost before Prometheus" "OpenCost after Prometheus" "$OA" 'docs[0]["metadata"]["annotations"]["argocd.argoproj.io/sync-wave"] = "58"'
 
 # Allowed changes the runbook makes (Codex P6 R1): limits.cpu "0" switches a pool
 # off (E1 On-Demand step on Spot, H2 emergency stop on both). check.sh must PASS.

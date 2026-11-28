@@ -47,6 +47,8 @@ jobs:
         run: bash gitops/check.sh
       - name: Guard tests (each rule must be able to fail)
         run: bash gitops/tests/check_guards.sh
+      - name: Experiment library tests (SYNTHETIC, stdlib only; SPEC-P7 T2.2, T3)
+        run: python -I -W error::ResourceWarning -m unittest discover -s tests/experiments -v
 
   kyverno:
     # L1 for the Kyverno policies (SPEC-P5 P5-T2.2 A): kyverno test in the pinned

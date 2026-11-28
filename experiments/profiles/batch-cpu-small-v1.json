@@ -1,0 +1,36 @@
+{
+  "schema_version": "1.0",
+  "profile_id": "batch-cpu-small-v1",
+  "status": "LOCKED_20261128",
+  "locked_before_any_cost": true,
+  "decision": "SPEC-P7 D9 (owner approved 28/11/2026); D13: P6 NumPy workload, no PyTorch, no real RAG",
+  "experiment_plan_section": "EXPERIMENT_PLAN §7 matched-pair cost contract",
+  "workload": {
+    "image": "ghcr.io/eurusdevsec/zero-d-rift/batch-training@sha256:d2bb517d884710dd269285773b6fd5de74b631a4faafdb2fd2a3c0020cbb470e",
+    "commands": ["submit", "train"],
+    "steps": 300,
+    "checkpoint_every_steps": 25,
+    "expected_duration_seconds_approx": 300,
+    "fail_profile": "none",
+    "success_marker": "Job Complete and final checkpoint object in the run bucket (same checks as P6)",
+    "input_size": "fixed by the image (synthetic NumPy data); no external dataset"
+  },
+  "resources": {"cpu_request": "500m", "memory_request": "384Mi", "memory_limit": "512Mi"},
+  "capacity": {
+    "region": "us-east-1",
+    "instance_type": "m5.large",
+    "baseline_arm": "On-Demand, one node created by owner CLI (D7), label zero-drift.io/role=baseline",
+    "optimized_arm": "Karpenter batch pools, Spot first, On-Demand fallback reported separately",
+    "zone": "observed and recorded; a difference between arms is reported, not hidden",
+    "root_volume": "gp3 20 GiB encrypted, deleted with the instance (EC2NodeClass batch)"
+  },
+  "timing": {
+    "idle_window_seconds": 1800,
+    "workload_timeout_seconds": 2700,
+    "baseline_readiness_stop_seconds": 3600,
+    "teardown_stop_seconds": 1800
+  },
+  "observability": {"prometheus_scrape_seconds": 30, "opencost_resolution": "1m (cause C1)", "logging": "unchanged from P6"},
+  "ordering": "pairs alternate baseline->optimized and optimized->baseline when feasible",
+  "change_rule": "any change makes batch-cpu-small-v2; pairs of different profiles are never pooled"
+}

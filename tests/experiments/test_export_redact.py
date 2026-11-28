@@ -12,6 +12,11 @@ import unittest
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "experiments", "lib"))
 import export_redact as er  # noqa: E402
 
+
+def dump(obj, path):
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(obj, f)
+
 SALT = b"synthetic-test-salt"
 NODE = "ip-10-1-2-3.us-west-2.compute.internal"  # SYNTHETIC
 PROVIDER = "aws:///us-west-2a/i-0abc1234def567890"  # SYNTHETIC
@@ -67,20 +72,17 @@ class EndToEndTest(unittest.TestCase):
     """main() on a SYNTHETIC raw folder: writes when clean, refuses when not."""
 
     def build(self, raw, metric):
-        json.dump({"items": [{"metadata": {"name": NODE}, "spec": {"providerID": PROVIDER},
-                              "status": {"addresses": [{"type": "InternalIP", "address": "10.1.2.3"}]}}]},
-                  open(os.path.join(raw, "nodes.json"), "w"))
-        json.dump({"status": "success", "data": {"result": [{"metric": metric, "values": [[1, "0.5"]]}]}},
-                  open(os.path.join(raw, "q.json"), "w"))
-        json.dump({"code": 200, "data": [{"tenant-a": {"properties": {"node": NODE, "providerID": PROVIDER},
-                                                       "totalCost": 0.01}}]},
-                  open(os.path.join(raw, "a.json"), "w"))
+        dump({"items": [{"metadata": {"name": NODE}, "spec": {"providerID": PROVIDER},
+                              "status": {"addresses": [{"type": "InternalIP", "address": "10.1.2.3"}]}}]}, os.path.join(raw, "nodes.json"))
+        dump({"status": "success", "data": {"result": [{"metric": metric, "values": [[1, "0.5"]]}]}}, os.path.join(raw, "q.json"))
+        dump({"code": 200, "data": [{"tenant-a": {"properties": {"node": NODE, "providerID": PROVIDER},
+                                                       "totalCost": 0.01}}]}, os.path.join(raw, "a.json"))
         meta = {"run_id": "SYNTHETIC-1", "synthetic": True, "official": False,
                 "window": {"start_utc": "2026-01-01T00:00:00Z", "end_utc": "2026-01-01T00:10:00Z", "step_s": 30},
                 "exported_at_utc": "2026-01-01T00:11:00Z",
                 "queries": [{"name": "q", "promql": "up", "raw": "q.json"}],
                 "allocations": [{"aggregate": "namespace", "raw": "a.json"}]}
-        json.dump(meta, open(os.path.join(raw, "meta.json"), "w"))
+        dump(meta, os.path.join(raw, "meta.json"))
 
     def run_main(self, metric):
         with tempfile.TemporaryDirectory() as raw, tempfile.TemporaryDirectory() as out:
@@ -88,7 +90,10 @@ class EndToEndTest(unittest.TestCase):
             rc = er.main(["--raw", raw, "--out", out, "--meta", os.path.join(raw, "meta.json")])
             written = sorted(os.path.relpath(os.path.join(d, f), out).replace("\\", "/")
                              for d, _, fs in os.walk(out) for f in fs)
-            blob = "".join(open(os.path.join(out, w), encoding="utf-8").read() for w in written)
+            blob = ""
+            for w in written:
+                with open(os.path.join(out, w), encoding="utf-8") as f:
+                    blob += f.read()
             return rc, written, blob
 
     def test_clean_export_is_written_without_identifiers(self):
@@ -102,7 +107,7 @@ class EndToEndTest(unittest.TestCase):
     def test_failed_query_stops_the_export(self):
         with tempfile.TemporaryDirectory() as raw, tempfile.TemporaryDirectory() as out:
             self.build(raw, {})
-            json.dump({"status": "error", "error": "bad"}, open(os.path.join(raw, "q.json"), "w"))
+            dump({"status": "error", "error": "bad"}, os.path.join(raw, "q.json"))
             with self.assertRaises(SystemExit):
                 er.main(["--raw", raw, "--out", out, "--meta", os.path.join(raw, "meta.json")])
             self.assertEqual(os.listdir(out), [])

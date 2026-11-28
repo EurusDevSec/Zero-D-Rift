@@ -177,17 +177,17 @@ Evidence: `docs/evidence/p7/P7-T2.1_L2_KIND_OPENCOST_20261128.md`.
 
 ### P7-T3 — Cost contract and ledger (3.5 h)
 
-- [ ] `COST_MEASUREMENT.md` per D4, D5: definitions, sources, formula, rounding, tolerance, registered causes of difference, `PENDING` rule.
-- [ ] `collect_timeline.sh`: NodeClaim and Node events, EC2 launch and termination times, instance type, capacity type and zone, with aliases instead of instance IDs.
-- [ ] `cost_calc`: variable compute per run and per arm; fixed categories per window from inventory hours and unit prices; refuses missing inputs.
-- [ ] Unit tests: the owner's hand pair, a Spot price change inside a run, a run under one minute, a missing termination time, pending billing.
-- [ ] `COST_LEDGER.md` with P2–P6 rows from the Billing readings already in evidence; each row has gross amount, category, source and status.
+- [x] `COST_MEASUREMENT.md` per D4, D5: definitions, sources, formula, rounding, tolerance, registered causes of difference, `PENDING` rule.
+- [x] `collect_timeline.sh`: NodeClaim and Node events, EC2 launch and termination times, instance type, capacity type and zone, with aliases instead of instance IDs.
+- [x] `cost_calc`: variable compute per run and per arm; fixed categories per window from inventory hours and unit prices; refuses missing inputs.
+- [x] Unit tests (SYNTHETIC; the hand pair awaits the owner's paper result in T1): the owner's hand pair, a Spot price change inside a run, a run under one minute, a missing termination time, pending billing.
+- [x] `COST_LEDGER.md` with P2–P6 rows from the Billing readings already in evidence; each row has gross amount, category, source and status.
 
 ### P7-T4 — Baselines and the locked profile (3 h)
 
-- [ ] RAG baseline runbook: steps 1–8 of EXPERIMENT_PLAN §5.2 as exact commands, D8 equal footing.
-- [ ] Batch baseline runbook: steps 1–8 of §5.3; one On-Demand CPU node by D7; plain Job manifest without KEDA; marker and checkpoint checks identical to P6; 1,800 s idle hold with a visible timer; removal and inventory.
-- [ ] Profile `batch-cpu-small-v1` (D9) and the interaction sheet; the same counting rule written for the platform path.
+- [x] RAG baseline runbook: steps 1–8 of EXPERIMENT_PLAN §5.2 as exact commands, D8 equal footing. **D8a proposed 28/11** (no `psql` in the image: run the image's own `bootstrap` once by hand, 1 interaction + 8 automated actions); owner decision pending.
+- [x] Batch baseline runbook: steps 1–8 of §5.3; one On-Demand CPU node by D7; plain Job manifest without KEDA; marker and checkpoint checks identical to P6; 1,800 s idle hold with a visible timer; removal and inventory.
+- [x] Profile `batch-cpu-small-v1` (D9, `experiments/profiles/`) and the interaction sheet; the same counting rule written for the platform path.
 
 ## 29/11, inside the joint P7+P8 window
 
