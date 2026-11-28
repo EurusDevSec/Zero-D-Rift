@@ -391,3 +391,19 @@ Status meanings:
 - Failure I can now diagnose: tenant-a still reaches tenant-b (PolicyEndpoint missing versus a wrong policy); Kyverno outage (scale to zero opens admission, unreachable closes it for tenants only).
 - Remaining gap: when `zdr-require-resources` matters (LimitRange fills defaults first); no prediction-based evidence for P5.
 - Status: PRACTICED + EXPLAINED
+
+### 2026-11-28 — SPEC-P6 §7 teach-back (DRF-81)
+- Phase/task: P6-T4.3.
+- Learning objective: explain the P6 chain, failure handling, cost guards and teardown order in own words.
+- Source(s) consulted: SPEC-P6 §7; P6 evidence; Claude asked one question at a time with a restaurant analogy, gave hints and corrections, and recorded each answer verbatim.
+- Prediction before lab: none.
+- Micro-lab/change performed: none in this session (EKS micro-lab M1, M2, M4 typed on 26/11).
+- Expected vs actual: warm-up met; Q1–Q5, Q7, Q8 met after hints; Q6 (fixed cost at zero Pods) not met first, met on re-ask in the same session.
+- Evidence path: `docs/evidence/p6/P6-T4.3_TEACHBACK_20261128.md`.
+- Explain in my own words (typed; quoted verbatim in the evidence file):
+  - "muốn xem phiếu thì phải có được aws cho phép nhìn hộp cho nên phỉa kiểm tra Keda có quyền nhìn đo skhông";
+  - "có một cái chặn điều này đó chính là cái messege bị nhận hỏng 3 lần thì nó bị chuyển sang DLQ";
+  - "sai vì vẫn còn chi phí cố định chạy".
+- Failure I can now diagnose: message stuck in the queue (walk SQS → KEDA IAM → Job → Pending → NodeClaim → node Ready); launch failure versus Spot reclaim; orphaned nodes when Karpenter is removed first.
+- Remaining gap: no owner lab for SQS, KEDA or checkpointing; misconceptions corrected in session (checkpoint location, system node capacity type, H5 versus run length, teardown order); re-ask 2a, 3b, 4, 7, 8.
+- Status: Karpenter PRACTICED + EXPLAINED; SQS, KEDA, checkpointing EXPLAINED. Gate closed by owner decision with these gaps.
